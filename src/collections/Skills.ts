@@ -87,6 +87,7 @@ export const Skills: CollectionConfig = {
         { name: 'skillRank', type: 'number', defaultValue: 0, label: 'SkillRank' },
         { name: 'healthScore', type: 'number', defaultValue: 0, label: '健康度' },
         { name: 'runCount', type: 'number', defaultValue: 0, label: '调用次数' },
+        { name: 'downloadCount', type: 'number', defaultValue: 0, label: '下载次数' },
         { name: 'favoriteCount', type: 'number', defaultValue: 0, label: '收藏数' },
         { name: 'reviewCount', type: 'number', defaultValue: 0, label: '评论数' },
         { name: 'avgRating', type: 'number', defaultValue: 0, label: '平均评分' },

@@ -5,7 +5,6 @@ import { getCurrentUser } from '@/lib/auth'
 import { SkillStatusTags } from '@/components/Tag'
 import { FavoriteButton } from '@/components/FavoriteButton'
 import { ReviewForm } from '@/components/ReviewForm'
-import { SoonButton } from '@/components/SoonButton'
 import {
   formatCost,
   formatLatency,
@@ -109,18 +108,28 @@ export default async function SkillDetailPage({
             </div>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto">
-            <Link
-              href={`/skills/${skill.slug}/run`}
+            <a
+              href={`/v1/skills/${skill.slug}/manifest?format=yaml`}
+              download
               className="btn btn-primary px-6 py-2.5"
             >
-              ▶ 在线运行
+              ⬇ 下载 Skill
+            </a>
+            <Link href={`/skills/${skill.slug}/run`} className="btn btn-secondary px-6 py-2.5">
+              ▶ 在线试用
             </Link>
             <div className="flex gap-2 text-sm">
               <FavoriteButton slug={skill.slug as string} initial={favorited} loggedIn={!!user} />
-              <SoonButton label="Fork" icon="⑂" message="Fork 功能将在第二阶段开放" className="flex-1" />
+              <a
+                href={`/v1/skills/${skill.slug}/manifest?format=json`}
+                download
+                className="btn btn-secondary flex-1"
+              >
+                ⬇ JSON
+              </a>
             </div>
             <code className="surface px-2.5 py-1.5 text-[11px] text-[var(--muted)]">
-              POST /v1/skills/{skill.slug}/run
+              下载后用本地 Runner / 自有模型运行
             </code>
           </div>
         </div>

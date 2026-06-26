@@ -161,6 +161,7 @@ export interface Skill {
   skillRank?: number | null;
   healthScore?: number | null;
   runCount?: number | null;
+  downloadCount?: number | null;
   favoriteCount?: number | null;
   reviewCount?: number | null;
   avgRating?: number | null;
@@ -602,6 +603,7 @@ export interface SkillsSelect<T extends boolean = true> {
   skillRank?: T;
   healthScore?: T;
   runCount?: T;
+  downloadCount?: T;
   favoriteCount?: T;
   reviewCount?: T;
   avgRating?: T;
