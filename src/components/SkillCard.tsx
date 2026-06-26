@@ -8,7 +8,7 @@ function rankColor(rank?: number | null) {
   if (r >= 85) return 'var(--accent-2)'
   if (r >= 70) return 'var(--accent)'
   if (r >= 50) return 'var(--warn)'
-  return 'var(--muted)'
+  return 'var(--faint)'
 }
 
 export function SkillCard({ skill }: { skill: any }) {
@@ -17,28 +17,34 @@ export function SkillCard({ skill }: { skill: any }) {
   return (
     <Link
       href={`/skills/${skill.slug}`}
-      className="group flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 transition-colors hover:border-[var(--accent)]"
+      className="card group flex flex-col gap-3 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--accent)] hover:shadow-[var(--shadow)]"
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate font-medium group-hover:text-[var(--accent)]">{skill.title}</h3>
-          </div>
-          <p className="mt-1 line-clamp-2 text-xs text-[var(--muted)]">{skill.description}</p>
+          <h3 className="truncate text-[15px] font-semibold transition-colors group-hover:text-[var(--accent)]">
+            {skill.title}
+          </h3>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--muted)]">
+            {skill.description}
+          </p>
         </div>
         <div
-          className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg border"
+          className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl border"
           style={{ borderColor: rankColor(skill.skillRank), color: rankColor(skill.skillRank) }}
           title="SkillRank"
         >
-          <span className="text-sm font-bold leading-none">{Math.round(skill.skillRank || 0)}</span>
-          <span className="text-[9px] text-[var(--muted)]">RANK</span>
+          <span className="text-base font-bold leading-none">{Math.round(skill.skillRank || 0)}</span>
+          <span className="mt-0.5 text-[9px] tracking-wider text-[var(--faint)]">RANK</span>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]">
-        {cat && <span>{cat.icon} {cat.name}</span>}
-        {author && <span>· {author.username}</span>}
+        {cat && (
+          <span className="inline-flex items-center gap-1">
+            {cat.icon} {cat.name}
+          </span>
+        )}
+        {author && <span className="text-[var(--faint)]">· {author.username}</span>}
         <SkillStatusTags skill={skill} />
       </div>
 
@@ -55,8 +61,8 @@ export function SkillCard({ skill }: { skill: any }) {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="font-medium text-[var(--text)]">{value}</div>
-      <div className="text-[var(--muted)]">{label}</div>
+      <div className="font-semibold text-[var(--text)]">{value}</div>
+      <div className="mt-0.5 text-[var(--faint)]">{label}</div>
     </div>
   )
 }

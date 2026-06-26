@@ -1,17 +1,58 @@
 @import 'tailwindcss';
 
-:root {
-  --bg: #0b0e14;
-  --panel: #131823;
-  --panel-2: #1a2030;
-  --border: #232b3d;
-  --text: #e6e9ef;
-  --muted: #9aa4b8;
-  --accent: #4f8cff;
-  --accent-2: #00c2a8;
-  --warn: #f0a020;
-  --danger: #f05f5f;
+/* ============ 主题令牌（浅色/深色） ============ */
+:root,
+[data-theme='dark'] {
+  --bg: #0b0d13;
+  --bg-elev: rgba(13, 16, 23, 0.72);
+  --panel: #151922;
+  --panel-2: #1c212d;
+  --panel-hover: #1f2533;
+  --border: #262d3b;
+  --border-strong: #353d4e;
+  --text: #eaedf3;
+  --muted: #9099aa;
+  --faint: #6b7384;
+  --accent: #5b7cfa;
+  --accent-hover: #6f8cff;
+  --accent-2: #2dd4bf;
+  --warn: #f5a524;
+  --danger: #f15a6b;
+  --ring: rgba(91, 124, 250, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --hero-from: #1a2030;
+  --hero-to: #141826;
   color-scheme: dark;
+}
+
+[data-theme='light'] {
+  --bg: #f5f7fa;
+  --bg-elev: rgba(255, 255, 255, 0.78);
+  --panel: #ffffff;
+  --panel-2: #f1f4f8;
+  --panel-hover: #eef2f7;
+  --border: #e4e8ee;
+  --border-strong: #d2d8e2;
+  --text: #1a1f2b;
+  --muted: #5c6675;
+  --faint: #8b94a3;
+  --accent: #4f6ef7;
+  --accent-hover: #3f5fe8;
+  --accent-2: #0ea58f;
+  --warn: #d98613;
+  --danger: #e0455a;
+  --ring: rgba(79, 110, 247, 0.28);
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow: 0 6px 24px rgba(16, 24, 40, 0.1);
+  --hero-from: #eef2ff;
+  --hero-to: #f6f8ff;
+  color-scheme: light;
+}
+
+/* ============ 基础 ============ */
+* {
+  box-sizing: border-box;
 }
 
 html,
@@ -25,6 +66,8 @@ body {
     'Microsoft YaHei', Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
   line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 a {
@@ -32,6 +75,138 @@ a {
   text-decoration: none;
 }
 
-* {
-  box-sizing: border-box;
+::selection {
+  background: var(--ring);
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============ 可复用组件类 ============ */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.surface {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px var(--ring);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+.btn-secondary {
+  background: var(--panel);
+  border-color: var(--border);
+  color: var(--text);
+}
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-ghost {
+  color: var(--muted);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.input {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  padding: 9px 12px;
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.chip-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.link-accent {
+  color: var(--accent);
+}
+.link-accent:hover {
+  text-decoration: underline;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-in {
+  animation: fadeInUp 0.35s ease both;
 }

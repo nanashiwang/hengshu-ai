@@ -39,7 +39,10 @@ export default async function HomePage() {
   return (
     <div className="space-y-10">
       {/* Hero */}
-      <section className="rounded-2xl border border-[var(--border)] bg-gradient-to-br from-[var(--panel)] to-[var(--panel-2)] p-8 sm:p-10">
+      <section
+        className="animate-in card overflow-hidden p-8 sm:p-10"
+        style={{ background: 'linear-gradient(135deg, var(--hero-from), var(--hero-to))' }}
+      >
         <div className="max-w-2xl">
           <h1 className="text-3xl font-bold tracking-tight">经过评测的 AI Skill 市场</h1>
           <p className="mt-3 text-[var(--muted)]">
@@ -49,13 +52,13 @@ export default async function HomePage() {
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href="/skills"
-              className="rounded-md bg-[var(--accent)] px-5 py-2.5 font-medium text-white hover:opacity-90"
+              className="btn btn-primary px-6 py-2.5"
             >
               浏览 Skill 市场
             </Link>
             <Link
               href="/rank"
-              className="rounded-md border border-[var(--border)] px-5 py-2.5 font-medium hover:border-[var(--accent)]"
+              className="btn btn-secondary px-6 py-2.5"
             >
               查看排行榜
             </Link>
@@ -75,11 +78,7 @@ export default async function HomePage() {
       <section>
         <div className="mb-3 flex flex-wrap gap-2">
           {categories.map((c: any) => (
-            <Link
-              key={c.id}
-              href={`/skills?category=${c.slug}`}
-              className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--text)]"
-            >
+            <Link key={c.id} href={`/skills?category=${c.slug}`} className="chip">
               {c.icon} {c.name}
             </Link>
           ))}

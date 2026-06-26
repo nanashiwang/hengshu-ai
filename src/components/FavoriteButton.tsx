@@ -41,10 +41,10 @@ export function FavoriteButton({
     <button
       onClick={toggle}
       disabled={loading}
-      className={`flex-1 rounded-md border px-3 py-1.5 text-sm disabled:opacity-50 ${
+      className={`btn flex-1 ${
         favorited
           ? 'border-[var(--warn)] text-[var(--warn)]'
-          : 'border-[var(--border)] text-[var(--muted)] hover:border-[var(--accent)]'
+          : 'btn-secondary'
       }`}
     >
       {favorited ? '★ 已收藏' : '☆ 收藏'}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface FieldDef {
   type?: string
@@ -35,6 +36,7 @@ export function RunForm({
   loggedIn: boolean
 }) {
   const fields = Object.entries(inputSchema || {})
+  const router = useRouter()
   const [values, setValues] = useState<Record<string, string>>({})
   const [routeMode, setRouteMode] = useState('balanced')
   const [loading, setLoading] = useState(false)
@@ -45,6 +47,10 @@ export function RunForm({
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!loggedIn) {
+      router.push('/login')
+      return
+    }
     setLoading(true)
     setError(null)
     setResult(null)
@@ -77,7 +83,7 @@ export function RunForm({
       {/* 表单 */}
       <form
         onSubmit={onSubmit}
-        className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--panel)] p-5"
+        className="card space-y-4 p-5"
       >
         {fields.length === 0 && (
           <p className="text-sm text-[var(--muted)]">该 Skill 无需输入，直接运行即可。</p>
@@ -90,9 +96,9 @@ export function RunForm({
             </label>
             {def.type === 'select' && def.options ? (
               <select
+                className="input"
                 value={values[key] || ''}
                 onChange={(e) => set(key, e.target.value)}
-                className="w-full rounded-md border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
               >
                 <option value="">请选择…</option>
                 {def.options.map((o, i) => (
@@ -107,14 +113,14 @@ export function RunForm({
                 onChange={(e) => set(key, e.target.value)}
                 placeholder={def.placeholder}
                 rows={4}
-                className="w-full rounded-md border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                className="input"
               />
             ) : (
               <input
                 value={values[key] || ''}
                 onChange={(e) => set(key, e.target.value)}
                 placeholder={def.placeholder}
-                className="w-full rounded-md border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                className="input"
               />
             )}
           </div>
@@ -128,11 +134,7 @@ export function RunForm({
                 type="button"
                 key={m.value}
                 onClick={() => setRouteMode(m.value)}
-                className={`rounded-md border px-3 py-1.5 text-sm ${
-                  routeMode === m.value
-                    ? 'border-[var(--accent)] text-[var(--accent)]'
-                    : 'border-[var(--border)] text-[var(--muted)]'
-                }`}
+                className={`chip ${routeMode === m.value ? 'chip-active' : ''}`}
               >
                 {m.label}
               </button>
@@ -140,24 +142,21 @@ export function RunForm({
           </div>
         </div>
 
-        <button
-          disabled={loading || !loggedIn}
-          className="w-full rounded-md bg-[var(--accent)] px-4 py-2.5 font-medium text-white disabled:opacity-50"
-        >
-          {loading ? '运行中…' : loggedIn ? '▶ 运行 Skill' : '请先登录'}
+        <button disabled={loading} className="btn btn-primary w-full">
+          {loading ? '运行中…' : loggedIn ? '▶ 运行 Skill' : '登录后运行'}
         </button>
         {!loggedIn && (
           <p className="text-center text-xs text-[var(--muted)]">
-            <Link href="/login" className="text-[var(--accent)]">
+            点击将前往{' '}
+            <Link href="/login" className="link-accent">
               登录
-            </Link>{' '}
-            后即可运行
+            </Link>
           </p>
         )}
       </form>
 
       {/* 结果 */}
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-5">
+      <div className="card p-5">
         <h3 className="mb-3 text-sm font-semibold">运行结果</h3>
         {error && (
           <div className="rounded-md border border-[var(--danger)] bg-[var(--panel-2)] p-3 text-sm text-[var(--danger)]">

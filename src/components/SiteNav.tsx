@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
 import { formatNumber } from '@/lib/format'
+import { ThemeToggle } from './ThemeToggle'
 
 const NAV = [
   { href: '/skills', label: 'Skill 市场' },
@@ -11,36 +12,52 @@ const NAV = [
 
 export async function SiteNav() {
   const user = await getCurrentUser()
+  const u = user as any
   return (
-    <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--bg)]/90 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg-elev)] backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-6xl items-center gap-6 px-4 py-3">
         <Link href="/" className="flex items-center gap-2 font-semibold">
-          <span className="text-lg text-[var(--accent)]">⬡</span>
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--accent)] text-sm text-white">
+            ⬡
+          </span>
           <span>
             元衡 <span className="text-[var(--accent)]">SkillHub</span>
           </span>
         </Link>
-        <nav className="hidden items-center gap-4 text-sm text-[var(--muted)] sm:flex">
+
+        <nav className="hidden items-center gap-1 text-sm sm:flex">
           {NAV.map((n) => (
-            <Link key={n.href} href={n.href} className="hover:text-[var(--text)]">
+            <Link
+              key={n.href}
+              href={n.href}
+              className="rounded-lg px-3 py-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--panel-2)] hover:text-[var(--text)]"
+            >
               {n.label}
             </Link>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-3 text-sm">
-          {user ? (
+
+        <div className="ml-auto flex items-center gap-2 text-sm">
+          <ThemeToggle />
+          {u ? (
             <>
-              <span className="hidden text-[var(--muted)] sm:inline" title="贡献值">
-                ⚡ {formatNumber((user as any).contributionScore)}
+              <span
+                className="hidden items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--accent-2)] sm:inline-flex"
+                title="贡献值"
+              >
+                ⚡ {formatNumber(u.contributionScore)}
               </span>
-              <Link href="/me" className="text-[var(--muted)] hover:text-[var(--text)]">
-                {(user as any).username || '个人中心'}
+              <Link
+                href="/me"
+                className="rounded-lg px-3 py-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--panel-2)] hover:text-[var(--text)]"
+              >
+                {u.username || '个人中心'}
               </Link>
-              {(user as any).role === 'admin' && (
+              {u.role === 'admin' && (
                 <Link
                   href="/admin"
-                  className="text-[var(--muted)] hover:text-[var(--text)]"
                   target="_blank"
+                  className="rounded-lg px-3 py-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--panel-2)] hover:text-[var(--text)]"
                 >
                   后台
                 </Link>
@@ -48,13 +65,13 @@ export async function SiteNav() {
             </>
           ) : (
             <>
-              <Link href="/login" className="text-[var(--muted)] hover:text-[var(--text)]">
+              <Link
+                href="/login"
+                className="rounded-lg px-3 py-1.5 text-[var(--muted)] transition-colors hover:text-[var(--text)]"
+              >
                 登录
               </Link>
-              <Link
-                href="/register"
-                className="rounded-md border border-[var(--border)] px-3 py-1 hover:border-[var(--accent)]"
-              >
+              <Link href="/register" className="btn btn-primary px-4 py-1.5">
                 注册
               </Link>
             </>

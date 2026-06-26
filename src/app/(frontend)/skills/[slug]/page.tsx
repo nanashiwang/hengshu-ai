@@ -5,6 +5,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { SkillStatusTags } from '@/components/Tag'
 import { FavoriteButton } from '@/components/FavoriteButton'
 import { ReviewForm } from '@/components/ReviewForm'
+import { SoonButton } from '@/components/SoonButton'
 import {
   formatCost,
   formatLatency,
@@ -107,24 +108,18 @@ export default async function SkillDetailPage({
               <span>· 更新于 {timeAgo(skill.lastUpdatedAt || skill.createdAt)}</span>
             </div>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto">
             <Link
               href={`/skills/${skill.slug}/run`}
-              className="rounded-md bg-[var(--accent)] px-5 py-2.5 text-center font-medium text-white hover:opacity-90"
+              className="btn btn-primary px-6 py-2.5"
             >
               ▶ 在线运行
             </Link>
             <div className="flex gap-2 text-sm">
               <FavoriteButton slug={skill.slug as string} initial={favorited} loggedIn={!!user} />
-              <button
-                className="flex-1 rounded-md border border-[var(--border)] px-3 py-1.5 text-[var(--muted)]"
-                disabled
-                title="第二阶段开放"
-              >
-                ⑂ Fork
-              </button>
+              <SoonButton label="Fork" icon="⑂" message="Fork 功能将在第二阶段开放" className="flex-1" />
             </div>
-            <code className="rounded bg-[var(--panel-2)] px-2 py-1 text-[11px] text-[var(--muted)]">
+            <code className="surface px-2.5 py-1.5 text-[11px] text-[var(--muted)]">
               POST /v1/skills/{skill.slug}/run
             </code>
           </div>
