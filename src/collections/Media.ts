@@ -4,7 +4,7 @@ import { isLoggedIn } from '@/access'
 export const Media: CollectionConfig = {
   slug: 'media',
   labels: { singular: '媒体', plural: '媒体' },
-  admin: { group: '系统' },
+  admin: { group: '系统设置' },
   access: {
     read: () => true,
     create: isLoggedIn,

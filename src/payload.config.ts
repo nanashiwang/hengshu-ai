@@ -31,17 +31,21 @@ export default buildConfig({
     },
   },
   collections: [
-    Users,
-    Categories,
+    // ── Skill 内容 ──
     Skills,
     SkillVersions,
+    Categories,
     SkillRuns,
-    Reviews,
-    Favorites,
+    Bounties,
+    // ── 成员管理 ──
+    Users,
     InviteCodes,
     ContributionLogs,
-    Bounties,
+    Favorites,
+    // ── 审核治理 ──
+    Reviews,
     Reports,
+    // ── 系统设置 ──
     Media,
   ],
   globals: [SiteSettings],

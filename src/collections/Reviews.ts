@@ -41,7 +41,7 @@ export const Reviews: CollectionConfig = {
   admin: {
     useAsTitle: 'id',
     defaultColumns: ['skill', 'user', 'rating', 'type', 'status', 'createdAt'],
-    group: '用户与社区',
+    group: '审核治理',
   },
   access: {
     read: () => true,

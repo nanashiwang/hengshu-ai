@@ -7,7 +7,7 @@ export const Bounties: CollectionConfig = {
   admin: {
     useAsTitle: 'title',
     defaultColumns: ['title', 'status', 'rewardType', 'rewardPoints', 'creator', 'dueAt'],
-    group: '用户与社区',
+    group: 'Skill 内容',
   },
   access: {
     read: () => true,

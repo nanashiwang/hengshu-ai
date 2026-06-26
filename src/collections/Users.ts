@@ -13,9 +13,12 @@ export const Users: CollectionConfig = {
   admin: {
     useAsTitle: 'username',
     defaultColumns: ['username', 'email', 'role', 'level', 'contributionScore'],
-    group: '用户与社区',
+    group: '成员管理',
   },
   access: {
+    // 仅管理/审核员可进入后台面板；普通用户与创作者走前台
+    admin: ({ req: { user } }) =>
+      Boolean(user && ['admin', 'reviewer', 'enterprise_admin'].includes(user.role as string)),
     read: adminOrSelf,
     create: isAdmin, // 首个用户由 Payload 引导流程创建；其余经邀请码端点(overrideAccess)或管理员
     update: adminOrSelf,

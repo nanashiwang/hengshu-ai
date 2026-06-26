@@ -8,7 +8,7 @@ export const InviteCodes: CollectionConfig = {
   admin: {
     useAsTitle: 'code',
     defaultColumns: ['code', 'inviter', 'usedBy', 'status', 'expiresAt'],
-    group: '用户与社区',
+    group: '成员管理',
   },
   access: {
     read: ownerOrAdmin('inviter'),

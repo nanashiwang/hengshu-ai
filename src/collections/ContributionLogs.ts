@@ -8,7 +8,7 @@ export const ContributionLogs: CollectionConfig = {
   admin: {
     useAsTitle: 'id',
     defaultColumns: ['user', 'actionType', 'points', 'createdAt'],
-    group: '用户与社区',
+    group: '成员管理',
   },
   access: {
     read: ownerOrAdmin('user'),

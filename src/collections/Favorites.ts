@@ -33,7 +33,7 @@ export const Favorites: CollectionConfig = {
   admin: {
     useAsTitle: 'id',
     defaultColumns: ['user', 'skill', 'createdAt'],
-    group: '用户与社区',
+    group: '成员管理',
   },
   access: {
     read: ownerOrAdmin('user'),

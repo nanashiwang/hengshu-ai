@@ -4,7 +4,7 @@ import { isAdmin } from '@/access'
 export const SiteSettings: GlobalConfig = {
   slug: 'site-settings',
   label: '站点设置',
-  admin: { group: '系统' },
+  admin: { group: '系统设置' },
   access: {
     read: () => true,
     update: isAdmin,

@@ -67,16 +67,16 @@ export interface Config {
   };
   blocks: {};
   collections: {
-    users: User;
-    categories: Category;
     skills: Skill;
     'skill-versions': SkillVersion;
+    categories: Category;
     'skill-runs': SkillRun;
-    reviews: Review;
-    favorites: Favorite;
+    bounties: Bounty;
+    users: User;
     'invite-codes': InviteCode;
     'contribution-logs': ContributionLog;
-    bounties: Bounty;
+    favorites: Favorite;
+    reviews: Review;
     reports: Report;
     media: Media;
     'payload-kv': PayloadKv;
@@ -86,16 +86,16 @@ export interface Config {
   };
   collectionsJoins: {};
   collectionsSelect: {
-    users: UsersSelect<false> | UsersSelect<true>;
-    categories: CategoriesSelect<false> | CategoriesSelect<true>;
     skills: SkillsSelect<false> | SkillsSelect<true>;
     'skill-versions': SkillVersionsSelect<false> | SkillVersionsSelect<true>;
+    categories: CategoriesSelect<false> | CategoriesSelect<true>;
     'skill-runs': SkillRunsSelect<false> | SkillRunsSelect<true>;
-    reviews: ReviewsSelect<false> | ReviewsSelect<true>;
-    favorites: FavoritesSelect<false> | FavoritesSelect<true>;
+    bounties: BountiesSelect<false> | BountiesSelect<true>;
+    users: UsersSelect<false> | UsersSelect<true>;
     'invite-codes': InviteCodesSelect<false> | InviteCodesSelect<true>;
     'contribution-logs': ContributionLogsSelect<false> | ContributionLogsSelect<true>;
-    bounties: BountiesSelect<false> | BountiesSelect<true>;
+    favorites: FavoritesSelect<false> | FavoritesSelect<true>;
+    reviews: ReviewsSelect<false> | ReviewsSelect<true>;
     reports: ReportsSelect<false> | ReportsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
@@ -143,6 +143,52 @@ export interface UserAuthOperations {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "skills".
+ */
+export interface Skill {
+  id: string;
+  title: string;
+  slug?: string | null;
+  description?: string | null;
+  category?: (string | null) | Category;
+  author?: (string | null) | User;
+  visibility?: ('public' | 'private' | 'unlisted' | 'enterprise') | null;
+  status?: ('draft' | 'pending' | 'published' | 'rejected' | 'archived') | null;
+  currentVersion?: (string | null) | SkillVersion;
+  isOfficial?: boolean | null;
+  isFeatured?: boolean | null;
+  isFreeleech?: boolean | null;
+  skillRank?: number | null;
+  healthScore?: number | null;
+  runCount?: number | null;
+  favoriteCount?: number | null;
+  reviewCount?: number | null;
+  avgRating?: number | null;
+  avgCost?: number | null;
+  avgLatencyMs?: number | null;
+  successRate?: number | null;
+  formatSuccessRate?: number | null;
+  lastRunAt?: string | null;
+  lastUpdatedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: string;
+  name: string;
+  slug?: string | null;
+  description?: string | null;
+  icon?: string | null;
+  order?: number | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "users".
  */
 export interface User {
@@ -180,52 +226,6 @@ export interface User {
     | null;
   password?: string | null;
   collection: 'users';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories".
- */
-export interface Category {
-  id: string;
-  name: string;
-  slug?: string | null;
-  description?: string | null;
-  icon?: string | null;
-  order?: number | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "skills".
- */
-export interface Skill {
-  id: string;
-  title: string;
-  slug?: string | null;
-  description?: string | null;
-  category?: (string | null) | Category;
-  author?: (string | null) | User;
-  visibility?: ('public' | 'private' | 'unlisted' | 'enterprise') | null;
-  status?: ('draft' | 'pending' | 'published' | 'rejected' | 'archived') | null;
-  currentVersion?: (string | null) | SkillVersion;
-  isOfficial?: boolean | null;
-  isFeatured?: boolean | null;
-  isFreeleech?: boolean | null;
-  skillRank?: number | null;
-  healthScore?: number | null;
-  runCount?: number | null;
-  favoriteCount?: number | null;
-  reviewCount?: number | null;
-  avgRating?: number | null;
-  avgCost?: number | null;
-  avgLatencyMs?: number | null;
-  successRate?: number | null;
-  formatSuccessRate?: number | null;
-  lastRunAt?: string | null;
-  lastUpdatedAt?: string | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -336,27 +336,30 @@ export interface SkillRun {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "reviews".
+ * via the `definition` "bounties".
  */
-export interface Review {
+export interface Bounty {
   id: string;
-  skill: string | Skill;
-  user?: (string | null) | User;
-  rating?: number | null;
-  content?: string | null;
-  type?: ('review' | 'failure_case' | 'compat_report') | null;
-  status?: ('visible' | 'hidden' | 'pending') | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "favorites".
- */
-export interface Favorite {
-  id: string;
-  user?: (string | null) | User;
-  skill: string | Skill;
+  title: string;
+  description?: string | null;
+  creator?: (string | null) | User;
+  rewardType?: ('points' | 'cash' | 'credit') | null;
+  rewardPoints?: number | null;
+  rewardAmount?: number | null;
+  status?: ('open' | 'accepted' | 'submitted' | 'completed' | 'cancelled') | null;
+  acceptedBy?: (string | null) | User;
+  submittedSkill?: (string | null) | Skill;
+  requirements?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  dueAt?: string | null;
+  isPublic?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -407,30 +410,27 @@ export interface ContributionLog {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "bounties".
+ * via the `definition` "favorites".
  */
-export interface Bounty {
+export interface Favorite {
   id: string;
-  title: string;
-  description?: string | null;
-  creator?: (string | null) | User;
-  rewardType?: ('points' | 'cash' | 'credit') | null;
-  rewardPoints?: number | null;
-  rewardAmount?: number | null;
-  status?: ('open' | 'accepted' | 'submitted' | 'completed' | 'cancelled') | null;
-  acceptedBy?: (string | null) | User;
-  submittedSkill?: (string | null) | Skill;
-  requirements?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  dueAt?: string | null;
-  isPublic?: boolean | null;
+  user?: (string | null) | User;
+  skill: string | Skill;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reviews".
+ */
+export interface Review {
+  id: string;
+  skill: string | Skill;
+  user?: (string | null) | User;
+  rating?: number | null;
+  content?: string | null;
+  type?: ('review' | 'failure_case' | 'compat_report') | null;
+  status?: ('visible' | 'hidden' | 'pending') | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -494,14 +494,6 @@ export interface PayloadLockedDocument {
   id: string;
   document?:
     | ({
-        relationTo: 'users';
-        value: string | User;
-      } | null)
-    | ({
-        relationTo: 'categories';
-        value: string | Category;
-      } | null)
-    | ({
         relationTo: 'skills';
         value: string | Skill;
       } | null)
@@ -510,16 +502,20 @@ export interface PayloadLockedDocument {
         value: string | SkillVersion;
       } | null)
     | ({
+        relationTo: 'categories';
+        value: string | Category;
+      } | null)
+    | ({
         relationTo: 'skill-runs';
         value: string | SkillRun;
       } | null)
     | ({
-        relationTo: 'reviews';
-        value: string | Review;
+        relationTo: 'bounties';
+        value: string | Bounty;
       } | null)
     | ({
-        relationTo: 'favorites';
-        value: string | Favorite;
+        relationTo: 'users';
+        value: string | User;
       } | null)
     | ({
         relationTo: 'invite-codes';
@@ -530,8 +526,12 @@ export interface PayloadLockedDocument {
         value: string | ContributionLog;
       } | null)
     | ({
-        relationTo: 'bounties';
-        value: string | Bounty;
+        relationTo: 'favorites';
+        value: string | Favorite;
+      } | null)
+    | ({
+        relationTo: 'reviews';
+        value: string | Review;
       } | null)
     | ({
         relationTo: 'reports';
@@ -585,53 +585,6 @@ export interface PayloadMigration {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users_select".
- */
-export interface UsersSelect<T extends boolean = true> {
-  username?: T;
-  role?: T;
-  level?: T;
-  contributionScore?: T;
-  consumptionScore?: T;
-  ratioScore?: T;
-  inviteCount?: T;
-  warningCount?: T;
-  bio?: T;
-  invitedBy?: T;
-  newapiUserId?: T;
-  newapiKeyEncrypted?: T;
-  updatedAt?: T;
-  createdAt?: T;
-  email?: T;
-  resetPasswordToken?: T;
-  resetPasswordExpiration?: T;
-  salt?: T;
-  hash?: T;
-  loginAttempts?: T;
-  lockUntil?: T;
-  sessions?:
-    | T
-    | {
-        id?: T;
-        createdAt?: T;
-        expiresAt?: T;
-      };
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories_select".
- */
-export interface CategoriesSelect<T extends boolean = true> {
-  name?: T;
-  slug?: T;
-  description?: T;
-  icon?: T;
-  order?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "skills_select".
  */
 export interface SkillsSelect<T extends boolean = true> {
@@ -681,6 +634,19 @@ export interface SkillVersionsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories_select".
+ */
+export interface CategoriesSelect<T extends boolean = true> {
+  name?: T;
+  slug?: T;
+  description?: T;
+  icon?: T;
+  order?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "skill-runs_select".
  */
 export interface SkillRunsSelect<T extends boolean = true> {
@@ -708,27 +674,57 @@ export interface SkillRunsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "reviews_select".
+ * via the `definition` "bounties_select".
  */
-export interface ReviewsSelect<T extends boolean = true> {
-  skill?: T;
-  user?: T;
-  rating?: T;
-  content?: T;
-  type?: T;
+export interface BountiesSelect<T extends boolean = true> {
+  title?: T;
+  description?: T;
+  creator?: T;
+  rewardType?: T;
+  rewardPoints?: T;
+  rewardAmount?: T;
   status?: T;
+  acceptedBy?: T;
+  submittedSkill?: T;
+  requirements?: T;
+  dueAt?: T;
+  isPublic?: T;
   updatedAt?: T;
   createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "favorites_select".
+ * via the `definition` "users_select".
  */
-export interface FavoritesSelect<T extends boolean = true> {
-  user?: T;
-  skill?: T;
+export interface UsersSelect<T extends boolean = true> {
+  username?: T;
+  role?: T;
+  level?: T;
+  contributionScore?: T;
+  consumptionScore?: T;
+  ratioScore?: T;
+  inviteCount?: T;
+  warningCount?: T;
+  bio?: T;
+  invitedBy?: T;
+  newapiUserId?: T;
+  newapiKeyEncrypted?: T;
   updatedAt?: T;
   createdAt?: T;
+  email?: T;
+  resetPasswordToken?: T;
+  resetPasswordExpiration?: T;
+  salt?: T;
+  hash?: T;
+  loginAttempts?: T;
+  lockUntil?: T;
+  sessions?:
+    | T
+    | {
+        id?: T;
+        createdAt?: T;
+        expiresAt?: T;
+      };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -760,21 +756,25 @@ export interface ContributionLogsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "bounties_select".
+ * via the `definition` "favorites_select".
  */
-export interface BountiesSelect<T extends boolean = true> {
-  title?: T;
-  description?: T;
-  creator?: T;
-  rewardType?: T;
-  rewardPoints?: T;
-  rewardAmount?: T;
+export interface FavoritesSelect<T extends boolean = true> {
+  user?: T;
+  skill?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reviews_select".
+ */
+export interface ReviewsSelect<T extends boolean = true> {
+  skill?: T;
+  user?: T;
+  rating?: T;
+  content?: T;
+  type?: T;
   status?: T;
-  acceptedBy?: T;
-  submittedSkill?: T;
-  requirements?: T;
-  dueAt?: T;
-  isPublic?: T;
   updatedAt?: T;
   createdAt?: T;
 }
