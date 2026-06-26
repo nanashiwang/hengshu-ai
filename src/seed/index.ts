@@ -11,16 +11,21 @@ async function seed() {
   const payload = await getPayload({ config })
   payload.logger.info('开始注入种子数据…')
 
-  // ── 管理员 ──
+  // ── 管理员（官方 Skill 作者）──
+  // 优先复用系统中已存在的管理员（如你通过 /admin 创建的首个用户已自动成为超管）；
+  // 若没有任何管理员，则创建默认管理员。
   let admin = (
     await payload.find({
       collection: 'users',
-      where: { email: { equals: ADMIN_EMAIL } },
+      where: { role: { equals: 'admin' } },
       limit: 1,
+      sort: 'createdAt',
       overrideAccess: true,
     })
   ).docs[0]
-  if (!admin) {
+  if (admin) {
+    payload.logger.info(`· 复用现有管理员作为官方 Skill 作者：${admin.email}`)
+  } else {
     admin = await payload.create({
       collection: 'users',
       overrideAccess: true,
@@ -33,9 +38,7 @@ async function seed() {
         inviteCount: 10,
       },
     })
-    payload.logger.info(`✓ 管理员已创建：${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`)
-  } else {
-    payload.logger.info('· 管理员已存在，跳过')
+    payload.logger.info(`✓ 默认管理员已创建（首个用户自动成为超管）：${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`)
   }
 
   // ── 分类 ──

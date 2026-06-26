@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-export const metadata = { title: '开发者文档 · 元衡 SkillHub' }
+export const metadata = { title: '开发者文档 · 衡术 Hengshu' }
 
 export default function DocsPage() {
   return (
@@ -43,7 +43,7 @@ Cookie: payload-token=...
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">New API 联动</h2>
         <p className="text-sm text-[var(--muted)]">
-          SkillHub 通过 OpenAI 兼容接口调用 New API 网关（<code>NEW_API_BASE_URL</code> /{' '}
+          衡术 通过 OpenAI 兼容接口调用 New API 网关（<code>NEW_API_BASE_URL</code> /{' '}
           <code>NEW_API_KEY</code>）。未配置时运行会返回带 <code>MOCK</code> 标记的模拟输出，便于先行体验。
         </p>
       </section>

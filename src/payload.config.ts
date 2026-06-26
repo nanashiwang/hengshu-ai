@@ -27,7 +27,7 @@ export default buildConfig({
     user: Users.slug,
     importMap: { baseDir: path.resolve(dirname) },
     meta: {
-      titleSuffix: '· 元衡 SkillHub',
+      titleSuffix: '· 衡术 Hengshu',
     },
   },
   collections: [

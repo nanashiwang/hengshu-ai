@@ -10,8 +10,13 @@ export const SiteSettings: GlobalConfig = {
     update: isAdmin,
   },
   fields: [
-    { name: 'siteName', type: 'text', defaultValue: '元衡 SkillHub', label: '站点名称' },
-    { name: 'slogan', type: 'text', defaultValue: '经过评测的 AI Skill 市场', label: '标语' },
+    { name: 'siteName', type: 'text', defaultValue: '衡术 Hengshu', label: '站点名称' },
+    {
+      name: 'slogan',
+      type: 'text',
+      defaultValue: 'Verified AI Skills, Powered by Contribution.',
+      label: '标语',
+    },
     {
       name: 'featuredSkills',
       type: 'relationship',

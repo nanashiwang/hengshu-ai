@@ -1,4 +1,6 @@
-# 元衡 SkillHub
+# 衡术 Hengshu
+
+> Verified AI Skills, Powered by Contribution.
 
 > 经过评测的 AI Skill 市场 —— 基于 **New API（OpenAI 兼容网关）** 的 AI 技能分发平台，引入类 PT 站的贡献值 / 邀请码 / 悬赏 / 资源健康度机制。
 

@@ -21,7 +21,7 @@ export async function SiteNav() {
             ⬡
           </span>
           <span>
-            元衡 <span className="text-[var(--accent)]">SkillHub</span>
+            衡术 <span className="text-[var(--accent)]">Hengshu</span>
           </span>
         </Link>
 

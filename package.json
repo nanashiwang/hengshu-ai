@@ -1,7 +1,7 @@
 {
-  "name": "yuanheng-skillhub",
+  "name": "hengshu-ai",
   "version": "0.1.0",
-  "description": "元衡 SkillHub — 经过评测的 AI Skill 市场",
+  "description": "衡术 Hengshu — 经过评测的 AI Skill 市场",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {

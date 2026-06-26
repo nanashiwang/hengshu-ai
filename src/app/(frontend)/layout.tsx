@@ -3,7 +3,7 @@ import './globals.css'
 import { SiteNav } from '@/components/SiteNav'
 
 export const metadata = {
-  title: '元衡 SkillHub — 经过评测的 AI Skill 市场',
+  title: '衡术 Hengshu — Verified AI Skills, Powered by Contribution.',
   description:
     '发现、运行、安装、评测和复用高质量 AI 技能，并通过贡献值机制获得更高权限和资源。',
 }
@@ -22,8 +22,8 @@ export default function FrontendLayout({ children }: { children: React.ReactNode
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
         <footer className="border-t border-[var(--border)]">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-8 text-xs text-[var(--faint)] sm:flex-row sm:items-center sm:justify-between">
-            <span>© 2026 元衡 SkillHub · v0.1</span>
-            <span>New API 负责模型接入与计费 · SkillHub 负责任务封装、评测与分发</span>
+            <span>© 2026 衡术 Hengshu · v0.1</span>
+            <span>New API 负责模型接入与计费 · 衡术 负责任务封装、评测与分发</span>
           </div>
         </footer>
       </body>

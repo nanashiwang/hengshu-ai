@@ -103,4 +103,24 @@ export const Users: CollectionConfig = {
       },
     },
   ],
+  hooks: {
+    beforeChange: [
+      async ({ req, operation, data }) => {
+        // 第一个创建的用户自动成为超级管理员
+        if (operation === 'create') {
+          const { totalDocs } = await req.payload.count({
+            collection: 'users',
+            overrideAccess: true,
+            req,
+          })
+          if (totalDocs === 0) {
+            data.role = 'admin'
+            data.level = 99
+            if (data.inviteCount == null) data.inviteCount = 10
+          }
+        }
+        return data
+      },
+    ],
+  },
 }

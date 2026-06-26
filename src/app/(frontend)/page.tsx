@@ -44,7 +44,13 @@ export default async function HomePage() {
         style={{ background: 'linear-gradient(135deg, var(--hero-from), var(--hero-to))' }}
       >
         <div className="max-w-2xl">
+          <div className="mb-2 text-sm font-semibold tracking-wide text-[var(--accent)]">
+            衡术 Hengshu
+          </div>
           <h1 className="text-3xl font-bold tracking-tight">经过评测的 AI Skill 市场</h1>
+          <p className="mt-2 text-[13px] font-medium uppercase tracking-wider text-[var(--accent-2)]">
+            Verified AI Skills, Powered by Contribution.
+          </p>
           <p className="mt-3 text-[var(--muted)]">
             发现、运行、评测和复用高质量 AI 技能。每个 Skill 都是可运行、可评测、可计费的能力包——
             告诉你「这个任务用哪个模型最省、最准、最稳」。
