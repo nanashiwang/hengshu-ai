@@ -1,0 +1,60 @@
+# 元衡 SkillHub 本地基础设施：PostgreSQL + Redis
+# 启动：docker compose up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: skillhub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: payload
+      POSTGRES_PASSWORD: payload
+      POSTGRES_DB: skillhub
+    ports:
+      # 主机 5433 → 容器 5432（避开本机已占用的 5432）
+      - '5433:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U payload -d skillhub']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: skillhub-redis
+    restart: unless-stopped
+    ports:
+      # 主机 6380 → 容器 6379（避开本机已占用的 6379）
+      - '6380:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # 应用（Next.js + Payload）。构建：docker compose build app；启动：docker compose up -d app
+  app:
+    build: .
+    container_name: skillhub-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      # 覆盖 .env 中的本机地址，改用容器内网服务名
+      DATABASE_URL: postgres://payload:payload@postgres:5432/skillhub
+      REDIS_URL: redis://redis:6379
+      NEXT_PUBLIC_SERVER_URL: http://localhost:8787
+    ports:
+      # 主机 8787 → 容器 3000（避开本机 dev 的 3000）
+      - '8787:3000'
+
+volumes:
+  pgdata:
+  redisdata:

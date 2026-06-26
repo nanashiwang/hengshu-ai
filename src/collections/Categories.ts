@@ -1,0 +1,41 @@
+import type { CollectionConfig } from 'payload'
+import { isAdmin, isReviewerOrAdmin } from '@/access'
+import { slugify } from '@/lib/slug'
+
+export const Categories: CollectionConfig = {
+  slug: 'categories',
+  labels: { singular: '分类', plural: '分类' },
+  admin: {
+    useAsTitle: 'name',
+    defaultColumns: ['name', 'slug', 'order'],
+    group: 'Skill 内容',
+  },
+  access: {
+    read: () => true,
+    create: isReviewerOrAdmin,
+    update: isReviewerOrAdmin,
+    delete: isAdmin,
+  },
+  fields: [
+    { name: 'name', type: 'text', required: true, label: '名称' },
+    {
+      name: 'slug',
+      type: 'text',
+      unique: true,
+      index: true,
+      label: 'Slug',
+      admin: { position: 'sidebar' },
+    },
+    { name: 'description', type: 'textarea', label: '描述' },
+    { name: 'icon', type: 'text', label: '图标（emoji 或名称）' },
+    { name: 'order', type: 'number', defaultValue: 0, label: '排序' },
+  ],
+  hooks: {
+    beforeChange: [
+      ({ data }) => {
+        if (data && !data.slug && data.name) data.slug = slugify(data.name)
+        return data
+      },
+    ],
+  },
+}
