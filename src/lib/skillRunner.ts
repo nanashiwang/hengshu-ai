@@ -17,6 +17,8 @@ export interface RunSkillArgs {
   user?: { id: string } | null
   routeMode?: RouteMode
   userApiKey?: string
+  forceModel?: string // 固定模型、不路由、不 fallback（多模型对比用）
+  skipAggregate?: boolean // 跳过 Skill 指标更新与贡献值发放（对比模式避免污染聚合）
 }
 
 export interface RunSkillResult {
@@ -47,14 +49,23 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
   // 2. 渲染 Prompt
   const prompt = renderTemplate(version?.promptTemplate || '', input)
 
-  // 3. 选模型
-  const fallbackDefault = process.env.MODEL_GATEWAY_DEFAULT_MODEL || 'deepseek-chat'
-  const { model, fallbacks, mode } = selectModel(
-    version?.routePolicy,
-    version?.recommendedModels,
-    routeMode,
-    fallbackDefault,
-  )
+  // 3. 选模型（forceModel 时固定模型、不路由、不 fallback —— 用于多模型对比）
+  const fallbackDefault = process.env.MODEL_GATEWAY_DEFAULT_MODEL || 'claude-haiku-4-5-20251001'
+  let model: string
+  let fallbacks: string[]
+  let mode: RouteMode
+  if (args.forceModel) {
+    model = args.forceModel
+    fallbacks = []
+    mode = routeMode || 'balanced'
+  } else {
+    ;({ model, fallbacks, mode } = selectModel(
+      version?.routePolicy,
+      version?.recommendedModels,
+      routeMode,
+      fallbackDefault,
+    ))
+  }
 
   // 4. 调用（主选失败则尝试 fallback）
   const messages = [{ role: 'user' as const, content: prompt }]
@@ -64,7 +75,18 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
   let lastError: string | undefined
   for (const m of candidates) {
     try {
-      result = await chatCompletion({ model: m, messages, apiKey: userApiKey })
+      result = await chatCompletion({
+        model: m,
+        messages,
+        apiKey: userApiKey,
+        metadata: {
+          runId,
+          skillId: skill?.id ? String(skill.id) : undefined,
+          skillVersionId: version?.id ? String(version.id) : undefined,
+          skillVersion: version?.version,
+          source: 'hengshu',
+        },
+      })
       usedModel = m
       break
     } catch (e) {
@@ -115,25 +137,27 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
     payload.logger?.error(`写入 SkillRun 失败: ${(e as Error).message}`)
   }
 
-  // 7. 更新 Skill 指标（O(1) 增量）
-  await updateSkillMetrics(payload, skill, {
-    success,
-    cost,
-    latencyMs: result?.latencyMs || 0,
-    formatValid,
-  })
+  // 7. 更新 Skill 指标 + 发贡献值（对比模式 skipAggregate 跳过，避免污染聚合）
+  if (!args.skipAggregate) {
+    await updateSkillMetrics(payload, skill, {
+      success,
+      cost,
+      latencyMs: result?.latencyMs || 0,
+      formatValid,
+    })
 
-  // 8. 成功调用 → 给作者 +0.1 贡献值
-  if (success) {
-    const authorId = typeof skill.author === 'object' ? skill.author?.id : skill.author
-    if (authorId) {
-      await awardContribution(payload, {
-        userId: authorId,
-        actionType: 'skill_run',
-        points: 0.1,
-        relatedSkill: skill.id,
-        description: 'Skill 被成功调用',
-      })
+    // 成功调用 → 给作者 +0.1 贡献值
+    if (success) {
+      const authorId = typeof skill.author === 'object' ? skill.author?.id : skill.author
+      if (authorId) {
+        await awardContribution(payload, {
+          userId: authorId,
+          actionType: 'skill_run',
+          points: 0.1,
+          relatedSkill: skill.id,
+          description: 'Skill 被成功调用',
+        })
+      }
     }
   }
 

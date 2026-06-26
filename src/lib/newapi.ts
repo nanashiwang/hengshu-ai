@@ -16,12 +16,21 @@ export interface NewApiResult {
   raw?: unknown
 }
 
+export interface GatewayMetadata {
+  runId?: string
+  skillId?: string
+  skillVersionId?: string
+  skillVersion?: string
+  source?: string
+}
+
 interface RunOpts {
   model: string
   messages: ChatMessage[]
   temperature?: number
   maxTokens?: number
   apiKey?: string // 用户绑定 Key 优先于全局
+  metadata?: GatewayMetadata // 透传给网关用于关联调用日志（产品文档 §12.4）
 }
 
 export class NewApiError extends Error {
@@ -31,6 +40,17 @@ export class NewApiError extends Error {
     this.status = status
     this.name = 'NewApiError'
   }
+}
+
+// 构造透传给网关的 metadata 请求头（X-YH-*）
+function metadataHeaders(m?: GatewayMetadata): Record<string, string> {
+  if (!m) return {}
+  const h: Record<string, string> = { 'X-YH-Source': m.source || 'hengshu' }
+  if (m.runId) h['X-YH-Run-ID'] = m.runId
+  if (m.skillId) h['X-YH-Skill-ID'] = String(m.skillId)
+  if (m.skillVersionId) h['X-YH-Skill-Version-ID'] = String(m.skillVersionId)
+  if (m.skillVersion) h['X-YH-Skill-Version'] = m.skillVersion
+  return h
 }
 
 export async function chatCompletion(opts: RunOpts): Promise<NewApiResult> {
@@ -48,6 +68,7 @@ export async function chatCompletion(opts: RunOpts): Promise<NewApiResult> {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
+      ...metadataHeaders(opts.metadata),
     },
     body: JSON.stringify({
       model: opts.model,

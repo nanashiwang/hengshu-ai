@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getPayloadClient } from '@/lib/payload'
 import { getCurrentUser } from '@/lib/auth'
-import { RunForm } from '@/components/RunForm'
+import { RunStudio } from '@/components/RunStudio'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +36,7 @@ export default async function RunPage({
 
   const user = await getCurrentUser()
   const inputSchema = (version?.inputSchema || {}) as Record<string, any>
+  const models = ((version?.recommendedModels as any)?.cloud || []) as string[]
 
   return (
     <div className="space-y-4">
@@ -46,7 +47,12 @@ export default async function RunPage({
         <h1 className="text-xl font-semibold">运行：{skill.title}</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">{skill.description}</p>
       </div>
-      <RunForm slug={skill.slug as string} inputSchema={inputSchema} loggedIn={!!user} />
+      <RunStudio
+        slug={skill.slug as string}
+        inputSchema={inputSchema}
+        loggedIn={!!user}
+        models={models}
+      />
     </div>
   )
 }
