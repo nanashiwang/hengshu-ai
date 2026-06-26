@@ -17,10 +17,10 @@ export default function FrontendLayout({ children }: { children: React.ReactNode
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body>
+      <body className="flex min-h-screen flex-col">
         <SiteNav />
-        <main className="mx-auto w-full max-w-6xl px-4 py-8">{children}</main>
-        <footer className="mt-12 border-t border-[var(--border)]">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
+        <footer className="border-t border-[var(--border)]">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-8 text-xs text-[var(--faint)] sm:flex-row sm:items-center sm:justify-between">
             <span>© 2026 元衡 SkillHub · v0.1</span>
             <span>New API 负责模型接入与计费 · SkillHub 负责任务封装、评测与分发</span>
