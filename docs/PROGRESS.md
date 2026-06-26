@@ -1,170 +1,170 @@
 # 衡术 Hengshu — 项目进度与规划
 
 > Verified AI Skills, Powered by Contribution.
-> 文档更新：2026-06-26 · 版本：v0.1（MVP 基础骨架）
-> 仓库：https://github.com/nanashiwang/hengshu-ai
+> 文档更新：2026-06-26 · 版本：v0.1（MVP）· 仓库：https://github.com/nanashiwang/hengshu-ai
 
 ---
 
 ## 1. 一句话现状
 
-衡术 Hengshu 的 **MVP 基础骨架已端到端跑通**：用户可浏览 Skill 市场 → 在线运行 Skill → 经 模型网关 调用真实模型 → 记录成本/耗时/成功率 → 形成 SkillRank → 收藏/评论/邀请/悬赏。前台支持浅色/深色主题，已容器化并接入真实 模型网关 网关。
+衡术 Hengshu 的 MVP 已端到端跑通，并完成一次关键的**架构方向调整**：从「中央服务器代跑」转向「**分发可下载的 Skill 能力包，用户用自己的算力运行**」。
 
-对照产品文档里程碑（§24）：**阶段 0（技术验证）已完成，阶段 1（MVP）核心已完成**，阶段 2~5 待推进。
+- 用户可：浏览市场 → 在线试用 / **下载 Skill** → 用本地 Runner / 自有模型运行 → 多模型对比 → 收藏/评论/邀请/悬赏
+- 已接入真实模型网关、支持浅/深主题、后台分组、容器化部署
 
 ---
 
-## 2. 技术栈与架构
+## 2. 架构方向：下载优先（分发 + 自带算力）★
+
+**核心判断**：把每次运行的算力都压在中央服务器，既贵又不扩展。正确定位是——**中央只做「发现 / 评测 / 分发 / 社区」，运行算力下沉到用户侧**。这契合产品文档的「AI 能力分发网络」定位与 PT 站「下载种子」隐喻。
+
+### 三种运行方式的定位
+
+| 方式 | 算力位置 | 定位 |
+|---|---|---|
+| 在线试用（云端运行） | 中央服务器 | 仅「尝一口」，需加配额/限流，**非主力** |
+| 下载 + 本地 Runner | 用户本地 | **主力**：自有模型，数据不出本地 |
+| 下载 + 自有网关 | 用户的网关 Key | 开发者：成本自担 |
+
+### 职责边界（调整后）
+
+```
+中央服务器（衡术）         用户侧
+──────────────────       ──────────────
+发现 / 搜索 / 分类          下载 manifest（轻量）
+SkillRank / 评测            ↓
+社区 / 贡献值 / 悬赏        本地 Runner / 自有网关
+分发 manifest（YAML/JSON）  ↓
+（可选）在线试用·限流       本地模型（Ollama/LM Studio/vLLM…）运行
+兼容报告聚合 ← ── 匿名回流 ── 运行结果（算力在用户侧）
+```
+
+> 中央**不再为每次运行买单**；只在用户主动选择「在线试用」时承担少量、可限流的算力。
+
+---
+
+## 3. 技术栈与架构
 
 | 层 | 选型 | 职责 |
 |---|---|---|
 | 前台 + API | **Next.js 16.2.6**（App Router, standalone） | 页面、RSC、自定义 `/v1` 端点 |
 | 基座 | **Payload CMS 3.85.1** | 数据建模 / 认证 / 权限 / 后台 / 钩子 / Local API |
-| 数据库 | **PostgreSQL 16**（Drizzle 适配器） | 主业务数据（dev 自动 push schema） |
-| 缓存/队列 | **Redis 7** | 预留（Worker / 限流 / 缓存） |
-| 模型网关 | **模型网关**（OpenAI 兼容，cn.meta-api.vip） | 模型调用、token 计费 |
-| 样式 | **Tailwind v4** + 集中式 CSS 令牌 | 双主题设计系统 |
-| 部署 | **Docker** 多阶段 + docker-compose | 本地/生产一致 |
-
-**职责边界**：Payload 管「内容/用户/后台/权限」；衡术自研 `src/lib/` + `/v1` 管「Skill 运行/路由/评测/贡献」。
-
-```
-用户浏览器
-   ↓
-Next.js（前台页面 + /v1 端点 + Payload admin/api）
-   ↓ Local API（零 HTTP）        ↓ fetch
-PostgreSQL / Redis           模型网关 → 模型供应商
-```
+| 数据库 | **PostgreSQL 16**（Drizzle） | 主业务数据（dev 自动 push schema） |
+| 缓存/队列 | **Redis 7** | 预留（限流 / 队列 / 缓存） |
+| 模型网关 | OpenAI 兼容网关（`MODEL_GATEWAY_*`） | 在线试用与对比的模型调用 |
+| 本地 Runner | `runner/`（Node CLI） | 下载后用本地/自有模型运行 |
+| 样式 | Tailwind v4 + 集中式 CSS 令牌 | 双主题设计系统 |
+| 部署 | Docker 多阶段 + docker-compose | 本地/生产一致 |
 
 ---
 
-## 3. 已实现功能清单
+## 4. 已实现功能清单
 
-### 3.1 数据层（12 Collection + 1 Global）✅
-`Users`（auth）· `Categories` · `Skills` · `SkillVersions` · `SkillRuns` · `Reviews` · `Favorites` · `InviteCodes` · `ContributionLogs` · `Bounties` · `Reports` · `Media` · `SiteSettings`(global)
+### 4.1 数据层（12 Collection + 1 Global）✅
+`Users`(auth) · `Categories` · `Skills` · `SkillVersions` · `SkillRuns` · `Reviews` · `Favorites` · `InviteCodes` · `ContributionLogs` · `Bounties` · `Reports` · `Media` · `SiteSettings`(global)
+- 函数式 Access Control（集合级 + 字段级）
+- **首个用户自动成为超级管理员**（Users beforeChange 钩子）
+- 关键钩子：slug 生成、发布 +50、收藏 +1、成功调用 +0.1、评论重算评分、版本→currentVersion
+- ⚠️ 已修复 Payload 钩子事务死锁（嵌套写操作透传 `req`）
 
-- 函数式 Access Control（集合级 + 字段级）：`isAdmin` / `ownerOrAdmin` / `publishedOrPrivileged` / 字段级敏感信息隔离
-- 关键业务钩子：
-  - slug 自动生成（Skills/Categories）
-  - **首个用户自动成为超管**（Users beforeChange）
-  - Skill 发布通过审核 → 作者 +50
-  - Skill 被收藏 → 作者 +1
-  - Skill 成功调用 → 作者 +0.1
-  - 评论变更 → 重算 avgRating/reviewCount
-  - 版本创建 → 自动设 currentVersion + 更新时间
-  - ⚠️ 已修复 Payload 钩子事务死锁（嵌套写操作透传 `req`）
+### 4.2 Skill 运行链路 ✅
+`src/lib/` 运行编排（产品文档 §12.2 闭环）：校验输入 → 渲染 Prompt → 选模型（路由）→ 调网关（带 fallback）→ 校验输出格式 → 写 SkillRun → 更新指标 → 发贡献值
+- 路由模式 cheap/quality/fast/balanced + fallback；无 Key 自动 mock 回退
+- **多模型对比**：`POST /v1/skills/[slug]/compare` 并行跑多模型，前台并排展示成本/耗时/tokens/格式对比表（高亮最优）
+- **网关 metadata 透传**：`X-YH-Source / Run-ID / Skill-ID / Skill-Version`（产品文档 §12.4），为关联网关日志铺路
 
-### 3.2 Skill 运行链路（核心）✅
-`src/lib/` 运行编排，完整实现产品文档 §12.2 闭环：
-```
-校验输入 → 渲染 Prompt({{var}}) → 选模型(路由策略) → 调 模型网关(带 fallback)
-→ 校验输出格式(JSON schema) → 写 SkillRun → 增量更新 Skill 指标 → 发贡献值
-```
-- 路由模式：`cheap / quality / fast / balanced` + fallback 链
-- 成本估算（token × 价格表）、首 token/耗时/成功率记录
-- **无 Key 自动 mock 回退**；**真实模型已验证**（claude-haiku-4-5 等）
-- 对外端点 `POST /v1/skills/{slug}/run`
+### 4.3 Skill 下载 + 本地 Runner ✅（下载优先核心）
+- `GET /v1/skills/[slug]/manifest?format=yaml|json`：导出可移植能力包（产品文档 §10.2）
+- 详情页「**下载 Skill**」为主操作，「在线试用」为次操作；`downloadCount` 指标
+- `runner/`：本地 Skill Runner CLI，连 Ollama / LM Studio / vLLM / 任意 OpenAI 兼容 endpoint 运行，**算力在用户侧**
 
-### 3.3 前台页面 ✅
-首页（Hero+精选+分类）· `/skills` 市场（PT 风格表+分类/排序/搜索）· `/skills/[slug]` 详情（§19 完整结构）· `/skills/[slug]/run` 在线运行（动态表单）· `/rank` 排行榜 · `/bounties` 悬赏（列表+详情+发布）· `/me` 个人中心 · `/login` `/register` · `/docs`
+### 4.4 前台页面 ✅
+首页 · `/skills` 市场（PT 风格表 + 分类/排序/搜索）· 详情（§19）· 在线运行/对比 · `/rank` · `/bounties`（列表/详情/发布）· `/me` · `/login` `/register` · `/docs`
 
-### 3.4 社区与 PT 化基础 ✅
-登录 · 邀请码注册 · 收藏（切换）· 评论评分 · 贡献值流水 · 邀请码管理 · 悬赏发布 · SkillRank/健康度 · 贡献榜
+### 4.5 后台（Payload Admin）✅
+- 左侧分组重整为 **系统设置 / 成员管理 / Skill 内容 / 审核治理**，一键直达、卡片可快捷新建
+- `access.admin` 限制：仅 admin/reviewer/enterprise_admin 进后台，普通用户走前台
 
-### 3.5 体验与工程 ✅
-- **浅色/深色主题**切换（localStorage 持久化 + 无闪烁注水）
-- 集中式设计系统（`.card/.btn/.chip/.input` + 阴影/圆角/双主题令牌）
-- sticky footer（页脚统一贴底）
-- Payload 自动后台 `/admin`
-- Worker 脚本：`npm run worker:skillrank`（SkillRank 批量重算）
-- 5 个官方 Skill 种子（小红书标题/会议纪要/邮件润色/周报/差评回复）
-- Docker 容器化 + compose（postgres/redis/app 一体）
+### 4.6 体验与工程 ✅
+浅/深色主题切换（持久化 + 无闪烁）· 集中式设计系统 · sticky footer · SkillRank 计算 + Worker 重算脚本 · 5 个官方 Skill 种子 · Docker 容器化 · 真实模型网关接入
 
 ---
 
-## 4. 端到端验证记录（实测）
+## 5. 端到端验证记录（实测）
 
 | 验证项 | 结果 |
 |---|---|
-| 生产构建 `npm run build` | ✅ 通过，19 条路由 |
-| DB schema 推送 | ✅ 12 集合 + 全局表 |
-| 真实模型运行（容器内） | ✅ `mocked:false`，claude-haiku-4-5，合法 JSON，成本/token/格式校验齐全 |
-| SkillRun 落库 + 指标更新 | ✅ run_count/success_rate/skill_rank 正确 |
-| 贡献值发放 | ✅ 发布 +50、调用 +0.1 |
-| 收藏/评论钩子 | ✅ favorite_count/avg_rating 重算无死锁 |
-| 双主题渲染 | ✅ 深/浅色截图验证 |
-| 容器化 | ✅ 8787 端口端到端可用 |
+| 生产构建 `npm run build` | ✅ 通过 |
+| 真实模型运行（容器内） | ✅ `mocked:false`，合法 JSON，成本/token/格式齐全 |
+| 多模型对比 | ✅ haiku vs sonnet 并行；haiku 便宜 4.5×、快 2× |
+| **本地 Runner** | ✅ 拉取 manifest + 直连网关运行成功，算力在用户侧 |
+| Skill 下载 | ✅ YAML/JSON manifest，downloadCount 累加 |
+| 首用户超管 / 后台分组 / 双主题 | ✅ 截图验证 |
 
 ---
 
-## 5. 本地运行速查
+## 6. 本地运行速查
 
 ```bash
-docker compose up -d            # 起 postgres(5433)/redis(6380)
+docker compose up -d            # postgres(5433) / redis(6380)
 cp .env.example .env            # 填 PAYLOAD_SECRET / MODEL_GATEWAY_*
 npm install && npm run dev      # http://localhost:3000
 npm run seed                    # 注入官方数据
 docker compose up -d app        # 容器版 http://localhost:8787
+
+# 本地 Runner（下载后用自己的模型跑）
+node runner/hengshu-run.mjs <slug 或 manifest 文件> \
+  --endpoint http://localhost:11434/v1 --model qwen2.5 --in topic=秋季护肤
 ```
+- 推荐初始化顺序：先 `/admin` 创建首个用户（自动超管）→ 再 `npm run seed`
 - 种子管理员：`admin@yuanheng.ai / admin12345` ｜ 邀请码：`WELCOME1`
-- 真实网关：`https://cn.meta-api.vip`（仅 Claude 4.x / GPT-5.x / grok-4.3）
 
 ---
 
-## 6. 已知限制 / 暂未实现
+## 7. 已知限制 / 待加固
 
-### 基础版/占位
-- `/rank`、`/me`、`/bounties`：功能可用但较基础（无分页、悬赏无接单/验收流程）
-- 评测中心：占位（指标来自真实运行聚合，无独立测试集评测）
-- Worker：仅重算脚本，无队列/定时调度
-- Fork：仅「敬请期待」反馈
-
-### 工程待加固
-- 生产仍需切 **migration**（当前 dev 用 push 自动同步）
-- 模型网关 Key **明文存储**，需加密（KMS/对称加密）
-- **邮件适配器**未配（注册验证/找回密码走 console）
-- 缺**速率限制**、错误监控、自动化测试
-
-### 产品文档后续阶段（§24 阶段 2~5）
-模型网关 深度联动 · 多模型对比 · 一键 Skill API · 创作者中心/认证 · 限免/H&R/贡献比强约束 · 工作流/RAG/工具 Skill · 本地 Runner · 企业版 · 支付分成
+- `/rank`、`/me`、`/bounties` 较基础；评测中心为占位（指标来自真实运行聚合）
+- Runner 为最小实现（暂无 install 缓存 / 运行记录 / 自动更新）
+- 工程：生产需切 migration（当前 dev push）；网关 Key 明文（需加密）；缺邮件适配器、速率限制、自动化测试
 
 ---
 
-## 7. 下一步建议（按优先级）
+## 8. 路线图（修订版 · 下载优先）
 
-### 优先级 A — 形成数据差异化（产品文档阶段 2 核心）
-1. **模型网关 深度联动**：本地同步模型列表与价格、调用透传 metadata（`X-YH-Run-ID`/`Skill-ID`）、关联 模型网关 调用日志、余额查询
-2. **多模型对比评测**：同一 Skill 一次跑多模型，并排展示准确率/成本/延迟/JSON 成功率 —— 这是区别于普通 Prompt 站的关键卖点
-3. **一键 Skill API**：用户生成 API Key，外部系统调用 Skill endpoint（开发者场景闭环）
+### 阶段 1（已基本完成）
+云端市场 + 在线试用 + 多模型对比 + **Skill 下载** + 最小本地 Runner + 后台分组 + 真实网关接入
 
-### 优先级 B — 评测与社区
-4. **评测中心 MVP**：上传测试集 + 批量评测 → 让 SkillRank 的「评测通过率」有真实来源
-5. **悬赏验收流程**：接单 → 提交 → 验收 → 释放赏金（贡献值结算）
-6. **创作者中心 + 认证**：发布管理、收益/曝光、认证创作者组
+### 阶段 2（建议下一步）— 把「下载-运行」做扎实
+1. **Runner 升级为可安装 CLI**：`hengshu install <slug>`（缓存 `~/.hengshu/skills`）、`run` / `list` / `update`，本地运行记录
+2. **本地模型兼容报告回流**：Runner 跑完可选匿名上报（模型/成功率/耗时/JSON 成功率）→ 中央 `compat-reports` 集合聚合成「本地模型兼容报告」（产品文档 §21.4 对比表）。**数据来自用户侧、零中央算力**，反哺 SkillRank 的本地维度
+3. **下载即贡献**：下载量/被复用纳入 PT 机制，给作者发贡献值；详情页展示下载量
+4. **在线试用加配额/限流**（Redis），防止把中央当免费算力
 
-### 优先级 C — 工程化与上线就绪
-7. 生产 migration 流程（`payload migrate:create` / `migrate`）
-8. 模型网关 Key 加密存储 + 邮件适配器（注册验证）
-9. Redis 速率限制 / 运行任务队列（异步评测）
-10. 单元测试（lib 运行编排）+ E2E（关键路径）
+### 阶段 3 — 分发网络
+5. 安装包版本同步、Runner 自动更新
+6. 私有 Skill / 企业内网 Runner（数据完全不出内网）
+7. Skill 组合 / 依赖下载（workflow）
 
-### 建议的最小下一步（可立即开工）
-> **「多模型对比 + 模型网关 metadata 透传」** 一起做：在运行页加「对比模式」选 2~3 个模型并行跑，落库多条 SkillRun，详情页展示对比表。它直接复用现有运行编排，改动小、产品价值最高，且能验证 模型网关 联动方向。
+### 阶段 4 — 商业化（成本结构更健康）
+8. 中央按「分发 / 评测 / 认证」收费，而非按运行收费（运行成本用户自担）
+9. 创作者分成基于**下载量 / 采用量**，而非调用量
+
+### 推荐的最小下一步
+> **#2 本地模型兼容报告回流 + Runner 缓存安装**：让 Runner 支持 `install/run/list` + `--report` 匿名上报；中央加 `compat-reports` 集合 + 详情页「本地模型兼容报告」区块。坐实「本地运行」为主力，同时让中央拿到差异化数据（哪个本地模型跑这个 Skill 好），且不增加服务器算力。
 
 ---
 
-## 8. 关键文件索引
+## 9. 关键文件索引
 
 | 路径 | 说明 |
 |---|---|
-| `src/payload.config.ts` | Payload 主配置（集合/db/admin） |
+| `src/payload.config.ts` | Payload 主配置（集合/分组/db/admin） |
 | `src/collections/*` | 12 个数据集合 + 钩子 |
-| `src/access/index.ts` | 权限规则 |
-| `src/lib/skillRunner.ts` | 运行编排（核心） |
-| `src/lib/newapi.ts` | 模型网关 客户端（含 mock 回退） |
-| `src/lib/skillrank.ts` | SkillRank 加权计算 |
-| `src/app/v1/**` | 对外 API（run/favorite/register） |
+| `src/access/index.ts` | 权限规则（含后台访问限制） |
+| `src/lib/skillRunner.ts` | 运行编排（含 forceModel/skipAggregate/metadata） |
+| `src/lib/newapi.ts` | 模型网关客户端（mock 回退 + X-YH-* 透传） |
+| `src/lib/manifest.ts` | Skill manifest 构造与序列化（YAML/JSON） |
+| `src/app/v1/skills/[slug]/{run,compare,favorite,manifest}` | 对外 API |
+| `runner/hengshu-run.mjs` | 本地 Skill Runner CLI |
 | `src/app/(frontend)/**` | 前台页面 |
-| `src/app/(frontend)/globals.css` | 设计系统 + 双主题令牌 |
-| `src/seed/*` | 种子脚本 + 官方 Skill 数据 |
 | `docs/yuanheng_skillhub_product_doc_v0.1.md` | 原始产品规划文档 |
