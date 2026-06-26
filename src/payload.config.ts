@@ -15,6 +15,8 @@ import { Reviews } from './collections/Reviews'
 import { Favorites } from './collections/Favorites'
 import { InviteCodes } from './collections/InviteCodes'
 import { ContributionLogs } from './collections/ContributionLogs'
+import { RunnerClients } from './collections/RunnerClients'
+import { DeviceCodes } from './collections/DeviceCodes'
 import { Bounties } from './collections/Bounties'
 import { Reports } from './collections/Reports'
 import { Media } from './collections/Media'
@@ -44,6 +46,8 @@ export default buildConfig({
     InviteCodes,
     ContributionLogs,
     Favorites,
+    RunnerClients,
+    DeviceCodes,
     // ── 审核治理 ──
     Reviews,
     Reports,

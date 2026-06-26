@@ -77,6 +77,8 @@ export interface Config {
     'invite-codes': InviteCode;
     'contribution-logs': ContributionLog;
     favorites: Favorite;
+    'runner-clients': RunnerClient;
+    'device-codes': DeviceCode;
     reviews: Review;
     reports: Report;
     media: Media;
@@ -97,6 +99,8 @@ export interface Config {
     'invite-codes': InviteCodesSelect<false> | InviteCodesSelect<true>;
     'contribution-logs': ContributionLogsSelect<false> | ContributionLogsSelect<true>;
     favorites: FavoritesSelect<false> | FavoritesSelect<true>;
+    'runner-clients': RunnerClientsSelect<false> | RunnerClientsSelect<true>;
+    'device-codes': DeviceCodesSelect<false> | DeviceCodesSelect<true>;
     reviews: ReviewsSelect<false> | ReviewsSelect<true>;
     reports: ReportsSelect<false> | ReportsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
@@ -467,6 +471,49 @@ export interface Favorite {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "runner-clients".
+ */
+export interface RunnerClient {
+  id: string;
+  user: string | User;
+  runnerId: string;
+  token?: string | null;
+  runnerVersion?: string | null;
+  os?: string | null;
+  arch?: string | null;
+  label?: string | null;
+  anonymousMode?: boolean | null;
+  trustedLevel?: ('community' | 'verified') | null;
+  lastSeenAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "device-codes".
+ */
+export interface DeviceCode {
+  id: string;
+  deviceCode: string;
+  userCode: string;
+  status?: ('pending' | 'authorized' | 'denied' | 'consumed') | null;
+  user?: (string | null) | User;
+  runnerClient?: (string | null) | RunnerClient;
+  meta?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  expiresAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "reviews".
  */
 export interface Review {
@@ -578,6 +625,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'favorites';
         value: string | Favorite;
+      } | null)
+    | ({
+        relationTo: 'runner-clients';
+        value: string | RunnerClient;
+      } | null)
+    | ({
+        relationTo: 'device-codes';
+        value: string | DeviceCode;
       } | null)
     | ({
         relationTo: 'reviews';
@@ -840,6 +895,39 @@ export interface ContributionLogsSelect<T extends boolean = true> {
 export interface FavoritesSelect<T extends boolean = true> {
   user?: T;
   skill?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "runner-clients_select".
+ */
+export interface RunnerClientsSelect<T extends boolean = true> {
+  user?: T;
+  runnerId?: T;
+  token?: T;
+  runnerVersion?: T;
+  os?: T;
+  arch?: T;
+  label?: T;
+  anonymousMode?: T;
+  trustedLevel?: T;
+  lastSeenAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "device-codes_select".
+ */
+export interface DeviceCodesSelect<T extends boolean = true> {
+  deviceCode?: T;
+  userCode?: T;
+  status?: T;
+  user?: T;
+  runnerClient?: T;
+  meta?: T;
+  expiresAt?: T;
   updatedAt?: T;
   createdAt?: T;
 }
