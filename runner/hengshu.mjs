@@ -86,6 +86,7 @@ function removeInstalled(slug) {
 
 function parseArgs(argv) {
   const a = { _: [], in: {} }
+  const BOOL = new Set(['raw', 'report', 'anon'])
   for (let i = 0; i < argv.length; i++) {
     const t = argv[i]
     if (t === '--in') {
@@ -94,7 +95,7 @@ function parseArgs(argv) {
       if (eq > 0) a.in[kv.slice(0, eq)] = kv.slice(eq + 1)
     } else if (t.startsWith('--')) {
       const k = t.slice(2)
-      if (k === 'raw') a.raw = true
+      if (BOOL.has(k)) a[k] = true
       else a[k] = argv[++i]
     } else {
       a._.push(t)
@@ -248,12 +249,71 @@ function render(template, vars) {
     return v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v)
   })
 }
+function bkt(n) {
+  const v = n || 0
+  if (v < 100) return '0-100'
+  if (v < 500) return '100-500'
+  if (v < 2000) return '500-2k'
+  if (v < 8000) return '2k-8k'
+  return '8k+'
+}
+function providerFromEndpoint(ep) {
+  if (/11434/.test(ep)) return 'ollama'
+  if (/1234/.test(ep)) return 'lmstudio'
+  if (/localhost|127\.0\.0\.1/.test(ep)) return 'local'
+  return 'openai_compatible'
+}
+function tryJson(text) {
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    /* noop */
+  }
+  const f = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (f) {
+    try {
+      return JSON.parse(f[1])
+    } catch {
+      /* noop */
+    }
+  }
+  const b = text.match(/\{[\s\S]*\}/)
+  if (b) {
+    try {
+      return JSON.parse(b[0])
+    } catch {
+      /* noop */
+    }
+  }
+  return null
+}
+function checkFormat(outputSchema, text) {
+  if (!outputSchema || outputSchema.type !== 'json' || !outputSchema.fields) return true
+  const parsed = tryJson(text)
+  if (!parsed || typeof parsed !== 'object') return false
+  return Object.keys(outputSchema.fields).every((k) => k in parsed)
+}
 async function collectInputs(schema, preset) {
   const vars = { ...preset }
+  const entries = Object.entries(schema || {})
+  const pending = entries.filter(([k]) => vars[k] == null || vars[k] === '')
+  if (pending.length === 0) return vars
+
+  // 非交互（管道/脚本）：必填缺失报错，可选跳过
+  if (!process.stdin.isTTY) {
+    for (const [key, def] of pending) {
+      if (def && def.required) {
+        console.error(`缺少必填字段：${(def && def.label) || key}（非交互模式请用 --in 提供）`)
+        process.exit(1)
+      }
+    }
+    return vars
+  }
+
   const rl = readline.createInterface({ input, output })
   try {
-    for (const [key, def] of Object.entries(schema || {})) {
-      if (vars[key] != null && vars[key] !== '') continue
+    for (const [key, def] of pending) {
       const label = (def && def.label) || key
       const req = def && def.required ? '（必填）' : '（可选，回车跳过）'
       const opts = def && def.options ? `[${def.options.map((o) => (typeof o === 'string' ? o : o.value || o.label)).join('/')}] ` : ''
@@ -302,23 +362,67 @@ async function cmdRun(args) {
   const messages = [...(sys ? [{ role: 'system', content: sys }] : []), { role: 'user', content: render(userTemplate, vars) }]
 
   const start = Date.now()
-  const res = await fetch(`${endpoint}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(args.key ? { Authorization: `Bearer ${args.key}` } : {}) },
-    body: JSON.stringify({ model, messages }),
-  })
+  let res = null
+  let errorType
+  try {
+    res = await fetch(`${endpoint}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(args.key ? { Authorization: `Bearer ${args.key}` } : {}) },
+      body: JSON.stringify({ model, messages }),
+    })
+  } catch {
+    errorType = 'network'
+  }
   const latency = Date.now() - start
-  if (!res.ok) throw new Error(`模型调用失败（${res.status}）：${(await res.text()).slice(0, 300)}`)
-  const data = await res.json()
-  const text = data?.choices?.[0]?.message?.content ?? ''
 
-  if (args.raw) console.log(text)
-  else {
-    console.log('—'.repeat(48))
-    console.log(text)
-    console.log('—'.repeat(48))
-    const u = data.usage || {}
-    console.log(`⏱  ${latency}ms   tokens: ${u.total_tokens ?? '?'}   （本地/自有算力，未经中央服务器）`)
+  let success = false
+  let text = ''
+  let usage = {}
+  if (res && res.ok) {
+    const data = await res.json()
+    text = data?.choices?.[0]?.message?.content ?? ''
+    usage = data.usage || {}
+    success = true
+  } else if (res) {
+    errorType = `http_${res.status}`
+  }
+
+  if (success) {
+    if (args.raw) console.log(text)
+    else {
+      console.log('—'.repeat(48))
+      console.log(text)
+      console.log('—'.repeat(48))
+      console.log(`⏱  ${latency}ms   tokens: ${usage.total_tokens ?? '?'}   （本地/自有算力，未经中央服务器）`)
+    }
+  } else {
+    console.error(`模型调用失败：${errorType}`)
+  }
+
+  // --report：回传可聚合指标（不含输入/输出原文）
+  if (args.report && cfg.token) {
+    const slug = manifest.id || ref
+    const inputChars = messages.reduce((a, m) => a + (m.content || '').length, 0)
+    const payload = {
+      slug,
+      model,
+      modelProvider: providerFromEndpoint(endpoint),
+      success,
+      latencyMs: latency,
+      formatValid: success ? checkFormat(manifest.output_schema, text) : false,
+      errorType,
+      inputSizeBucket: bkt(inputChars),
+      outputSizeBucket: bkt(text.length),
+      anon: !!args.anon,
+    }
+    const hub = (args.hub || cfg.hub || DEFAULT_HUB).replace(/\/$/, '')
+    try {
+      const r = await fetch(`${hub}/v1/runner/report`, { method: 'POST', headers: bearer(cfg.token), body: JSON.stringify(payload) })
+      const d = await r.json().catch(() => ({}))
+      if (!args.raw && d.ok) console.log(`📡 已提交兼容报告${args.anon ? '（匿名）' : ''}　LocalScore=${d.localScore}`)
+    } catch {
+      /* best-effort */
+    }
   }
 
   // 已安装 + 已登录 → 刷新活跃时间（best-effort）
@@ -326,6 +430,8 @@ async function cmdRun(args) {
     const hub = (args.hub || cfg.hub || DEFAULT_HUB).replace(/\/$/, '')
     fetch(`${hub}/v1/runner/touch`, { method: 'POST', headers: bearer(cfg.token), body: JSON.stringify({ slug: ref }) }).catch(() => {})
   }
+
+  if (!success) process.exit(1)
 }
 
 // ───────── doctor ─────────

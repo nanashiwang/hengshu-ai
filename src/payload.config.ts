@@ -10,6 +10,7 @@ import { Categories } from './collections/Categories'
 import { Skills } from './collections/Skills'
 import { SkillVersions } from './collections/SkillVersions'
 import { SkillArtifacts } from './collections/SkillArtifacts'
+import { CompatReports } from './collections/CompatReports'
 import { SkillRuns } from './collections/SkillRuns'
 import { Reviews } from './collections/Reviews'
 import { Favorites } from './collections/Favorites'
@@ -42,6 +43,7 @@ export default buildConfig({
     Categories,
     SkillRuns,
     Bounties,
+    CompatReports,
     // ── 成员管理 ──
     Users,
     InviteCodes,

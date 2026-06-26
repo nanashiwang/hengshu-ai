@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getPayloadClient } from '@/lib/payload'
+import { aggregateByModel } from '@/lib/compat'
 import { getCurrentUser } from '@/lib/auth'
 import { SkillStatusTags } from '@/components/Tag'
 import { FavoriteButton } from '@/components/FavoriteButton'
@@ -59,7 +60,8 @@ async function getSkill(slug: string) {
     })
     checksum = ((art.docs[0] as any)?.checksum as string) || null
   }
-  return { skill, version, reviews: reviews.docs, versions: versions.docs, checksum }
+  const compat = await aggregateByModel(payload, skill.id as string)
+  return { skill, version, reviews: reviews.docs, versions: versions.docs, checksum, compat }
 }
 
 export default async function SkillDetailPage({
@@ -70,7 +72,7 @@ export default async function SkillDetailPage({
   const { slug } = await params
   const data = await getSkill(slug)
   if (!data) notFound()
-  const { skill, version, reviews, versions, checksum } = data
+  const { skill, version, reviews, versions, checksum, compat } = data
 
   // 当前用户与收藏态
   const user = await getCurrentUser()
@@ -245,9 +247,39 @@ export default async function SkillDetailPage({
             </div>
           </Section>
 
-          {/* 6. 评测结果（占位） */}
-          <Section title="评测结果">
-            <Empty>评测中心建设中。当前指标由真实运行数据聚合。</Empty>
+          {/* 6. 本地模型兼容报告 */}
+          <Section
+            title={`本地模型兼容报告${(skill as any).localScore ? ` · LocalScore ${(skill as any).localScore}` : ''}`}
+          >
+            {compat.length === 0 ? (
+              <Empty>
+                暂无兼容报告。用 <code className="surface px-1 text-[11px]">hengshu run --report</code>{' '}
+                贡献你本地模型的兼容数据（不含输入/输出）。
+              </Empty>
+            ) : (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border)] text-left text-[var(--muted)]">
+                    <th className="py-1.5 font-medium">模型</th>
+                    <th className="py-1.5 text-right font-medium">成功率</th>
+                    <th className="py-1.5 text-right font-medium">JSON率</th>
+                    <th className="py-1.5 text-right font-medium">耗时</th>
+                    <th className="py-1.5 text-right font-medium">报告</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {compat.map((m: any) => (
+                    <tr key={m.modelName} className="border-b border-[var(--border)] last:border-0">
+                      <td className="py-1.5 font-mono">{m.modelName}</td>
+                      <td className="py-1.5 text-right">{formatPercent(m.successRate)}</td>
+                      <td className="py-1.5 text-right">{formatPercent(m.formatRate)}</td>
+                      <td className="py-1.5 text-right">{formatLatency(m.avgLatencyMs)}</td>
+                      <td className="py-1.5 text-right text-[var(--muted)]">{m.reports}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </Section>
 
           {/* 7. 版本历史 */}

@@ -85,6 +85,7 @@ export const Skills: CollectionConfig = {
       admin: { initCollapsed: true },
       fields: [
         { name: 'skillRank', type: 'number', defaultValue: 0, label: 'SkillRank' },
+        { name: 'localScore', type: 'number', defaultValue: 0, label: 'LocalScore（本地兼容）' },
         { name: 'healthScore', type: 'number', defaultValue: 0, label: '健康度' },
         { name: 'runCount', type: 'number', defaultValue: 0, label: '调用次数' },
         { name: 'downloadCount', type: 'number', defaultValue: 0, label: '下载次数' },

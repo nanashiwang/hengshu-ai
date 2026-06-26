@@ -73,6 +73,7 @@ export interface Config {
     categories: Category;
     'skill-runs': SkillRun;
     bounties: Bounty;
+    'compat-reports': CompatReport;
     users: User;
     'invite-codes': InviteCode;
     'contribution-logs': ContributionLog;
@@ -96,6 +97,7 @@ export interface Config {
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     'skill-runs': SkillRunsSelect<false> | SkillRunsSelect<true>;
     bounties: BountiesSelect<false> | BountiesSelect<true>;
+    'compat-reports': CompatReportsSelect<false> | CompatReportsSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
     'invite-codes': InviteCodesSelect<false> | InviteCodesSelect<true>;
     'contribution-logs': ContributionLogsSelect<false> | ContributionLogsSelect<true>;
@@ -167,6 +169,7 @@ export interface Skill {
   isFeatured?: boolean | null;
   isFreeleech?: boolean | null;
   skillRank?: number | null;
+  localScore?: number | null;
   healthScore?: number | null;
   runCount?: number | null;
   downloadCount?: number | null;
@@ -416,6 +419,51 @@ export interface Bounty {
   createdAt: string;
 }
 /**
+ * 本地模型兼容报告（系统接收，不含输入/输出原文）
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "compat-reports".
+ */
+export interface CompatReport {
+  id: string;
+  skill: string | Skill;
+  skillVersion?: (string | null) | SkillVersion;
+  runner?: (string | null) | RunnerClient;
+  anonymousUserHash?: string | null;
+  modelProvider?: string | null;
+  modelName?: string | null;
+  modelVersion?: string | null;
+  success?: boolean | null;
+  latencyMs?: number | null;
+  formatValid?: boolean | null;
+  errorType?: string | null;
+  inputSizeBucket?: string | null;
+  outputSizeBucket?: string | null;
+  runnerVersion?: string | null;
+  source?: ('community' | 'verified') | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "runner-clients".
+ */
+export interface RunnerClient {
+  id: string;
+  user: string | User;
+  runnerId: string;
+  token?: string | null;
+  runnerVersion?: string | null;
+  os?: string | null;
+  arch?: string | null;
+  label?: string | null;
+  anonymousMode?: boolean | null;
+  trustedLevel?: ('community' | 'verified') | null;
+  lastSeenAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "invite-codes".
  */
@@ -468,25 +516,6 @@ export interface Favorite {
   id: string;
   user?: (string | null) | User;
   skill: string | Skill;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "runner-clients".
- */
-export interface RunnerClient {
-  id: string;
-  user: string | User;
-  runnerId: string;
-  token?: string | null;
-  runnerVersion?: string | null;
-  os?: string | null;
-  arch?: string | null;
-  label?: string | null;
-  anonymousMode?: boolean | null;
-  trustedLevel?: ('community' | 'verified') | null;
-  lastSeenAt?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -631,6 +660,10 @@ export interface PayloadLockedDocument {
         value: string | Bounty;
       } | null)
     | ({
+        relationTo: 'compat-reports';
+        value: string | CompatReport;
+      } | null)
+    | ({
         relationTo: 'users';
         value: string | User;
       } | null)
@@ -729,6 +762,7 @@ export interface SkillsSelect<T extends boolean = true> {
   isFeatured?: T;
   isFreeleech?: T;
   skillRank?: T;
+  localScore?: T;
   healthScore?: T;
   runCount?: T;
   downloadCount?: T;
@@ -847,6 +881,29 @@ export interface BountiesSelect<T extends boolean = true> {
   requirements?: T;
   dueAt?: T;
   isPublic?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "compat-reports_select".
+ */
+export interface CompatReportsSelect<T extends boolean = true> {
+  skill?: T;
+  skillVersion?: T;
+  runner?: T;
+  anonymousUserHash?: T;
+  modelProvider?: T;
+  modelName?: T;
+  modelVersion?: T;
+  success?: T;
+  latencyMs?: T;
+  formatValid?: T;
+  errorType?: T;
+  inputSizeBucket?: T;
+  outputSizeBucket?: T;
+  runnerVersion?: T;
+  source?: T;
   updatedAt?: T;
   createdAt?: T;
 }
