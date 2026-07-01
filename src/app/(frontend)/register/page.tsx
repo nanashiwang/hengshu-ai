@@ -58,7 +58,7 @@ export default function RegisterPage() {
         className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--panel)] p-6"
       >
         {error && <div className="text-sm text-[var(--danger)]">{error}</div>}
-        <Field label="邀请码" value={form.inviteCode} onChange={(v) => set('inviteCode', v)} placeholder="如：WELCOME1" />
+        <Field label="邀请码" value={form.inviteCode} onChange={(v) => set('inviteCode', v)} placeholder="输入你的邀请码" />
         <Field label="用户名" value={form.username} onChange={(v) => set('username', v)} placeholder="昵称" />
         <Field label="邮箱" type="email" value={form.email} onChange={(v) => set('email', v)} placeholder="you@example.com" />
         <Field label="密码" type="password" value={form.password} onChange={(v) => set('password', v)} placeholder="至少 8 位" />
@@ -69,7 +69,6 @@ export default function RegisterPage() {
           {loading ? '注册中…' : '注册'}
         </button>
       </form>
-      <p className="mt-4 text-center text-xs text-[var(--muted)]">种子邀请码：WELCOME1</p>
     </div>
   )
 }

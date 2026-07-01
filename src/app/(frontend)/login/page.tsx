@@ -59,9 +59,6 @@ export default function LoginPage() {
           {loading ? '登录中…' : '登录'}
         </button>
       </form>
-      <p className="mt-4 text-center text-xs text-[var(--muted)]">
-        种子管理员：admin@yuanheng.ai / admin12345
-      </p>
     </div>
   )
 }
