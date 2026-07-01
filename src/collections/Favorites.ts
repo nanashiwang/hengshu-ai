@@ -30,6 +30,8 @@ async function adjustFavoriteCount(payload: any, skillId: string, delta: number,
 
 export const Favorites: CollectionConfig = {
   slug: 'favorites',
+  // 复合唯一：一个用户对一个 Skill 只能有一条收藏，杜绝重复导致 favoriteCount 虚高
+  indexes: [{ fields: ['user', 'skill'], unique: true }],
   labels: { singular: '收藏', plural: '收藏' },
   admin: {
     useAsTitle: 'id',

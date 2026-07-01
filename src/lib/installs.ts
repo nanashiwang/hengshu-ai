@@ -73,11 +73,30 @@ export async function upsertInstall(
       overrideAccess: true,
     })
   }
-  return payload.create({
-    collection: 'skill-installs',
-    overrideAccess: true,
-    data: { ...data, installedAt: now },
-  })
+  try {
+    return await payload.create({
+      collection: 'skill-installs',
+      overrideAccess: true,
+      data: { ...data, installedAt: now },
+    })
+  } catch (e) {
+    // 复合唯一约束兜底：并发下已被另一次创建 → 回查并更新
+    const again = await payload.find({
+      collection: 'skill-installs',
+      where,
+      limit: 1,
+      overrideAccess: true,
+    })
+    if (again.docs[0]) {
+      return payload.update({
+        collection: 'skill-installs',
+        id: again.docs[0].id,
+        data,
+        overrideAccess: true,
+      })
+    }
+    throw e
+  }
 }
 
 export async function findInstall(

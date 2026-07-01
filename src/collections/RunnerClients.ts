@@ -46,4 +46,32 @@ export const RunnerClients: CollectionConfig = {
     },
     { name: 'lastSeenAt', type: 'date', label: '最近活跃' },
   ],
+  hooks: {
+    beforeDelete: [
+      async ({ id, req }) => {
+        // 删 Runner 前解除引用，避免 skill-installs / compat-reports 的 runner 悬空
+        await req.payload.update({
+          collection: 'skill-installs',
+          where: { runner: { equals: id } },
+          data: { runner: null },
+          overrideAccess: true,
+          req,
+        })
+        await req.payload.update({
+          collection: 'compat-reports',
+          where: { runner: { equals: id } },
+          data: { runner: null },
+          overrideAccess: true,
+          req,
+        })
+        await req.payload.update({
+          collection: 'device-codes',
+          where: { runnerClient: { equals: id } },
+          data: { runnerClient: null },
+          overrideAccess: true,
+          req,
+        })
+      },
+    ],
+  },
 }

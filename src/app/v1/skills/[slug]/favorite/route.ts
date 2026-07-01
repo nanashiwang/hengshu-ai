@@ -34,10 +34,22 @@ export async function POST(
     return Response.json({ favorited: false })
   }
 
-  await payload.create({
-    collection: 'favorites',
-    data: { user: user.id, skill: skill.id },
-    overrideAccess: true,
-  })
+  try {
+    await payload.create({
+      collection: 'favorites',
+      data: { user: user.id, skill: skill.id },
+      overrideAccess: true,
+    })
+  } catch (e) {
+    // 复合唯一约束兜底：仅当确已存在（并发/重复）才视为已收藏，其它真错误照抛
+    const again = await payload.find({
+      collection: 'favorites',
+      where: { and: [{ user: { equals: user.id } }, { skill: { equals: skill.id } }] },
+      limit: 1,
+      overrideAccess: true,
+    })
+    if (again.docs[0]) return Response.json({ favorited: true })
+    throw e
+  }
   return Response.json({ favorited: true })
 }

@@ -37,6 +37,8 @@ async function recomputeSkillRating(payload: any, skillId: string, req?: any) {
 
 export const Reviews: CollectionConfig = {
   slug: 'reviews',
+  // 复合唯一：一个用户对一个 Skill 每种类型只能一条，防刷 reviewCount / 评分
+  indexes: [{ fields: ['user', 'skill', 'type'], unique: true }],
   labels: { singular: '评论', plural: '评论' },
   admin: {
     useAsTitle: 'id',

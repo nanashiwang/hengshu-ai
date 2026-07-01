@@ -5,6 +5,8 @@ import { rowActionsField } from './fields/rowActions'
 // 安装记录（≠下载）。一台 Runner 装某 Skill 一条；是「安装/有效安装/活跃安装」指标的来源。
 export const SkillInstalls: CollectionConfig = {
   slug: 'skill-installs',
+  // 复合唯一：user+skill+runner 只有一条安装记录，防重复膨胀「有效安装」指标
+  indexes: [{ fields: ['user', 'skill', 'runner'], unique: true }],
   labels: { singular: '安装记录', plural: '安装记录' },
   admin: {
     useAsTitle: 'id',

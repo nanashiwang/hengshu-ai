@@ -39,5 +39,17 @@ export const Categories: CollectionConfig = {
         return data
       },
     ],
+    beforeDelete: [
+      async ({ id, req }) => {
+        // 删分类前解除引用，避免 skills.category 悬空导致前台筛选/展示错乱
+        await req.payload.update({
+          collection: 'skills',
+          where: { category: { equals: id } },
+          data: { category: null },
+          overrideAccess: true,
+          req,
+        })
+      },
+    ],
   },
 }

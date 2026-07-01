@@ -36,8 +36,18 @@ export function ReviewForm({ skillId, loggedIn }: { skillId: string; loggedIn: b
         body: JSON.stringify({ skill: skillId, rating, content, type }),
       })
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        setError(d?.errors?.[0]?.message || '提交失败')
+        const raw = await res.text().catch(() => '')
+        if (/duplicate|unique|已存在|唯一/i.test(raw)) {
+          setError('你已对该 Skill 发表过同类型评价，请先编辑或删除原评价')
+        } else {
+          let msg = '提交失败'
+          try {
+            msg = JSON.parse(raw)?.errors?.[0]?.message || msg
+          } catch {
+            /* 非 JSON 响应，用默认文案 */
+          }
+          setError(msg)
+        }
         return
       }
       setContent('')
