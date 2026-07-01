@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
 import { formatNumber } from '@/lib/format'
 import { ThemeToggle } from './ThemeToggle'
+import { MobileNav } from './MobileNav'
 
 const NAV = [
   { href: '/skills', label: 'Skill 市场' },
@@ -24,6 +25,8 @@ export async function SiteNav() {
             衡术 <span className="text-[var(--accent)]">Hengshu</span>
           </span>
         </Link>
+
+        <MobileNav items={NAV} />
 
         <nav className="hidden items-center gap-1 text-sm sm:flex">
           {NAV.map((n) => (
