@@ -97,7 +97,7 @@ npm run seed                         # 管理员+分类+5官方Skill+邀请码
 npm run migrate:spec-v1              # 旧版本迁移到 Spec v1（幂等）
 npm run artifacts:backfill           # 冻结现有版本制品（幂等）
 npm run seed:rules                   # 术值规则（幂等，含 compat_report）
-npm run keygen                       # 生成 ed25519 签名密钥（输出 HENGSHU_SIGNING_KEY=... 写入 .env）
+npm run keygen                       # 生成 ed25519 签名密钥（打印到 stdout，需手动粘贴进 .env；首启自动生成见部署文档 P0-3）
 npm run artifacts:backfill           # 冻结现有版本制品（幂等）；配了签名密钥则带签名
 docker compose up -d app             # 容器版 http://localhost:8787
 node runner/hengshu.mjs <cmd>        # 本地 Runner
@@ -126,5 +126,6 @@ node runner/hengshu.mjs <cmd>        # 本地 Runner
 | `src/app/v1/**` | 对外 API |
 | `runner/hengshu.mjs` | 本地 Runner CLI |
 | `src/seed/*` | 种子/迁移/回填脚本 |
-| `docs/hengshu_prd_v0.2.1.md` | 收敛修订版 PRD（规划依据） |
-| `docs/体验手册.md` | 完整闭环体验操作手册 |
+| `docs/衡术-总纲.md` | **唯一开发依据**：定位/护城河5层/三币经济/统一落地路线(阶段0-4)/待拍板决策/代码锚点（已整合原 4 份规划稿） |
+| `docs/hengshu_prd_v0.2.1.md` | 收敛修订版 PRD（历史参考） |
+| `docs/体验手册.md` | 完整闭环体验操作手册（历史参考） |
