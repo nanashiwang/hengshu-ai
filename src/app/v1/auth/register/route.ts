@@ -63,12 +63,11 @@ export async function POST(request: Request) {
     data: { status: 'used', usedBy: newUser.id },
   })
 
-  // 给邀请人 +5 贡献值
+  // 给邀请人发术值（分值与每日上限由 contribution-rules 的 invite 规则决定，未配规则则不发）
   if (inviterId) {
     await awardContribution(payload, {
       userId: inviterId,
       actionType: 'invite',
-      points: 5,
       description: '邀请新用户注册',
     })
   }
