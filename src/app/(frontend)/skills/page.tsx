@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getPayloadClient } from '@/lib/payload'
 import { SkillStatusTags } from '@/components/Tag'
+import { Pagination } from '@/components/Pagination'
 import {
   formatCost,
   formatLatency,
@@ -10,6 +11,8 @@ import {
 } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
+
+const PAGE_SIZE = 25
 
 const SORTS = [
   { key: 'skillRank', label: '综合', sort: '-skillRank' },
@@ -50,7 +53,15 @@ export default async function SkillsPage({
   if (activeCat) where.and.push({ category: { equals: activeCat.id } })
   if (q) where.and.push({ title: { like: q } })
 
-  const res = await payload.find({ collection: 'skills', where, depth: 1, limit: 60, sort })
+  const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
+  const res = await payload.find({
+    collection: 'skills',
+    where,
+    depth: 1,
+    limit: PAGE_SIZE,
+    page,
+    sort,
+  })
   const skills = res.docs
 
   return (
@@ -63,7 +74,7 @@ export default async function SkillsPage({
       {/* 分类筛选 */}
       <div className="flex flex-wrap gap-2">
         <Link
-          href={buildHref(sp, { category: undefined })}
+          href={buildHref(sp, { category: undefined, page: undefined })}
           className={`rounded-full border px-3 py-1 text-sm ${
             !activeCat
               ? 'border-[var(--accent)] text-[var(--accent)]'
@@ -75,7 +86,7 @@ export default async function SkillsPage({
         {categories.map((c: any) => (
           <Link
             key={c.id}
-            href={buildHref(sp, { category: c.slug })}
+            href={buildHref(sp, { category: c.slug, page: undefined })}
             className={`rounded-full border px-3 py-1 text-sm ${
               activeCat?.id === c.id
                 ? 'border-[var(--accent)] text-[var(--accent)]'
@@ -93,7 +104,7 @@ export default async function SkillsPage({
           {SORTS.map((s) => (
             <Link
               key={s.key}
-              href={buildHref(sp, { sort: s.key })}
+              href={buildHref(sp, { sort: s.key, page: undefined })}
               className={`rounded-md px-3 py-1 ${
                 sortKey === s.key
                   ? 'bg-[var(--panel-2)] text-[var(--text)]'
@@ -182,6 +193,8 @@ export default async function SkillsPage({
           </table>
         </div>
       )}
+
+      <Pagination page={res.page || page} totalPages={res.totalPages || 1} basePath="/skills" params={sp} />
     </div>
   )
 }

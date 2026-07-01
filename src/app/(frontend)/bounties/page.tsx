@@ -2,9 +2,12 @@ import Link from 'next/link'
 import { getPayloadClient } from '@/lib/payload'
 import { getCurrentUser } from '@/lib/auth'
 import { BountyForm } from '@/components/BountyForm'
+import { Pagination } from '@/components/Pagination'
 import { formatNumber, timeAgo } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
+
+const PAGE_SIZE = 20
 
 const STATUS_LABELS: Record<string, string> = {
   open: '开放中',
@@ -14,13 +17,20 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: '已取消',
 }
 
-export default async function BountiesPage() {
+export default async function BountiesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>
+}) {
+  const sp = await searchParams
   const payload = await getPayloadClient()
   const user = await getCurrentUser()
+  const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
   const res = await payload.find({
     collection: 'bounties',
     depth: 1,
-    limit: 50,
+    limit: PAGE_SIZE,
+    page,
     sort: '-createdAt',
   })
 
@@ -69,6 +79,8 @@ export default async function BountiesPage() {
           })}
         </div>
       )}
+
+      <Pagination page={res.page || page} totalPages={res.totalPages || 1} basePath="/bounties" params={sp} />
     </div>
   )
 }
