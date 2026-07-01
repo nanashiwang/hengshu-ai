@@ -19,7 +19,21 @@ export function anonHash(runnerId: string): string {
     .slice(0, 32)
 }
 
-// 由兼容报告聚合重算 Skill 的 LocalScore（0-100）并写回
+// ── 护城河第0层：活体数据聚合 ──
+// 近期数据主导（模型月更、旧样本会腐坏）：按时间指数衰减加权；样本稀疏则诚实标注、不用误导性百分比霸榜。
+const HALF_LIFE_DAYS = 30 // 半衰期：30 天前的报告权重减半
+const MIN_MODEL_SAMPLE = 5 // 单模型报告数 < 此值 → lowSample（前端显示"战绩积累中"而非百分比）
+const CONF_FULL_N = 10 // LocalScore 置信满额所需的有效(衰减)样本量；不足则按置信度衰减分数
+
+function decayWeight(createdAt: unknown, nowMs: number): number {
+  const t = createdAt ? new Date(createdAt as string).getTime() : NaN
+  // 缺失/非法时间戳按 0 权重（不计入），避免"无时间"被当作"最新报告"霸榜/被利用
+  if (!Number.isFinite(t)) return 0
+  const ageDays = Math.max(0, (nowMs - t) / 86_400_000)
+  return Math.pow(0.5, ageDays / HALF_LIFE_DAYS)
+}
+
+// 由兼容报告聚合重算 Skill 的 LocalScore（0-100）并写回（衰减加权 + 置信度衰减）
 export async function recomputeLocalScore(payload: Payload, skillId: string) {
   const res = await payload.find({
     collection: 'compat-reports',
@@ -31,11 +45,27 @@ export async function recomputeLocalScore(payload: Payload, skillId: string) {
   const reports = res.docs as any[]
   let localScore = 0
   if (reports.length > 0) {
-    const successRate = reports.filter((r) => r.success).length / reports.length
-    const formatRate = reports.filter((r) => r.formatValid).length / reports.length
-    const distinctModels = new Set(reports.map((r) => r.modelName)).size
-    const coverage = Math.min(1, distinctModels / 3)
-    localScore = Math.round(100 * (0.6 * successRate + 0.3 * formatRate + 0.1 * coverage))
+    const now = Date.now()
+    let wSum = 0
+    let wSuccess = 0
+    let wFormat = 0
+    const models = new Set<string>()
+    for (const r of reports) {
+      const w = decayWeight(r.createdAt, now)
+      wSum += w
+      if (r.success) wSuccess += w
+      if (r.formatValid) wFormat += w
+      if (r.modelName) models.add(r.modelName)
+    }
+    if (wSum > 0) {
+      const successRate = wSuccess / wSum
+      const formatRate = wFormat / wSum
+      const coverage = Math.min(1, models.size / 3)
+      const base = 0.6 * successRate + 0.3 * formatRate + 0.1 * coverage
+      // 置信度：有效(衰减)样本不足时按比例衰减分数，杜绝 N=1 的 100% 噪声霸榜
+      const confidence = Math.min(1, wSum / CONF_FULL_N)
+      localScore = Math.round(100 * base * confidence)
+    }
   }
   await payload.update({
     collection: 'skills',
@@ -54,6 +84,7 @@ export interface ModelCompat {
   successRate: number
   formatRate: number
   avgLatencyMs: number
+  lowSample: boolean // 样本不足：前端应显示"战绩积累中"而非百分比
 }
 export async function aggregateByModel(payload: Payload, skillId: string): Promise<ModelCompat[]> {
   const res = await payload.find({
@@ -63,6 +94,7 @@ export async function aggregateByModel(payload: Payload, skillId: string): Promi
     depth: 0,
     overrideAccess: true,
   })
+  const now = Date.now()
   const byModel = new Map<string, any[]>()
   for (const r of res.docs as any[]) {
     const m = r.modelName || 'unknown'
@@ -71,14 +103,29 @@ export async function aggregateByModel(payload: Payload, skillId: string): Promi
   }
   const out: ModelCompat[] = []
   for (const [modelName, rs] of byModel) {
-    const n = rs.length
+    let wSum = 0
+    let wSuccess = 0
+    let wFormat = 0
+    let wLatency = 0
+    let wLatencySum = 0
+    for (const r of rs) {
+      const w = decayWeight(r.createdAt, now)
+      wSum += w
+      if (r.success) wSuccess += w
+      if (r.formatValid) wFormat += w
+      if (typeof r.latencyMs === 'number') {
+        wLatency += w * r.latencyMs
+        wLatencySum += w
+      }
+    }
     out.push({
       modelName,
-      reports: n,
+      reports: rs.length,
       verified: rs.filter((r) => r.source === 'verified').length,
-      successRate: rs.filter((r) => r.success).length / n,
-      formatRate: rs.filter((r) => r.formatValid).length / n,
-      avgLatencyMs: Math.round(rs.reduce((a, r) => a + (r.latencyMs || 0), 0) / n),
+      successRate: wSum > 0 ? wSuccess / wSum : 0,
+      formatRate: wSum > 0 ? wFormat / wSum : 0,
+      avgLatencyMs: wLatencySum > 0 ? Math.round(wLatency / wLatencySum) : 0,
+      lowSample: rs.length < MIN_MODEL_SAMPLE,
     })
   }
   return out.sort((a, b) => b.reports - a.reports)

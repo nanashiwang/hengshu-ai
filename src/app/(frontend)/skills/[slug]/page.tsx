@@ -274,9 +274,17 @@ export default async function SkillDetailPage({
                   {compat.map((m: any) => (
                     <tr key={m.modelName} className="border-b border-[var(--border)] last:border-0">
                       <td className="py-1.5 font-mono">{m.modelName}</td>
-                      <td className="py-1.5 text-right">{formatPercent(m.successRate)}</td>
-                      <td className="py-1.5 text-right">{formatPercent(m.formatRate)}</td>
-                      <td className="py-1.5 text-right">{formatLatency(m.avgLatencyMs)}</td>
+                      {m.lowSample ? (
+                        <td className="py-1.5 text-right text-[var(--muted)]" colSpan={3}>
+                          战绩积累中 · 已 {m.reports} 次
+                        </td>
+                      ) : (
+                        <>
+                          <td className="py-1.5 text-right">{formatPercent(m.successRate)}</td>
+                          <td className="py-1.5 text-right">{formatPercent(m.formatRate)}</td>
+                          <td className="py-1.5 text-right">{formatLatency(m.avgLatencyMs)}</td>
+                        </>
+                      )}
                       <td className="py-1.5 text-right text-[var(--muted)]">
                         {m.reports}
                         {m.verified ? <span className="ml-1 text-[var(--accent-2)]">✓{m.verified}</span> : null}
