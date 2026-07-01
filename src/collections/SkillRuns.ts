@@ -42,6 +42,13 @@ export const SkillRuns: CollectionConfig = {
     { name: 'success', type: 'checkbox', defaultValue: false, label: '是否成功' },
     { name: 'errorCode', type: 'text', label: '错误码' },
     { name: 'formatValid', type: 'checkbox', defaultValue: false, label: '输出格式有效' },
+    {
+      name: 'countedInMetrics',
+      type: 'checkbox',
+      defaultValue: true,
+      label: '计入 Skill 指标',
+      admin: { description: '对比/探测运行(skipAggregate)为 false，不计入 headline 指标，台账对账据此过滤' },
+    },
     { name: 'newapiLogId', type: 'text', label: '模型网关 日志 ID' },
   ],
 }

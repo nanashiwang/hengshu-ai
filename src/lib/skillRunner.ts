@@ -135,6 +135,8 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
         success,
         errorCode: success ? undefined : 'NEWAPI_ERROR',
         formatValid,
+        // 对比/探测(skipAggregate)不计入 headline 指标；持久化该意图供台账对账过滤，避免重算时把探测运行错误计入
+        countedInMetrics: !args.skipAggregate,
       },
     })
     skillRunId = run.id as string

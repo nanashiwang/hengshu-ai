@@ -388,6 +388,10 @@ export interface SkillRun {
   success?: boolean | null;
   errorCode?: string | null;
   formatValid?: boolean | null;
+  /**
+   * 对比/探测运行(skipAggregate)为 false，不计入 headline 指标，台账对账据此过滤
+   */
+  countedInMetrics?: boolean | null;
   newapiLogId?: string | null;
   updatedAt: string;
   createdAt: string;
@@ -910,6 +914,7 @@ export interface SkillRunsSelect<T extends boolean = true> {
   success?: T;
   errorCode?: T;
   formatValid?: T;
+  countedInMetrics?: T;
   newapiLogId?: T;
   updatedAt?: T;
   createdAt?: T;
