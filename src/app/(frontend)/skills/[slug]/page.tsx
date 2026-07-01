@@ -6,6 +6,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { SkillStatusTags } from '@/components/Tag'
 import { FavoriteButton } from '@/components/FavoriteButton'
 import { ReviewForm } from '@/components/ReviewForm'
+import { CopyButton } from '@/components/CopyButton'
 import {
   formatCost,
   formatLatency,
@@ -173,12 +174,15 @@ export default async function SkillDetailPage({
                 ⬇ JSON
               </a>
             </div>
-            <code
-              className="surface block px-2.5 py-1.5 text-[10px] text-[var(--muted)]"
-              title={checksum || '下载后用本地 Runner / 自有模型运行'}
-            >
-              {checksum ? `🔒 ${checksum.replace('sha256:', '').slice(0, 18)}…${signed ? ' ✓签名' : ''}` : '下载后本地 Runner 运行'}
-            </code>
+            <div className="flex items-center gap-2">
+              <code
+                className="surface block flex-1 truncate px-2.5 py-1.5 text-[10px] text-[var(--muted)]"
+                title={checksum || '下载后用本地 Runner / 自有模型运行'}
+              >
+                {checksum ? `🔒 ${checksum.replace('sha256:', '').slice(0, 18)}…${signed ? ' ✓签名' : ''}` : '下载后本地 Runner 运行'}
+              </code>
+              {checksum && <CopyButton value={checksum} label="复制校验和" title="复制完整 sha256 校验和" />}
+            </div>
           </div>
         </div>
       </div>

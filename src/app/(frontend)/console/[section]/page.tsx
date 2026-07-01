@@ -5,6 +5,7 @@ import { getPayloadClient } from '@/lib/payload'
 import { formatCost, formatLatency, timeAgo } from '@/lib/format'
 import { Section, Empty } from '@/components/console/ConsoleUI'
 import { Pagination } from '@/components/Pagination'
+import { CopyButton } from '@/components/CopyButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -243,8 +244,11 @@ export default async function ConsoleSection({
       ) : (
         <ul className="divide-y divide-[var(--border)] text-sm">
           {(invites.docs as any[]).map((i) => (
-            <li key={i.id} className="flex items-center justify-between py-2">
-              <code className="font-mono">{i.code}</code>
+            <li key={i.id} className="flex items-center justify-between gap-2 py-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <code className="font-mono">{i.code}</code>
+                <CopyButton value={i.code} label="复制" />
+              </div>
               <span className="text-xs text-[var(--muted)]">
                 {i.status === 'unused' ? '未使用' : i.status === 'used' ? '已使用' : i.status}
               </span>
