@@ -16,16 +16,22 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-async function getSkill(slug: string) {
+async function getSkill(slug: string, viewer: any) {
   const payload = await getPayloadClient()
   const res = await payload.find({
     collection: 'skills',
     where: { slug: { equals: slug } },
     depth: 2,
     limit: 1,
+    overrideAccess: true,
   })
   const skill = res.docs[0]
-  if (!skill || skill.status !== 'published') return null
+  if (!skill) return null
+  // 可见性：已发布对所有人；未发布仅作者本人 / 审核员 / 管理员可预览
+  const authorId = typeof skill.author === 'object' ? (skill.author as any)?.id : skill.author
+  const isStaff = !!(viewer && ['admin', 'reviewer', 'enterprise_admin'].includes(viewer.role))
+  const isAuthor = !!(viewer && authorId && String(viewer.id) === String(authorId))
+  if (skill.status !== 'published' && !isStaff && !isAuthor) return null
 
   let version: any = skill.currentVersion
   if (version && typeof version === 'string') {
@@ -73,12 +79,12 @@ export default async function SkillDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  const data = await getSkill(slug)
+  const user = await getCurrentUser()
+  const data = await getSkill(slug, user)
   if (!data) notFound()
   const { skill, version, reviews, versions, checksum, signed, compat } = data
 
-  // 当前用户与收藏态
-  const user = await getCurrentUser()
+  // 收藏态
   let favorited = false
   if (user) {
     const payload = await getPayloadClient()
