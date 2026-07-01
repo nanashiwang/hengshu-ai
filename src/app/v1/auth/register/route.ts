@@ -1,6 +1,7 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { awardContribution } from '@/lib/contribution'
+import { getClientIp, hashIp } from '@/lib/clientMeta'
 
 // POST /v1/auth/register —— 邀请码注册
 export async function POST(request: Request) {
@@ -18,6 +19,25 @@ export async function POST(request: Request) {
   }
   if (!inviteCode) {
     return Response.json({ error: '需要邀请码' }, { status: 400 })
+  }
+
+  // 反女巫：采集注册 IP 哈希。同 IP 24h 内注册数宽松上限（兜底极端批量；注册本已被邀请码强约束；
+  // 阈值宽松以规避 CGNAT/共享出口 IP 的误伤）。
+  const ipHashValue = hashIp(getClientIp(request.headers))
+  if (ipHashValue) {
+    try {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const recent = await payload.count({
+        collection: 'users',
+        where: { and: [{ ipHash: { equals: ipHashValue } }, { createdAt: { greater_than_equal: since } }] },
+        overrideAccess: true,
+      })
+      if (recent.totalDocs >= 20) {
+        return Response.json({ error: '同一网络注册过于频繁，请稍后再试' }, { status: 429 })
+      }
+    } catch {
+      /* 频控查询失败降级放行，不阻断注册 */
+    }
   }
 
   // 校验邀请码
@@ -49,6 +69,7 @@ export async function POST(request: Request) {
         password,
         role: 'user',
         invitedBy: inviterId || undefined,
+        ipHash: ipHashValue || undefined,
       },
     })
   } catch (e: any) {
@@ -63,13 +84,23 @@ export async function POST(request: Request) {
     data: { status: 'used', usedBy: newUser.id },
   })
 
-  // 给邀请人发术值（分值与每日上限由 contribution-rules 的 invite 规则决定，未配规则则不发）
+  // 给邀请人发术值（分值/每日上限由 contribution-rules 的 invite 规则决定）；
+  // 同 IP 自邀不发，根治用自己网络的小号刷邀请分（只扣奖励、不阻断注册，几乎无误伤）。
   if (inviterId) {
-    await awardContribution(payload, {
-      userId: inviterId,
-      actionType: 'invite',
-      description: '邀请新用户注册',
-    })
+    let sameIp = false
+    if (ipHashValue) {
+      const inviter = await payload
+        .findByID({ collection: 'users', id: inviterId, overrideAccess: true, depth: 0 })
+        .catch(() => null)
+      sameIp = !!(inviter && (inviter as any).ipHash && (inviter as any).ipHash === ipHashValue)
+    }
+    if (!sameIp) {
+      await awardContribution(payload, {
+        userId: inviterId,
+        actionType: 'invite',
+        description: '邀请新用户注册',
+      })
+    }
   }
 
   return Response.json({ ok: true, userId: newUser.id })

@@ -217,6 +217,7 @@ export interface User {
   warningCount?: number | null;
   bio?: string | null;
   invitedBy?: (string | null) | User;
+  ipHash?: string | null;
   newapiUserId?: string | null;
   /**
    * MVP 阶段服务端保存；生产需加密存储
@@ -973,6 +974,7 @@ export interface UsersSelect<T extends boolean = true> {
   warningCount?: T;
   bio?: T;
   invitedBy?: T;
+  ipHash?: T;
   newapiUserId?: T;
   newapiKeyEncrypted?: T;
   updatedAt?: T;

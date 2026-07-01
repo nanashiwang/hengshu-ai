@@ -92,6 +92,14 @@ export const Users: CollectionConfig = {
       admin: { readOnly: true, position: 'sidebar' },
     },
     {
+      name: 'ipHash',
+      type: 'text',
+      index: true,
+      label: '注册 IP 哈希（反女巫）',
+      access: { read: isAdminField },
+      admin: { readOnly: true, hidden: true },
+    },
+    {
       name: 'newapiUserId',
       type: 'text',
       label: '模型网关 用户 ID',
