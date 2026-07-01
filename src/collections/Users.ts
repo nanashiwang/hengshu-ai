@@ -135,5 +135,47 @@ export const Users: CollectionConfig = {
         return data
       },
     ],
+    beforeDelete: [
+      async ({ id, req }) => {
+        // 删用户级联（在删除事务内、透传 req → 原子；任一步失败整体回滚，绝不产生脏数据）
+        const p = req.payload
+        const opts = { overrideAccess: true, req }
+        // 阻断危险场景：仍有作品(会悬空作者) / 进行中或争议悬赏(冻结术值会卡死)
+        const skills = await p.count({ collection: 'skills', where: { author: { equals: id } }, ...opts })
+        if (skills.totalDocs > 0) throw new Error('该用户仍有 Skill 作品，请先转移或删除其作品后再删账号')
+        const activeBounties = await p.count({
+          collection: 'bounties',
+          where: {
+            and: [
+              { or: [{ creator: { equals: id } }, { acceptedBy: { equals: id } }] },
+              { status: { in: ['open', 'accepted', 'submitted', 'disputed'] } },
+            ],
+          },
+          ...opts,
+        })
+        if (activeBounties.totalDocs > 0) throw new Error('该用户有进行中/争议中的悬赏，请先结算或取消后再删账号')
+        // 删除用户私有从属记录（favorites/reviews 触发各自 afterDelete 修正 Skill 计数）
+        for (const collection of [
+          'favorites',
+          'reviews',
+          'skill-installs',
+          'runner-clients',
+          'contribution-logs',
+          'device-codes',
+        ] as const) {
+          await p.delete({ collection, where: { user: { equals: id } }, ...opts })
+        }
+        await p.delete({ collection: 'invite-codes', where: { inviter: { equals: id } }, ...opts })
+        // 解除可保留数据里的用户引用（保留历史、避免外键阻断删除）
+        await p.update({ collection: 'skill-runs', where: { user: { equals: id } }, data: { user: null }, ...opts })
+        await p.update({ collection: 'bounties', where: { creator: { equals: id } }, data: { creator: null }, ...opts })
+        await p.update({ collection: 'bounties', where: { acceptedBy: { equals: id } }, data: { acceptedBy: null }, ...opts })
+        await p.update({ collection: 'users', where: { invitedBy: { equals: id } }, data: { invitedBy: null }, ...opts })
+        await p.update({ collection: 'invite-codes', where: { usedBy: { equals: id } }, data: { usedBy: null }, ...opts })
+        await p.update({ collection: 'reports', where: { reporter: { equals: id } }, data: { reporter: null }, ...opts })
+        await p.update({ collection: 'reports', where: { handledBy: { equals: id } }, data: { handledBy: null }, ...opts })
+        await p.update({ collection: 'skill-versions', where: { createdBy: { equals: id } }, data: { createdBy: null }, ...opts })
+      },
+    ],
   },
 }
