@@ -18,6 +18,9 @@
     "seed:rules": "cross-env NODE_OPTIONS=--no-deprecation tsx src/seed/contribution-rules.ts",
     "keygen": "cross-env NODE_OPTIONS=--no-deprecation tsx src/seed/keygen.ts",
     "worker:skillrank": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/recompute-skillrank.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
     "runner": "node runner/hengshu.mjs"
   },
   "dependencies": {
@@ -42,7 +45,8 @@
     "@types/react-dom": "^19.2.3",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.21.0",
-    "typescript": "5.7.3"
+    "typescript": "5.7.3",
+    "vitest": "^4.1.9"
   },
   "engines": {
     "node": "^18.20.2 || >=20.9.0"
