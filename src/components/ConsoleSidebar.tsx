@@ -6,6 +6,7 @@ import { ADMIN_GROUPS } from '@/lib/adminNav'
 
 const PERSONAL = [
   { href: '/console', label: '概览', exact: true },
+  { href: '/console/skills/new', label: '发布 Skill' },
   { href: '/console/installs', label: '已安装 Skill' },
   { href: '/console/runners', label: 'Runner 实例' },
   { href: '/console/runs', label: '运行记录' },
