@@ -1,13 +1,14 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin, isLoggedIn, ownerOrAdmin } from '@/access'
 import { awardContribution } from '@/lib/contribution'
+import { rowActionsField } from './fields/rowActions'
 
 export const Bounties: CollectionConfig = {
   slug: 'bounties',
   labels: { singular: '悬赏', plural: '悬赏' },
   admin: {
     useAsTitle: 'title',
-    defaultColumns: ['title', 'status', 'rewardType', 'rewardPoints', 'creator', 'dueAt'],
+    defaultColumns: ['title', 'status', 'rewardType', 'rewardPoints', 'creator', 'dueAt', 'rowActions'],
     group: 'Skill 内容',
   },
   access: {
@@ -17,6 +18,7 @@ export const Bounties: CollectionConfig = {
     delete: isAdmin,
   },
   fields: [
+    rowActionsField('bounties'),
     { name: 'title', type: 'text', required: true, label: '标题' },
     { name: 'description', type: 'textarea', label: '需求说明' },
     {
@@ -60,6 +62,13 @@ export const Bounties: CollectionConfig = {
       label: '冻结术值',
       admin: { readOnly: true, description: '发布时从发布人冻结，完成后发给接单人' },
     },
+    {
+      name: 'idempotencyKey',
+      type: 'text',
+      unique: true,
+      index: true,
+      admin: { readOnly: true, hidden: true, description: '幂等键：防止重复提交导致重复发布/扣款' },
+    },
     { name: 'acceptedBy', type: 'relationship', relationTo: 'users', label: '接单人' },
     { name: 'submittedSkill', type: 'relationship', relationTo: 'skills', label: '提交的 Skill' },
     {
@@ -101,6 +110,7 @@ export const Bounties: CollectionConfig = {
             relatedBounty: doc.id,
             description: `冻结悬赏赏金「${doc.title}」`,
             req,
+            throwOnError: true, // 扣款失败即抛出，回滚整个发布（避免“悬赏建了但没扣钱”）
           })
         }
         return doc

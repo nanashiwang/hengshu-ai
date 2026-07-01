@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin } from '@/access'
 import { CONTRIBUTION_ACTIONS } from '@/lib/constants'
+import { rowActionsField } from './fields/rowActions'
 
 // 术值规则（可配置）。awardContribution 据此取分值并做反作弊（日上限/自操作排除）。
 export const ContributionRules: CollectionConfig = {
@@ -8,7 +9,7 @@ export const ContributionRules: CollectionConfig = {
   labels: { singular: '术值规则', plural: '术值规则' },
   admin: {
     useAsTitle: 'actionType',
-    defaultColumns: ['actionType', 'basePoints', 'dailyLimit', 'selfActionExcluded', 'enabled'],
+    defaultColumns: ['actionType', 'basePoints', 'dailyLimit', 'selfActionExcluded', 'enabled', 'rowActions'],
     group: '成员管理',
   },
   access: {
@@ -18,6 +19,7 @@ export const ContributionRules: CollectionConfig = {
     delete: isAdmin,
   },
   fields: [
+    rowActionsField('contribution-rules'),
     {
       name: 'actionType',
       type: 'select',

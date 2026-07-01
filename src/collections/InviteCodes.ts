@@ -1,13 +1,14 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin, isLoggedIn, ownerOrAdmin } from '@/access'
 import { generateInviteCode } from '@/lib/slug'
+import { rowActionsField } from './fields/rowActions'
 
 export const InviteCodes: CollectionConfig = {
   slug: 'invite-codes',
   labels: { singular: '邀请码', plural: '邀请码' },
   admin: {
     useAsTitle: 'code',
-    defaultColumns: ['code', 'inviter', 'usedBy', 'status', 'expiresAt'],
+    defaultColumns: ['code', 'inviter', 'usedBy', 'status', 'expiresAt', 'rowActions'],
     group: '成员管理',
   },
   access: {
@@ -17,6 +18,7 @@ export const InviteCodes: CollectionConfig = {
     delete: isAdmin,
   },
   fields: [
+    rowActionsField('invite-codes'),
     {
       name: 'code',
       type: 'text',

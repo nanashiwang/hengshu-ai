@@ -1,12 +1,13 @@
 import type { CollectionConfig } from 'payload'
 import { isCreatorOrAbove, publishedOrPrivileged, isAdmin } from '@/access'
+import { rowActionsField } from './fields/rowActions'
 
 export const SkillVersions: CollectionConfig = {
   slug: 'skill-versions',
   labels: { singular: 'Skill 版本', plural: 'Skill 版本' },
   admin: {
     useAsTitle: 'version',
-    defaultColumns: ['skill', 'version', 'status', 'createdBy', 'createdAt'],
+    defaultColumns: ['skill', 'version', 'status', 'createdBy', 'createdAt', 'rowActions'],
     group: 'Skill 内容',
   },
   access: {
@@ -16,6 +17,7 @@ export const SkillVersions: CollectionConfig = {
     delete: isAdmin,
   },
   fields: [
+    rowActionsField('skill-versions'),
     { name: 'skill', type: 'relationship', relationTo: 'skills', required: true, label: '所属 Skill' },
     { name: 'version', type: 'text', required: true, defaultValue: '1.0.0', label: '版本号' },
     {
@@ -103,6 +105,17 @@ export const SkillVersions: CollectionConfig = {
     },
   ],
   hooks: {
+    beforeDelete: [
+      async ({ id, req }) => {
+        // skill-artifacts.skillVersion 为必填(NOT NULL) 外键，删版本前先级联删除其制品快照
+        await req.payload.delete({
+          collection: 'skill-artifacts',
+          where: { skillVersion: { equals: id } },
+          req,
+          overrideAccess: true,
+        })
+      },
+    ],
     beforeChange: [
       ({ data, req, operation }) => {
         if (operation === 'create' && req.user && !data.createdBy) {

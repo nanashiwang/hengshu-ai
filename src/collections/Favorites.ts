@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { isLoggedIn, ownerOrAdmin } from '@/access'
 import { awardContribution } from '@/lib/contribution'
+import { rowActionsField } from './fields/rowActions'
 
 async function adjustFavoriteCount(payload: any, skillId: string, delta: number, req?: any) {
   if (!skillId) return
@@ -32,7 +33,7 @@ export const Favorites: CollectionConfig = {
   labels: { singular: '收藏', plural: '收藏' },
   admin: {
     useAsTitle: 'id',
-    defaultColumns: ['user', 'skill', 'createdAt'],
+    defaultColumns: ['user', 'skill', 'createdAt', 'rowActions'],
     group: '成员管理',
   },
   access: {
@@ -42,6 +43,7 @@ export const Favorites: CollectionConfig = {
     delete: ownerOrAdmin('user'),
   },
   fields: [
+    rowActionsField('favorites'),
     {
       name: 'user',
       type: 'relationship',

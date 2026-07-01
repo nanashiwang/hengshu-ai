@@ -1,5 +1,6 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin } from '@/access'
+import { rowActionsField } from './fields/rowActions'
 
 // 发布时冻结的不可变 manifest 快照。由系统生成，下载时直接发存量字节。
 export const SkillArtifacts: CollectionConfig = {
@@ -7,7 +8,7 @@ export const SkillArtifacts: CollectionConfig = {
   labels: { singular: 'Skill 制品', plural: 'Skill 制品' },
   admin: {
     useAsTitle: 'checksum',
-    defaultColumns: ['skill', 'version', 'format', 'checksum', 'downloadCount'],
+    defaultColumns: ['skill', 'version', 'format', 'checksum', 'downloadCount', 'rowActions'],
     group: 'Skill 内容',
     description: '发布时冻结的不可变 manifest 快照（系统生成，请勿手改）',
   },
@@ -18,6 +19,7 @@ export const SkillArtifacts: CollectionConfig = {
     delete: isAdmin,
   },
   fields: [
+    rowActionsField('skill-artifacts'),
     { name: 'skill', type: 'relationship', relationTo: 'skills', required: true, label: 'Skill' },
     {
       name: 'skillVersion',

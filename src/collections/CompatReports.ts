@@ -1,5 +1,6 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin } from '@/access'
+import { rowActionsField } from './fields/rowActions'
 
 // 本地模型兼容报告（原始）。只含可聚合指标，绝不含输入/输出原文。
 // 信任模型：raw 报告永不直接上榜，聚合后展示；社区报告仅展示不计术值（verified 通道留后续）。
@@ -8,7 +9,7 @@ export const CompatReports: CollectionConfig = {
   labels: { singular: '兼容报告', plural: '兼容报告' },
   admin: {
     useAsTitle: 'id',
-    defaultColumns: ['skill', 'modelName', 'success', 'formatValid', 'latencyMs', 'source'],
+    defaultColumns: ['skill', 'modelName', 'success', 'formatValid', 'latencyMs', 'source', 'rowActions'],
     group: 'Skill 内容',
     description: '本地模型兼容报告（系统接收，不含输入/输出原文）',
   },
@@ -19,6 +20,7 @@ export const CompatReports: CollectionConfig = {
     delete: isAdmin,
   },
   fields: [
+    rowActionsField('compat-reports'),
     { name: 'skill', type: 'relationship', relationTo: 'skills', required: true, index: true, label: 'Skill' },
     { name: 'skillVersion', type: 'relationship', relationTo: 'skill-versions', label: '版本' },
     { name: 'runner', type: 'relationship', relationTo: 'runner-clients', label: 'Runner（具名）' },

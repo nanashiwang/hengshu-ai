@@ -23,7 +23,8 @@ export async function awardContribution(
     relatedSkill?: string
     relatedBounty?: string
     description?: string
-    req?: PayloadRequest
+    req?: Partial<PayloadRequest>
+    throwOnError?: boolean // 结算类调用：内部出错时抛出而非静默吞，供上层事务回滚
   },
 ): Promise<void> {
   const { userId, actionType, actorId, req } = args
@@ -92,6 +93,8 @@ export async function awardContribution(
       ...tx,
     })
   } catch (e) {
+    // 结算场景：抛给上层触发事务回滚，避免“状态已改、术值未发”的不一致
+    if (args.throwOnError) throw e
     payload.logger?.error(`awardContribution 失败: ${(e as Error).message}`)
   }
 }

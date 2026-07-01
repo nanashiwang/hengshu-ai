@@ -35,7 +35,7 @@ export default function RegisterPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: form.email, password: form.password }),
       })
-      router.push('/me')
+      router.push('/console')
       router.refresh()
     } catch (e: any) {
       setError(e.message)

@@ -2,13 +2,14 @@ import type { CollectionConfig } from 'payload'
 import { isAdmin, isCreatorOrAbove, publishedOrPrivileged } from '@/access'
 import { slugify } from '@/lib/slug'
 import { awardContribution } from '@/lib/contribution'
+import { rowActionsField } from './fields/rowActions'
 
 export const Skills: CollectionConfig = {
   slug: 'skills',
   labels: { singular: 'Skill', plural: 'Skill' },
   admin: {
     useAsTitle: 'title',
-    defaultColumns: ['title', 'status', 'author', 'skillRank', 'runCount', 'successRate'],
+    defaultColumns: ['title', 'status', 'author', 'skillRank', 'runCount', 'successRate', 'rowActions'],
     group: 'Skill 内容',
   },
   access: {
@@ -78,6 +79,8 @@ export const Skills: CollectionConfig = {
     { name: 'isOfficial', type: 'checkbox', defaultValue: false, label: '官方' },
     { name: 'isFeatured', type: 'checkbox', defaultValue: false, label: '精选' },
     { name: 'isFreeleech', type: 'checkbox', defaultValue: false, label: '限免' },
+    // ── 列表行内操作（下架/发布 + 删除）──
+    rowActionsField('skills'),
     // ── 健康度/指标（由运行链路与 Worker 维护）──
     {
       type: 'collapsible',
@@ -102,6 +105,29 @@ export const Skills: CollectionConfig = {
     },
   ],
   hooks: {
+    beforeDelete: [
+      async ({ id, req }) => {
+        // 级联清理引用本 Skill 的子记录：这些外键为 SET NULL，但部分子表 skill 为必填(NOT NULL)，
+        // 直接删父会触发 NOT NULL 违例(500)。按依赖顺序（先删引用版本的，再删版本）清理。
+        const children = [
+          'compat-reports',
+          'skill-artifacts',
+          'skill-runs',
+          'skill-versions',
+          'skill-installs',
+          'favorites',
+          'reviews',
+        ] as const
+        for (const collection of children) {
+          await req.payload.delete({
+            collection,
+            where: { skill: { equals: id } },
+            req,
+            overrideAccess: true,
+          })
+        }
+      },
+    ],
     beforeChange: [
       ({ data, req, operation }) => {
         if (operation === 'create') {

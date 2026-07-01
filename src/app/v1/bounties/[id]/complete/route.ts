@@ -1,4 +1,5 @@
 import { getPayload } from 'payload'
+import type { PayloadRequest } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
 import { awardContribution } from '@/lib/contribution'
@@ -18,18 +19,34 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   }
   if (b.status !== 'submitted') return Response.json({ error: '当前状态不可验收' }, { status: 400 })
 
-  await payload.update({ collection: 'bounties', id, data: { status: 'completed' }, overrideAccess: true })
-
   const acceptedById = typeof b.acceptedBy === 'object' ? (b.acceptedBy as any)?.id : b.acceptedBy
-  if ((b.frozenPoints || 0) > 0 && acceptedById) {
-    // 释放冻结术值（无 'bounty' 规则 → 走传入 points 的可变金额）
-    await awardContribution(payload, {
-      userId: acceptedById,
-      actionType: 'bounty',
-      points: b.frozenPoints || 0,
-      relatedBounty: id,
-      description: `完成悬赏「${b.title}」奖励`,
-    })
+  const frozen = b.frozenPoints || 0
+
+  // 原子结算：状态变更 + 释放术值绑进同一事务，任一步失败整体回滚（杜绝“状态已完成但术值没到账”）
+  const transactionID = await payload.db.beginTransaction()
+  const txReq: Partial<PayloadRequest> | undefined = transactionID ? { transactionID } : undefined
+  try {
+    await payload.update({ collection: 'bounties', id, data: { status: 'completed' }, overrideAccess: true, req: txReq })
+
+    if (frozen > 0 && acceptedById) {
+      // 释放冻结术值（无 'bounty' 规则 → 走传入 points 的可变金额）
+      await awardContribution(payload, {
+        userId: acceptedById,
+        actionType: 'bounty',
+        points: frozen,
+        relatedBounty: id,
+        description: `完成悬赏「${b.title}」奖励`,
+        req: txReq,
+        throwOnError: true,
+      })
+    }
+
+    if (transactionID) await payload.db.commitTransaction(transactionID)
+  } catch (e) {
+    if (transactionID) await payload.db.rollbackTransaction(transactionID)
+    payload.logger?.error(`bounty complete 结算失败: ${(e as Error).message}`)
+    return Response.json({ error: '验收结算失败，请重试' }, { status: 500 })
   }
-  return Response.json({ ok: true, released: b.frozenPoints || 0 })
+
+  return Response.json({ ok: true, released: frozen })
 }

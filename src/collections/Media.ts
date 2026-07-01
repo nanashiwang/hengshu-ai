@@ -11,6 +11,9 @@ export const Media: CollectionConfig = {
     update: isLoggedIn,
     delete: isLoggedIn,
   },
-  upload: true,
+  upload: {
+    // 优先用 MEDIA_DIR（容器内指向挂载的持久卷 /app/media）；未设时回退项目根下 media（本地开发，与 Payload 默认一致）
+    staticDir: process.env.MEDIA_DIR || 'media',
+  },
   fields: [{ name: 'alt', type: 'text', label: '替代文本' }],
 }

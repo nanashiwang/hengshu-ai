@@ -1,5 +1,6 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin, ownerOrAdmin } from '@/access'
+import { rowActionsField } from './fields/rowActions'
 
 // 安装记录（≠下载）。一台 Runner 装某 Skill 一条；是「安装/有效安装/活跃安装」指标的来源。
 export const SkillInstalls: CollectionConfig = {
@@ -7,7 +8,7 @@ export const SkillInstalls: CollectionConfig = {
   labels: { singular: '安装记录', plural: '安装记录' },
   admin: {
     useAsTitle: 'id',
-    defaultColumns: ['user', 'skill', 'installedVersion', 'status', 'lastUsedAt'],
+    defaultColumns: ['user', 'skill', 'installedVersion', 'status', 'lastUsedAt', 'rowActions'],
     group: '成员管理',
   },
   access: {
@@ -17,6 +18,7 @@ export const SkillInstalls: CollectionConfig = {
     delete: ownerOrAdmin('user'),
   },
   fields: [
+    rowActionsField('skill-installs'),
     { name: 'user', type: 'relationship', relationTo: 'users', required: true, label: '用户' },
     { name: 'skill', type: 'relationship', relationTo: 'skills', required: true, label: 'Skill' },
     { name: 'skillVersion', type: 'relationship', relationTo: 'skill-versions', label: '版本' },

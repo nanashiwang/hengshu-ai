@@ -1,13 +1,14 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin, ownerOrAdmin } from '@/access'
 import { CONTRIBUTION_ACTIONS } from '@/lib/constants'
+import { rowActionsField } from './fields/rowActions'
 
 export const ContributionLogs: CollectionConfig = {
   slug: 'contribution-logs',
   labels: { singular: '贡献值流水', plural: '贡献值流水' },
   admin: {
     useAsTitle: 'id',
-    defaultColumns: ['user', 'actionType', 'points', 'createdAt'],
+    defaultColumns: ['user', 'actionType', 'points', 'createdAt', 'rowActions'],
     group: '成员管理',
   },
   access: {
@@ -17,6 +18,7 @@ export const ContributionLogs: CollectionConfig = {
     delete: isAdmin,
   },
   fields: [
+    rowActionsField('contribution-logs'),
     { name: 'user', type: 'relationship', relationTo: 'users', required: true, label: '用户' },
     {
       name: 'actionType',

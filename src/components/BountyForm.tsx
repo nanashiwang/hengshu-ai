@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -10,6 +10,8 @@ export function BountyForm({ loggedIn }: { loggedIn: boolean }) {
   const [form, setForm] = useState({ title: '', description: '', rewardPoints: '50', dueAt: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // 幂等键：同一次“发布意图”复用同一个 key，超时/断网后重试不会重复扣款；成功后再换新 key
+  const idemKeyRef = useRef<string | null>(null)
 
   if (!loggedIn) {
     return (
@@ -28,25 +30,26 @@ export function BountyForm({ loggedIn }: { loggedIn: boolean }) {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    if (!idemKeyRef.current) idemKeyRef.current = crypto.randomUUID()
     try {
-      const res = await fetch('/api/bounties', {
+      const res = await fetch('/v1/bounties', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: form.title,
           description: form.description,
-          rewardType: 'points',
           rewardPoints: Number(form.rewardPoints) || 0,
-          status: 'open',
           dueAt: form.dueAt || undefined,
+          idempotencyKey: idemKeyRef.current,
         }),
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        setError(d?.errors?.[0]?.message || '发布失败')
-        return
+        setError(d?.error || '发布失败')
+        return // 保留同一个幂等键，重试不会重复创建/扣款
       }
+      idemKeyRef.current = null // 成功后清空，下次发布用新 key
       setForm({ title: '', description: '', rewardPoints: '50', dueAt: '' })
       setOpen(false)
       router.refresh()

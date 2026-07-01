@@ -64,7 +64,12 @@ export default buildConfig({
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   db: postgresAdapter({
-    pool: { connectionString: process.env.DATABASE_URL },
+    pool: {
+      connectionString: process.env.DATABASE_URL,
+      // 兜底自愈：事务空闲超 30s 由 PG 自动断开，回收异常残留的 idle-in-transaction 持锁连接
+      // （停 dev server / 进程被 kill 时最可靠的持锁缓解，不依赖应用优雅关闭）
+      options: '-c idle_in_transaction_session_timeout=30000',
+    },
     idType: 'uuid',
   }),
   sharp,

@@ -51,10 +51,16 @@ services:
       DATABASE_URL: postgres://payload:payload@postgres:5432/skillhub
       REDIS_URL: redis://redis:6379
       NEXT_PUBLIC_SERVER_URL: http://localhost:8787
+      # 媒体上传目录，指向下方挂载的持久卷
+      MEDIA_DIR: /app/media
     ports:
       # 主机 8787 → 容器 3000（避开本机 dev 的 3000）
       - '8787:3000'
+    volumes:
+      # 上传文件持久化：容器重建/更新不丢（见 docs/生产部署清单 P1-1）
+      - mediadata:/app/media
 
 volumes:
   pgdata:
   redisdata:
+  mediadata:

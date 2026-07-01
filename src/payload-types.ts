@@ -408,6 +408,10 @@ export interface Bounty {
    * 发布时从发布人冻结，完成后发给接单人
    */
   frozenPoints?: number | null;
+  /**
+   * 幂等键：防止重复提交导致重复发布/扣款
+   */
+  idempotencyKey?: string | null;
   acceptedBy?: (string | null) | User;
   submittedSkill?: (string | null) | Skill;
   requirements?:
@@ -922,6 +926,7 @@ export interface BountiesSelect<T extends boolean = true> {
   rewardAmount?: T;
   status?: T;
   frozenPoints?: T;
+  idempotencyKey?: T;
   acceptedBy?: T;
   submittedSkill?: T;
   requirements?: T;

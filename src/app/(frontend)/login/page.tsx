@@ -27,7 +27,7 @@ export default function LoginPage() {
         setError(data?.errors?.[0]?.message || data?.message || '登录失败')
         return
       }
-      router.push('/me')
+      router.push('/console')
       router.refresh()
     } catch (e: any) {
       setError(e.message)

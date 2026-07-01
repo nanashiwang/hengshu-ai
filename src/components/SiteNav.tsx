@@ -15,7 +15,7 @@ export async function SiteNav() {
   const u = user as any
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg-elev)] backdrop-blur-md">
-      <div className="mx-auto flex w-full max-w-6xl items-center gap-6 px-4 py-3">
+      <div className="mx-auto flex w-full max-w-[1600px] items-center gap-6 px-4 py-3 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-2 font-semibold">
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--accent)] text-sm text-white">
             ⬡
@@ -48,20 +48,11 @@ export async function SiteNav() {
                 ⚡ {formatNumber(u.contributionScore)}
               </span>
               <Link
-                href="/me"
+                href="/console"
                 className="rounded-lg px-3 py-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--panel-2)] hover:text-[var(--text)]"
               >
-                {u.username || '个人中心'}
+                {u.username || '控制台'}
               </Link>
-              {u.role === 'admin' && (
-                <Link
-                  href="/admin"
-                  target="_blank"
-                  className="rounded-lg px-3 py-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--panel-2)] hover:text-[var(--text)]"
-                >
-                  后台
-                </Link>
-              )}
             </>
           ) : (
             <>

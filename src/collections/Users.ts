@@ -1,5 +1,6 @@
 import type { CollectionConfig } from 'payload'
 import { adminOrSelf, fieldAdminOrSelf, isAdmin, isAdminField } from '@/access'
+import { rowActionsField } from './fields/rowActions'
 
 export const Users: CollectionConfig = {
   slug: 'users',
@@ -12,7 +13,7 @@ export const Users: CollectionConfig = {
   },
   admin: {
     useAsTitle: 'username',
-    defaultColumns: ['username', 'email', 'role', 'level', 'contributionScore'],
+    defaultColumns: ['username', 'email', 'role', 'level', 'contributionScore', 'rowActions'],
     group: '成员管理',
   },
   access: {
@@ -25,6 +26,7 @@ export const Users: CollectionConfig = {
     delete: isAdmin,
   },
   fields: [
+    rowActionsField('users'),
     { name: 'username', type: 'text', required: true, unique: true, label: '用户名' },
     {
       name: 'role',

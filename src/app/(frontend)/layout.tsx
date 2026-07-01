@@ -19,9 +19,9 @@ export default function FrontendLayout({ children }: { children: React.ReactNode
       </head>
       <body className="flex min-h-screen flex-col">
         <SiteNav />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-8 sm:px-6 lg:px-8">{children}</main>
         <footer className="border-t border-[var(--border)]">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-8 text-xs text-[var(--faint)] sm:flex-row sm:items-center sm:justify-between">
+          <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-2 px-4 py-8 text-xs text-[var(--faint)] sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
             <span>© 2026 衡术 Hengshu · v0.1</span>
             <span>Verified AI Skills, Powered by Contribution.</span>
           </div>

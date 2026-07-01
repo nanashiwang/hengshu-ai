@@ -1,5 +1,6 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin, ownerOrAdmin } from '@/access'
+import { rowActionsField } from './fields/rowActions'
 
 // 一台已登录的 Runner 实例（设备）。install / 兼容报告等写操作据此归属用户、做反作弊。
 export const RunnerClients: CollectionConfig = {
@@ -7,7 +8,7 @@ export const RunnerClients: CollectionConfig = {
   labels: { singular: 'Runner 实例', plural: 'Runner 实例' },
   admin: {
     useAsTitle: 'runnerId',
-    defaultColumns: ['user', 'runnerId', 'runnerVersion', 'os', 'trustedLevel', 'lastSeenAt'],
+    defaultColumns: ['user', 'runnerId', 'runnerVersion', 'os', 'trustedLevel', 'lastSeenAt', 'rowActions'],
     group: '成员管理',
   },
   access: {
@@ -17,6 +18,7 @@ export const RunnerClients: CollectionConfig = {
     delete: ownerOrAdmin('user'),
   },
   fields: [
+    rowActionsField('runner-clients'),
     { name: 'user', type: 'relationship', relationTo: 'users', required: true, label: '用户' },
     { name: 'runnerId', type: 'text', required: true, unique: true, index: true, label: 'Runner ID' },
     {

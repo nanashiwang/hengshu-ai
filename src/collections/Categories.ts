@@ -1,13 +1,14 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin, isReviewerOrAdmin } from '@/access'
 import { slugify } from '@/lib/slug'
+import { rowActionsField } from './fields/rowActions'
 
 export const Categories: CollectionConfig = {
   slug: 'categories',
   labels: { singular: '分类', plural: '分类' },
   admin: {
     useAsTitle: 'name',
-    defaultColumns: ['name', 'slug', 'order'],
+    defaultColumns: ['name', 'slug', 'order', 'rowActions'],
     group: 'Skill 内容',
   },
   access: {
@@ -17,6 +18,7 @@ export const Categories: CollectionConfig = {
     delete: isAdmin,
   },
   fields: [
+    rowActionsField('categories'),
     { name: 'name', type: 'text', required: true, label: '名称' },
     {
       name: 'slug',

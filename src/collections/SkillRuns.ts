@@ -1,13 +1,14 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin, ownerOrAdmin } from '@/access'
 import { ROUTE_MODES } from '@/lib/constants'
+import { rowActionsField } from './fields/rowActions'
 
 export const SkillRuns: CollectionConfig = {
   slug: 'skill-runs',
   labels: { singular: '运行记录', plural: '运行记录' },
   admin: {
     useAsTitle: 'runId',
-    defaultColumns: ['runId', 'skill', 'model', 'success', 'estimatedCost', 'latencyMs', 'createdAt'],
+    defaultColumns: ['runId', 'skill', 'model', 'success', 'estimatedCost', 'latencyMs', 'createdAt', 'rowActions'],
     group: 'Skill 内容',
   },
   access: {
@@ -17,6 +18,7 @@ export const SkillRuns: CollectionConfig = {
     delete: isAdmin,
   },
   fields: [
+    rowActionsField('skill-runs'),
     { name: 'runId', type: 'text', index: true, label: '运行 ID' },
     { name: 'user', type: 'relationship', relationTo: 'users', label: '用户' },
     { name: 'skill', type: 'relationship', relationTo: 'skills', required: true, label: 'Skill' },
