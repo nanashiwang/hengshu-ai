@@ -33,7 +33,13 @@ function decayWeight(createdAt: unknown, nowMs: number): number {
   return Math.pow(0.5, ageDays / HALF_LIFE_DAYS)
 }
 
-// 由兼容报告聚合重算 Skill 的 LocalScore（0-100）并写回（衰减加权 + 置信度衰减）
+// 来源分级权重：verified 最可信、community 次之、online(在线试用) 最低——削弱在线通道刷分/投毒杠杆
+const SOURCE_WEIGHT: Record<string, number> = { verified: 1, community: 0.5, online: 0.3 }
+function sourceWeight(source: unknown): number {
+  return SOURCE_WEIGHT[String(source)] ?? 0.5
+}
+
+// 由兼容报告聚合重算 Skill 的 LocalScore（0-100）并写回（衰减加权 × 来源权重 + 置信度衰减）
 export async function recomputeLocalScore(payload: Payload, skillId: string) {
   const res = await payload.find({
     collection: 'compat-reports',
@@ -51,7 +57,7 @@ export async function recomputeLocalScore(payload: Payload, skillId: string) {
     let wFormat = 0
     const models = new Set<string>()
     for (const r of reports) {
-      const w = decayWeight(r.createdAt, now)
+      const w = decayWeight(r.createdAt, now) * sourceWeight(r.source)
       wSum += w
       if (r.success) wSuccess += w
       if (r.formatValid) wFormat += w
@@ -109,7 +115,7 @@ export async function aggregateByModel(payload: Payload, skillId: string): Promi
     let wLatency = 0
     let wLatencySum = 0
     for (const r of rs) {
-      const w = decayWeight(r.createdAt, now)
+      const w = decayWeight(r.createdAt, now) * sourceWeight(r.source)
       wSum += w
       if (r.success) wSuccess += w
       if (r.formatValid) wFormat += w

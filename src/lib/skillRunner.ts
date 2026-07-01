@@ -4,6 +4,7 @@ import { validateInput, checkOutputFormat } from './schemaValidate'
 import { selectModel } from './route'
 import { chatCompletion, type NewApiResult } from './newapi'
 import { estimateCost } from './cost'
+import { anonHash, bucketSize } from './compat'
 import { generateRunId } from './slug'
 import { skillRankFromAggregates } from './skillrank'
 import { awardContribution } from './contribution'
@@ -139,6 +140,55 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
     skillRunId = run.id as string
   } catch (e) {
     payload.logger?.error(`写入 SkillRun 失败: ${(e as Error).message}`)
+  }
+
+  // 6b. 在线运行回流兼容报告（护城河水龙头）：真实非 mock 调用喂逐模型评测数据（不含输入/输出原文）。
+  //     排除作者自跑（防自刷兼容矩阵）；不随 skipAggregate 跳过——对比模式正是要采集的信号。
+  {
+    const runAuthorId = typeof skill.author === 'object' ? skill.author?.id : skill.author
+    const isSelfRun = !!(user?.id && runAuthorId && String(user.id) === String(runAuthorId))
+    const uHash = user?.id ? anonHash(String(user.id)) : undefined
+    if (result && !result.mocked && !isSelfRun) {
+      try {
+        // 抗刷：同一用户对同一 (skill, model) 的 online 报告最多计 3 条，防单人灌满/反向投毒某格
+        let allow = true
+        if (uHash) {
+          const existing = await payload.count({
+            collection: 'compat-reports',
+            where: {
+              and: [
+                { skill: { equals: skill.id } },
+                { modelName: { equals: usedModel } },
+                { anonymousUserHash: { equals: uHash } },
+                { source: { equals: 'online' } },
+              ],
+            },
+            overrideAccess: true,
+          })
+          allow = existing.totalDocs < 3
+        }
+        if (allow) {
+          await payload.create({
+            collection: 'compat-reports',
+            overrideAccess: true,
+            data: {
+              skill: skill.id,
+              skillVersion: version?.id,
+              anonymousUserHash: uHash,
+              modelName: usedModel,
+              success,
+              formatValid,
+              latencyMs: result.latencyMs || 0,
+              inputSizeBucket: bucketSize(JSON.stringify(input || {}).length),
+              outputSizeBucket: bucketSize((result.text || '').length),
+              source: 'online',
+            },
+          })
+        }
+      } catch (e) {
+        payload.logger?.error(`写入在线兼容报告失败: ${(e as Error).message}`)
+      }
+    }
   }
 
   // 7. 更新 Skill 指标 + 发贡献值（对比模式 skipAggregate 跳过，避免污染聚合）
