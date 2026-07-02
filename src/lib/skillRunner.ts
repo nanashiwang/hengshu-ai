@@ -22,6 +22,7 @@ export interface RunSkillArgs {
   userApiKey?: string
   forceModel?: string // 固定模型、不路由、不 fallback（多模型对比用）
   skipAggregate?: boolean // 跳过 Skill 指标更新与贡献值发放（对比模式避免污染聚合）
+  benchmark?: boolean // 系统评测(#8)：不限频/不预检/不扣费/不排除自跑，compat 报告 source=benchmark
 }
 
 export interface RunSkillResult {
@@ -80,12 +81,13 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
   }
 
   // 3b. 护栏（总纲 6a+6l）：mock 全免；BYOK 仅频控；平台代付=白名单+频控+credit 预检
+  //     benchmark(系统评测 #8)：跳过频控/预检/扣费，但仍受白名单约束(合规)；不排除自跑、不计履约指标。
   const gatewayConfigured = !!process.env.MODEL_GATEWAY_BASE_URL?.trim()
   const platformKeyPath =
     gatewayConfigured && !userApiKey && !!process.env.MODEL_GATEWAY_KEY?.trim()
   const isRealCall = gatewayConfigured && !!(userApiKey || process.env.MODEL_GATEWAY_KEY?.trim())
 
-  if (isRealCall && user?.id) {
+  if (isRealCall && user?.id && !args.benchmark) {
     // 频控：60 秒窗口内该用户已落库运行数（护栏拒绝不写行，故只计真实执行）
     try {
       const winStart = new Date(Date.now() - 60_000).toISOString()
@@ -142,8 +144,10 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
     fallbacks = chain.slice(1)
     platformMaxTokens = PRECHECK_COMPLETION_TOKENS
 
-    // credit 预检：按 prompt 实估 + 输出上限假设，余额不足直接拒（不产生任何调用成本）
-    if (user?.id) {
+    // credit 预检：按 prompt 实估 + 输出上限假设，余额不足直接拒（不产生任何调用成本）。benchmark 系统评测跳过。
+    if (args.benchmark) {
+      /* 系统评测不预检、不扣费（成本记平台，四面墙 margin=0） */
+    } else if (user?.id) {
       try {
         const u = (await payload.findByID({
           collection: 'users',
@@ -237,7 +241,7 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
   // 5b. credit 消费出口（总纲 6a，三币漏斗"跑模型→蒸发"段）：仅平台代付且真实调用时扣。
   //     幂等键=runId 防重试双扣；预检已兜底，实扣允许轻微透支保台账真实（账实一致优先于余额非负）。
   let chargedCredits = 0
-  if (platformKeyPath && result && !result.mocked && user?.id) {
+  if (platformKeyPath && !args.benchmark && result && !result.mocked && user?.id) {
     chargedCredits = creditsFromYuan(cost)
     if (chargedCredits > 0) {
       const charge = await applyCredit(payload, {
@@ -296,12 +300,14 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
     const runAuthorId = typeof skill.author === 'object' ? skill.author?.id : skill.author
     const isSelfRun = !!(user?.id && runAuthorId && String(user.id) === String(runAuthorId))
     const uHash = user?.id ? anonHash(String(user.id)) : undefined
+    // benchmark(系统评测)：source=benchmark、不排除自跑(平台代作者评测)、不受单用户封顶；否则 online 用户回流
+    const reportSource = args.benchmark ? 'benchmark' : 'online'
     // isRealCall=真实尝试（网关已配+有 Key）：成功则 result 非 mock，失败则 result 为 null 但仍是真实尝试
-    if (isRealCall && !isSelfRun && !(result && result.mocked)) {
+    if (isRealCall && (args.benchmark || !isSelfRun) && !(result && result.mocked)) {
       try {
-        // 抗刷：同一用户对同一 (skill, model) 的 online 报告最多计 3 条，防单人灌满/反向投毒某格
+        // 抗刷：同一用户对同一 (skill, model) 的 online 报告最多计 3 条（benchmark 无此限，系统可信）
         let allow = true
-        if (uHash) {
+        if (!args.benchmark && uHash) {
           const existing = await payload.count({
             collection: 'compat-reports',
             where: {
@@ -331,7 +337,7 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
               errorType, // 6m 负知识：失败原因/格式漂移分类
               inputSizeBucket: bucketSize(JSON.stringify(input || {}).length),
               outputSizeBucket: bucketSize((result?.text || '').length),
-              source: 'online',
+              source: reportSource,
             },
           })
         }

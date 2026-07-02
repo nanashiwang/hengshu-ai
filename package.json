@@ -19,6 +19,7 @@
     "keygen": "cross-env NODE_OPTIONS=--no-deprecation tsx src/seed/keygen.ts",
     "worker:skillrank": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/recompute-skillrank.ts",
     "worker:reconcile": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/reconcile-ledger.ts",
+    "worker:benchmark": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/benchmark.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

@@ -467,7 +467,7 @@ export interface CompatReport {
   inputSizeBucket?: string | null;
   outputSizeBucket?: string | null;
   runnerVersion?: string | null;
-  source?: ('community' | 'verified' | 'online') | null;
+  source?: ('community' | 'verified' | 'online' | 'benchmark') | null;
   updatedAt: string;
   createdAt: string;
 }

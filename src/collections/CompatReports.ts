@@ -46,6 +46,7 @@ export const CompatReports: CollectionConfig = {
         { label: '社区', value: 'community' },
         { label: '已验证', value: 'verified' },
         { label: '在线试用', value: 'online' },
+        { label: '系统评测', value: 'benchmark' },
       ],
     },
   ],

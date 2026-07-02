@@ -33,8 +33,8 @@ function decayWeight(createdAt: unknown, nowMs: number): number {
   return Math.pow(0.5, ageDays / HALF_LIFE_DAYS)
 }
 
-// 来源分级权重：verified 最可信、community 次之、online(在线试用) 最低——削弱在线通道刷分/投毒杠杆
-const SOURCE_WEIGHT: Record<string, number> = { verified: 1, community: 0.5, online: 0.3 }
+// 来源分级权重：verified/benchmark(系统评测) 最可信、community 次之、online(在线试用) 最低——削弱在线通道刷分/投毒杠杆
+const SOURCE_WEIGHT: Record<string, number> = { verified: 1, benchmark: 1, community: 0.5, online: 0.3 }
 function sourceWeight(source: unknown): number {
   return SOURCE_WEIGHT[String(source)] ?? 0.5
 }
