@@ -12,6 +12,7 @@ const PERSONAL = [
   { href: '/console/runners', label: 'Runner 实例' },
   { href: '/console/runs', label: '运行记录' },
   { href: '/console/contributions', label: '术值流水' },
+  { href: '/console/exchange', label: '术值兑换' },
   { href: '/console/favorites', label: '收藏' },
   { href: '/console/invites', label: '邀请码' },
 ]

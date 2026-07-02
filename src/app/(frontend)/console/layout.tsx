@@ -25,6 +25,10 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
             ⚡ {formatNumber(u.contributionScore)}{' '}
             <span className="text-xs font-normal text-[var(--muted)]">术值</span>
           </div>
+          <div className="mt-1 text-sm font-bold text-[var(--accent-2)]">
+            ◆ {formatNumber(u.creditBalance)}{' '}
+            <span className="text-xs font-normal text-[var(--muted)]">credit</span>
+          </div>
         </div>
         <ConsoleSidebar isStaff={isStaff} />
       </aside>
