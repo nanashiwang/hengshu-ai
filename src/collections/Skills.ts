@@ -7,6 +7,8 @@ import { rowActionsField } from './fields/rowActions'
 export const Skills: CollectionConfig = {
   slug: 'skills',
   labels: { singular: 'Skill', plural: 'Skill' },
+  // 市场/排行热路径：where status+visibility，sort -skillRank/-runCount/-successRate（各字段已单列索引）
+  indexes: [{ fields: ['status', 'visibility'] }],
   admin: {
     useAsTitle: 'title',
     defaultColumns: ['title', 'status', 'author', 'skillRank', 'runCount', 'successRate', 'rowActions'],
@@ -87,17 +89,17 @@ export const Skills: CollectionConfig = {
       label: '指标（自动维护）',
       admin: { initCollapsed: true },
       fields: [
-        { name: 'skillRank', type: 'number', defaultValue: 0, label: 'SkillRank' },
+        { name: 'skillRank', type: 'number', defaultValue: 0, index: true, label: 'SkillRank' },
         { name: 'localScore', type: 'number', defaultValue: 0, label: 'LocalScore（本地兼容）' },
         { name: 'healthScore', type: 'number', defaultValue: 0, label: '健康度' },
-        { name: 'runCount', type: 'number', defaultValue: 0, label: '调用次数' },
+        { name: 'runCount', type: 'number', defaultValue: 0, index: true, label: '调用次数' },
         { name: 'downloadCount', type: 'number', defaultValue: 0, label: '下载次数' },
         { name: 'favoriteCount', type: 'number', defaultValue: 0, label: '收藏数' },
         { name: 'reviewCount', type: 'number', defaultValue: 0, label: '评论数' },
         { name: 'avgRating', type: 'number', defaultValue: 0, label: '平均评分' },
         { name: 'avgCost', type: 'number', defaultValue: 0, label: '平均成本(元)' },
         { name: 'avgLatencyMs', type: 'number', defaultValue: 0, label: '平均耗时(ms)' },
-        { name: 'successRate', type: 'number', defaultValue: 0, label: '成功率(0-1)' },
+        { name: 'successRate', type: 'number', defaultValue: 0, index: true, label: '成功率(0-1)' },
         { name: 'formatSuccessRate', type: 'number', defaultValue: 0, label: '格式成功率(0-1)' },
         { name: 'lastRunAt', type: 'date', label: '最近调用时间' },
         { name: 'lastUpdatedAt', type: 'date', label: '最近更新时间' },

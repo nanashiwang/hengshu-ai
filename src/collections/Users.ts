@@ -49,6 +49,7 @@ export const Users: CollectionConfig = {
       name: 'contributionScore',
       type: 'number',
       defaultValue: 0,
+      index: true, // 贡献榜 sort -contributionScore 热路径
       label: '贡献值',
       access: { update: isAdminField },
     },
