@@ -1,5 +1,6 @@
 import type { CollectionConfig } from 'payload'
-import { isCreatorOrAbove, publishedOrPrivileged, isAdmin } from '@/access'
+import { APIError } from 'payload'
+import { isCreatorOrAbove, ownSkillVersionOrStaff, isAdmin } from '@/access'
 import { rowActionsField } from './fields/rowActions'
 
 export const SkillVersions: CollectionConfig = {
@@ -13,7 +14,7 @@ export const SkillVersions: CollectionConfig = {
   access: {
     read: () => true,
     create: isCreatorOrAbove,
-    update: isCreatorOrAbove,
+    update: ownSkillVersionOrStaff, // 修复越权：仅所属 Skill 作者/审核/管理可改
     delete: isAdmin,
   },
   fields: [
@@ -105,6 +106,26 @@ export const SkillVersions: CollectionConfig = {
     },
   ],
   hooks: {
+    beforeValidate: [
+      async ({ data, req, originalDoc }) => {
+        // 归属校验（纵深防御，覆盖 create 指向他人 Skill 的越权——create access 无法看 data.skill）：
+        // 非登录/无 user 的服务端可信写入(seed/发布端点 overrideAccess 且 author 恒为本人)放行；staff 放行。
+        const user = req.user
+        if (!user) return data
+        if (user.role === 'admin' || user.role === 'reviewer') return data
+        const skillRef = (data?.skill ?? originalDoc?.skill) as any
+        const skillId = typeof skillRef === 'object' ? skillRef?.id : skillRef
+        if (!skillId) return data // 交给 required 校验报错
+        const skill = await req.payload
+          .findByID({ collection: 'skills', id: skillId, overrideAccess: true, depth: 0, req })
+          .catch(() => null)
+        const authorId = skill && (typeof skill.author === 'object' ? (skill.author as any)?.id : skill.author)
+        if (!authorId || String(authorId) !== String(user.id)) {
+          throw new APIError('无权为他人的 Skill 创建或修改版本', 403)
+        }
+        return data
+      },
+    ],
     beforeDelete: [
       async ({ id, req }) => {
         // skill-artifacts.skillVersion 为必填(NOT NULL) 外键，删版本前先级联删除其制品快照

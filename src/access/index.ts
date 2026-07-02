@@ -51,6 +51,14 @@ export const publishedOrPrivileged: Access = ({ req: { user } }) => {
   return publicPublished
 }
 
+/** SkillVersions 写入：管理/审核放行；其余登录用户仅限"所属 Skill 是自己作品"的版本（按 skill.author 过滤）。
+ *  修复越权：此前 update 用 isCreatorOrAbove 返回布尔 true，任何 creator 可改他人版本的 prompt 劫持在线运行。 */
+export const ownSkillVersionOrStaff: Access = ({ req: { user } }) => {
+  if (!user) return false
+  if (user.role === 'admin' || user.role === 'reviewer') return true
+  return { 'skill.author': { equals: user.id } } as Where
+}
+
 // ───────────── 字段级 Access ─────────────
 
 export const isAdminField: FieldAccess = ({ req: { user } }) => user?.role === 'admin'
