@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { isLoggedIn, ownerOrAdmin } from '@/access'
 import { awardContribution } from '@/lib/contribution'
+import { notify } from '@/lib/notify'
 import { rowActionsField } from './fields/rowActions'
 
 async function adjustFavoriteCount(payload: any, skillId: string, delta: number, req?: any) {
@@ -80,6 +81,15 @@ export const Favorites: CollectionConfig = {
             description: 'Skill 被收藏',
             // 一次性奖励：同一收藏者对同一 Skill 只发一次，杜绝收藏→取消→再收藏循环刷分（取消也不回收）
             idempotencyKey: `fav:${favUserId}:${skillId}`,
+            req,
+          })
+          await notify(req.payload, {
+            userId: authorId,
+            type: 'skill_favorited',
+            title: `你的 Skill「${skill?.title || ''}」被收藏了`,
+            link: skill?.slug ? `/skills/${skill.slug}` : undefined,
+            relatedSkill: skillId,
+            actorId: favUserId,
             req,
           })
         }

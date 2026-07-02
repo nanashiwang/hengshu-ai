@@ -18,6 +18,7 @@ import { InviteCodes } from './collections/InviteCodes'
 import { ContributionLogs } from './collections/ContributionLogs'
 import { ContributionRules } from './collections/ContributionRules'
 import { CreditLogs } from './collections/CreditLogs'
+import { Notifications } from './collections/Notifications'
 import { ModelPriceSnapshots } from './collections/ModelPriceSnapshots'
 import { ScoreSnapshots } from './collections/ScoreSnapshots'
 import { RunnerClients } from './collections/RunnerClients'
@@ -59,6 +60,7 @@ export default buildConfig({
     RunnerClients,
     DeviceCodes,
     SkillInstalls,
+    Notifications,
     // ── 审核治理 ──
     Reviews,
     Reports,

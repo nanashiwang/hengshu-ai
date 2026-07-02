@@ -3,6 +3,7 @@ import type { PayloadRequest } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
 import { awardContribution } from '@/lib/contribution'
+import { notify } from '@/lib/notify'
 
 // POST /v1/bounties/{id}/complete —— 发布人验收，释放冻结术值给接单人
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -46,6 +47,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (transactionID) await payload.db.rollbackTransaction(transactionID)
     payload.logger?.error(`bounty complete 结算失败: ${(e as Error).message}`)
     return Response.json({ error: '验收结算失败，请重试' }, { status: 500 })
+  }
+
+  // 提交后通知接单人赏金到账（在事务外，通知失败不影响已完成的结算）
+  if (acceptedById) {
+    await notify(payload, {
+      userId: acceptedById,
+      type: 'bounty_completed',
+      title: `悬赏「${b.title}」已验收，${frozen} 术值赏金到账`,
+      link: `/bounties/${id}`,
+      relatedBounty: id,
+      actorId: user.id as string,
+    })
   }
 
   return Response.json({ ok: true, released: frozen })

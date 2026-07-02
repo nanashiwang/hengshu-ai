@@ -83,6 +83,7 @@ export interface Config {
     'runner-clients': RunnerClient;
     'device-codes': DeviceCode;
     'skill-installs': SkillInstall;
+    notifications: Notification;
     reviews: Review;
     reports: Report;
     media: Media;
@@ -111,6 +112,7 @@ export interface Config {
     'runner-clients': RunnerClientsSelect<false> | RunnerClientsSelect<true>;
     'device-codes': DeviceCodesSelect<false> | DeviceCodesSelect<true>;
     'skill-installs': SkillInstallsSelect<false> | SkillInstallsSelect<true>;
+    notifications: NotificationsSelect<false> | NotificationsSelect<true>;
     reviews: ReviewsSelect<false> | ReviewsSelect<true>;
     reports: ReportsSelect<false> | ReportsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
@@ -653,6 +655,23 @@ export interface SkillInstall {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "notifications".
+ */
+export interface Notification {
+  id: string;
+  user: string | User;
+  type?: ('skill_favorited' | 'review' | 'bounty_accepted' | 'bounty_submitted' | 'bounty_completed' | 'system') | null;
+  title: string;
+  body?: string | null;
+  link?: string | null;
+  read?: boolean | null;
+  relatedSkill?: (string | null) | Skill;
+  relatedBounty?: (string | null) | Bounty;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "reviews".
  */
 export interface Review {
@@ -820,6 +839,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'skill-installs';
         value: string | SkillInstall;
+      } | null)
+    | ({
+        relationTo: 'notifications';
+        value: string | Notification;
       } | null)
     | ({
         relationTo: 'reviews';
@@ -1201,6 +1224,22 @@ export interface SkillInstallsSelect<T extends boolean = true> {
   status?: T;
   installedAt?: T;
   lastUsedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "notifications_select".
+ */
+export interface NotificationsSelect<T extends boolean = true> {
+  user?: T;
+  type?: T;
+  title?: T;
+  body?: T;
+  link?: T;
+  read?: T;
+  relatedSkill?: T;
+  relatedBounty?: T;
   updatedAt?: T;
   createdAt?: T;
 }

@@ -1,5 +1,6 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin, isLoggedIn, ownerOrAdmin } from '@/access'
+import { notify } from '@/lib/notify'
 
 // 重算某 Skill 的平均评分与评论数（在 hook 内调用须透传 req 以共享事务）
 async function recomputeSkillRating(payload: any, skillId: string, req?: any) {
@@ -93,9 +94,28 @@ export const Reviews: CollectionConfig = {
       },
     ],
     afterChange: [
-      async ({ doc, req }) => {
+      async ({ doc, operation, req }) => {
         const skillId = typeof doc.skill === 'object' ? doc.skill?.id : doc.skill
         await recomputeSkillRating(req.payload, skillId, req)
+        // 新评价通知作者（仅新建、可见）
+        if (operation === 'create' && doc.status === 'visible' && skillId) {
+          try {
+            const skill = await req.payload.findByID({ collection: 'skills', id: skillId, depth: 0, overrideAccess: true, req })
+            const authorId = typeof (skill as any).author === 'object' ? (skill as any).author?.id : (skill as any).author
+            const reviewerId = typeof doc.user === 'object' ? doc.user?.id : doc.user
+            await notify(req.payload, {
+              userId: authorId,
+              type: 'review',
+              title: `你的 Skill「${(skill as any).title || ''}」收到新评价`,
+              link: (skill as any).slug ? `/skills/${(skill as any).slug}` : undefined,
+              relatedSkill: skillId,
+              actorId: reviewerId,
+              req,
+            })
+          } catch (e) {
+            req.payload.logger?.error(`review notify 失败: ${(e as Error).message}`)
+          }
+        }
         return doc
       },
     ],
