@@ -1,5 +1,6 @@
 # 衡术 Hengshu — 项目进度与规划
 
+> ⚠️ **本文档已冻结（2026-07-02）**：仅作 S1-S7 时期的进度存档。当前唯一开发依据是 **`docs/衡术-总纲.md`**——进度、差距、路线均以总纲为准，本文不再更新。
 > Verified AI Skills, Powered by Contribution.
 > 更新：2026-06-27 · 阶段：v0.2.1 路线图 S1–S7 全部完成 · 仓库：https://github.com/nanashiwang/hengshu-ai
 > 规划依据见 `hengshu_prd_v0.2.1.md`（收敛修订版）；体验见 `体验手册.md`。

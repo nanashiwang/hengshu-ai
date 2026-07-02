@@ -22,7 +22,8 @@
 - **下载→运行主线**：Skill Spec v1 · 发布快照+checksum · Runner 设备码登录 · 本地安装/离线运行（CLI 六命令）· 兼容报告回流+LocalScore · 术值/贡献2.0 规则引擎 · 求术悬赏闭环
 - **信任模型**：manifest ed25519 签名 + Runner 验签 + `/v1/keys` 公钥分发
 - **护城河数据层**：逐模型兼容真值表（时间衰减加权 + 置信度）· 在线运行回流喂评测数据 · 来源分级权重
-- **创作者供给**���前台发布 Skill（`/console/skills/new`）· 我的作品 · 未发布 Skill 作者可预览
+- **创作者供给**：前台发布 Skill（`/console/skills/new`）· 我的作品 · 未发布 Skill 作者可预览
+- **经济闭环（骨架）**：credit 台账 + 术值兑换池（`/console/exchange`，默认关闭待接真值）
 - **前台**：首页发现 · Skill 市场（筛选/排序/搜索）· 详情（兼容矩阵/评论/版本）· 排行榜 · 悬赏区 · 控制台 · 移动端导航 · SEO(sitemap/robots/metadata)
 
 ## 快速开始
@@ -69,7 +70,7 @@ src/
 ├─ app/(payload)/      # Payload admin + REST/GraphQL（自动样板，勿手改 layout/importMap）
 ├─ app/(frontend)/     # 前台：首页 / skills / rank / bounties / console / login / register / docs
 ├─ app/v1/             # 对外 API：skills(发布/run/compare/favorite/manifest) / auth / runner / bounties / keys
-├─ collections/        # 18 个 Collection（Users/Skills/SkillVersions/CompatReports/...）
+├─ collections/        # 19 个 Collection（Users/Skills/SkillVersions/CreditLogs/...）
 ├─ lib/                # newapi / 运行编排 / 校验 / 路由 / 贡献值 / 兼容聚合 / 签名 / 反女巫
 ├─ components/         # 前台组件
 ├─ seed/              # 种子/迁移/回填脚本
