@@ -46,6 +46,12 @@ export function ConsoleSidebar({ isStaff }: { isStaff: boolean }) {
           <div className="px-3 pb-1 pt-3 text-[11px] uppercase tracking-wide text-[var(--faint)]">
             管理
           </div>
+          <Link
+            href="/console/moderation"
+            className={itemCls(pathname === '/console/moderation')}
+          >
+            举报处置
+          </Link>
           {/* 分组为二级标题；组内集合在内容区以横向子标题 Tab 切换 */}
           {ADMIN_GROUPS.map((g) => {
             const href = `/console/admin/${g.items[0].slug}`
