@@ -1,6 +1,8 @@
 import type { Payload } from 'payload'
-import { createHmac } from 'crypto'
+import { createHmac, createHash } from 'crypto'
 import { rankDataDrivenRoute } from './route'
+import { canonicalString } from './canonical'
+import { signCanonical, getSigningKeyId } from './signing'
 
 // 规模分档（避免回传精确长度）
 export function bucketSize(n: number): string {
@@ -42,6 +44,10 @@ function sourceWeight(source: unknown): number {
 
 // 由兼容报告聚合重算 Skill 的 LocalScore（0-100）并写回（衰减加权 × 来源权重 + 置信度衰减）
 export async function recomputeLocalScore(payload: Payload, skillId: string) {
+  const prevSkill = (await payload
+    .findByID({ collection: 'skills', id: skillId, depth: 0, overrideAccess: true })
+    .catch(() => null)) as any
+  const prevScore: number | null = prevSkill ? prevSkill.localScore ?? 0 : null
   const res = await payload.find({
     collection: 'compat-reports',
     where: { skill: { equals: skillId } },
@@ -80,6 +86,14 @@ export async function recomputeLocalScore(payload: Payload, skillId: string) {
     data: { localScore },
     overrideAccess: true,
   })
+  // 6j-2 信任加固：分数变化时落一条 ed25519 签名的 append-only 快照，改历史必留痕。失败不影响主流程。
+  try {
+    if (localScore !== (prevScore ?? -1)) {
+      await writeScoreSnapshot(payload, skillId, localScore, reports.length)
+    }
+  } catch (e) {
+    payload.logger?.error(`writeScoreSnapshot 失败: ${(e as Error).message}`)
+  }
   // 护城河第1层(#15)：由真实回流回写省钱路由，让"数据改变产品动作"而非只改展示。失败不影响 localScore。
   try {
     await recomputeRoutePolicy(payload, skillId)
@@ -89,7 +103,33 @@ export async function recomputeLocalScore(payload: Payload, skillId: string) {
   return localScore
 }
 
-// 由逐模型兼容聚合回写当前版本的 routePolicy.dataDriven（省/快/质）。
+// 6j-2：写一条 ed25519 签名的 append-only 分数快照。无签名密钥时仍落记录(带哈希)，仅 signature 为空。
+async function writeScoreSnapshot(
+  payload: Payload,
+  skillId: string,
+  localScore: number,
+  reportCount: number,
+): Promise<void> {
+  const signedAt = new Date().toISOString()
+  const core = { skill: String(skillId), localScore, reportCount, signedAt }
+  const canon = canonicalString(core)
+  const payloadHash = createHash('sha256').update(canon).digest('hex')
+  const signature = signCanonical(core) // 无密钥返回 null
+  const keyId = getSigningKeyId() // 无密钥返回 null
+  await payload.create({
+    collection: 'score-snapshots',
+    overrideAccess: true,
+    data: {
+      skill: skillId,
+      localScore,
+      reportCount,
+      payloadHash,
+      keyId: keyId || undefined,
+      signature: signature || undefined,
+      signedAt,
+    },
+  })
+}
 // 只写 dataDriven 子键、不动作者手填的 strategies/default；无足够数据(可用模型为空)则不动作，保留作者意图。
 export async function recomputeRoutePolicy(payload: Payload, skillId: string): Promise<void> {
   const models = await aggregateByModel(payload, skillId)

@@ -87,6 +87,7 @@ export interface Config {
     reports: Report;
     media: Media;
     'model-price-snapshots': ModelPriceSnapshot;
+    'score-snapshots': ScoreSnapshot;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -114,6 +115,7 @@ export interface Config {
     reports: ReportsSelect<false> | ReportsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     'model-price-snapshots': ModelPriceSnapshotsSelect<false> | ModelPriceSnapshotsSelect<true>;
+    'score-snapshots': ScoreSnapshotsSelect<false> | ScoreSnapshotsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -717,6 +719,22 @@ export interface ModelPriceSnapshot {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "score-snapshots".
+ */
+export interface ScoreSnapshot {
+  id: string;
+  skill: string | Skill;
+  localScore: number;
+  reportCount?: number | null;
+  payloadHash?: string | null;
+  keyId?: string | null;
+  signature?: string | null;
+  signedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -818,6 +836,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'model-price-snapshots';
         value: string | ModelPriceSnapshot;
+      } | null)
+    | ({
+        relationTo: 'score-snapshots';
+        value: string | ScoreSnapshot;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1241,6 +1263,21 @@ export interface ModelPriceSnapshotsSelect<T extends boolean = true> {
   sourceUrl?: T;
   capturedAt?: T;
   note?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "score-snapshots_select".
+ */
+export interface ScoreSnapshotsSelect<T extends boolean = true> {
+  skill?: T;
+  localScore?: T;
+  reportCount?: T;
+  payloadHash?: T;
+  keyId?: T;
+  signature?: T;
+  signedAt?: T;
   updatedAt?: T;
   createdAt?: T;
 }
