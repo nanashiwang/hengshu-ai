@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
+import { getPayloadClient } from '@/lib/payload'
 import { formatNumber } from '@/lib/format'
 import { ThemeToggle } from './ThemeToggle'
 import { MobileNav } from './MobileNav'
@@ -15,6 +16,20 @@ const NAV = [
 export async function SiteNav() {
   const user = await getCurrentUser()
   const u = user as any
+  let unread = 0
+  if (u) {
+    try {
+      const payload = await getPayloadClient()
+      const res = await payload.count({
+        collection: 'notifications',
+        where: { and: [{ user: { equals: u.id } }, { read: { equals: false } }] },
+        overrideAccess: true,
+      })
+      unread = res.totalDocs
+    } catch {
+      /* 未读数失败不影响导航 */
+    }
+  }
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg-elev)] backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-[1600px] items-center gap-6 px-4 py-3 sm:px-6 lg:px-8">
@@ -51,6 +66,18 @@ export async function SiteNav() {
               >
                 ⚡ {formatNumber(u.contributionScore)}
               </span>
+              <Link
+                href="/console/notifications"
+                className="relative rounded-lg px-2 py-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--panel-2)] hover:text-[var(--text)]"
+                title="通知"
+              >
+                🔔
+                {unread > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-medium text-white">
+                    {unread > 99 ? '99+' : unread}
+                  </span>
+                )}
+              </Link>
               <Link
                 href="/console"
                 className="rounded-lg px-3 py-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--panel-2)] hover:text-[var(--text)]"

@@ -7,6 +7,7 @@ import { Section, Empty } from '@/components/console/ConsoleUI'
 import { Pagination } from '@/components/Pagination'
 import { CopyButton } from '@/components/CopyButton'
 import { RerunButton } from '@/components/console/RerunButton'
+import { MarkNotificationsRead } from '@/components/console/MarkNotificationsRead'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,7 @@ const TITLES: Record<string, string> = {
   contributions: '术值流水',
   favorites: '收藏',
   invites: '邀请码',
+  notifications: '通知',
 }
 
 export default async function ConsoleSection({
@@ -314,6 +316,52 @@ export default async function ConsoleSection({
           ))}
         </ul>
       )
+  } else if (section === 'notifications') {
+    const notifs = await payload.find({
+      collection: 'notifications',
+      where: { user: { equals: uid } },
+      depth: 0,
+      limit: PAGE_SIZE,
+      page,
+      sort: '-createdAt',
+      overrideAccess: true,
+    })
+    totalPages = notifs.totalPages || 1
+    const hasUnread = (notifs.docs as any[]).some((n) => !n.read)
+    body =
+      notifs.docs.length === 0 ? (
+        <Empty>暂无通知。有人收藏/评价你的 Skill 或悬赏有进展时会通知你。</Empty>
+      ) : (
+        <>
+          <MarkNotificationsRead hasUnread={hasUnread} />
+          <ul className="divide-y divide-[var(--border)] text-sm">
+          {(notifs.docs as any[]).map((n) => {
+            const inner = (
+              <div className={`flex items-start gap-2 py-2 ${n.read ? '' : 'font-medium'}`}>
+                {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--accent)]" />}
+                <div className={`min-w-0 ${n.read ? 'pl-4' : ''}`}>
+                  <div className="truncate">{n.title}</div>
+                  {n.body && <div className="text-xs text-[var(--muted)]">{n.body}</div>}
+                  <div className="mt-0.5 text-xs text-[var(--faint)]">{timeAgo(n.createdAt)}</div>
+                </div>
+              </div>
+            )
+            return (
+              <li key={n.id}>
+                {n.link ? (
+                  <Link href={n.link} className="block hover:text-[var(--accent)]">
+                    {inner}
+                  </Link>
+                ) : (
+                  inner
+                )}
+              </li>
+            )
+          })}
+          </ul>
+        </>
+      )
+    // 查看即已读：由客户端组件挂载后调用标记端点（不在 render 内 mutate，避免 Link prefetch 提前触发）
   }
 
   return (
