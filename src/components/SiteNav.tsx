@@ -6,6 +6,7 @@ import { MobileNav } from './MobileNav'
 
 const NAV = [
   { href: '/skills', label: 'Skill 市场' },
+  { href: '/models', label: '模型榜' },
   { href: '/rank', label: '排行榜' },
   { href: '/bounties', label: '悬赏区' },
   { href: '/docs', label: '文档' },

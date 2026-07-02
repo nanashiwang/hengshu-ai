@@ -183,3 +183,58 @@ export async function aggregateByModel(payload: Payload, skillId: string): Promi
   }
   return out.sort((a, b) => b.reports - a.reports)
 }
+
+// 跨全站按模型聚合（中立模型榜用）：衰减×来源权重加权，返回逐模型全局实测事实。
+export interface GlobalModelStat {
+  model: string
+  successRate: number
+  formatRate: number
+  avgLatencyMs: number
+  samples: number
+}
+export async function aggregateModelsGlobal(payload: Payload): Promise<GlobalModelStat[]> {
+  const now = Date.now()
+  const byModel = new Map<
+    string,
+    { wSum: number; wSuccess: number; wFormat: number; wLat: number; wLatSum: number; n: number }
+  >()
+  let page = 1
+  for (;;) {
+    const res = await payload.find({
+      collection: 'compat-reports',
+      limit: 500,
+      page,
+      depth: 0,
+      overrideAccess: true,
+      sort: 'id',
+    })
+    for (const r of res.docs as any[]) {
+      const m = r.modelName
+      if (!m) continue
+      const a = byModel.get(m) || { wSum: 0, wSuccess: 0, wFormat: 0, wLat: 0, wLatSum: 0, n: 0 }
+      const w = decayWeight(r.createdAt, now) * sourceWeight(r.source)
+      a.wSum += w
+      if (r.success) a.wSuccess += w
+      if (r.formatValid) a.wFormat += w
+      if (typeof r.latencyMs === 'number') {
+        a.wLat += w * r.latencyMs
+        a.wLatSum += w
+      }
+      a.n++
+      byModel.set(m, a)
+    }
+    if (!res.hasNextPage) break
+    page++
+  }
+  const out: GlobalModelStat[] = []
+  for (const [model, a] of byModel) {
+    out.push({
+      model,
+      successRate: a.wSum > 0 ? a.wSuccess / a.wSum : 0,
+      formatRate: a.wSum > 0 ? a.wFormat / a.wSum : 0,
+      avgLatencyMs: a.wLatSum > 0 ? Math.round(a.wLat / a.wLatSum) : 0,
+      samples: a.n,
+    })
+  }
+  return out
+}

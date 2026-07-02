@@ -18,6 +18,7 @@ import { InviteCodes } from './collections/InviteCodes'
 import { ContributionLogs } from './collections/ContributionLogs'
 import { ContributionRules } from './collections/ContributionRules'
 import { CreditLogs } from './collections/CreditLogs'
+import { ModelPriceSnapshots } from './collections/ModelPriceSnapshots'
 import { RunnerClients } from './collections/RunnerClients'
 import { DeviceCodes } from './collections/DeviceCodes'
 import { SkillInstalls } from './collections/SkillInstalls'
@@ -62,6 +63,7 @@ export default buildConfig({
     Reports,
     // ── 系统设置 ──
     Media,
+    ModelPriceSnapshots,
   ],
   globals: [SiteSettings, EconomySettings],
   editor: lexicalEditor(),

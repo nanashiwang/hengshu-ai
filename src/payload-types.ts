@@ -86,6 +86,7 @@ export interface Config {
     reviews: Review;
     reports: Report;
     media: Media;
+    'model-price-snapshots': ModelPriceSnapshot;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -112,6 +113,7 @@ export interface Config {
     reviews: ReviewsSelect<false> | ReviewsSelect<true>;
     reports: ReportsSelect<false> | ReportsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    'model-price-snapshots': ModelPriceSnapshotsSelect<false> | ModelPriceSnapshotsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -699,6 +701,22 @@ export interface Media {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "model-price-snapshots".
+ */
+export interface ModelPriceSnapshot {
+  id: string;
+  model: string;
+  inputPrice: number;
+  outputPrice: number;
+  currency?: string | null;
+  sourceUrl?: string | null;
+  capturedAt?: string | null;
+  note?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -796,6 +814,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'media';
         value: string | Media;
+      } | null)
+    | ({
+        relationTo: 'model-price-snapshots';
+        value: string | ModelPriceSnapshot;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1206,6 +1228,21 @@ export interface MediaSelect<T extends boolean = true> {
   height?: T;
   focalX?: T;
   focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "model-price-snapshots_select".
+ */
+export interface ModelPriceSnapshotsSelect<T extends boolean = true> {
+  model?: T;
+  inputPrice?: T;
+  outputPrice?: T;
+  currency?: T;
+  sourceUrl?: T;
+  capturedAt?: T;
+  note?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
