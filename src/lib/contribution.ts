@@ -102,10 +102,18 @@ export async function awardContribution(
       depth: 0,
       ...wtx,
     })
+    const newScore = (user.contributionScore || 0) + points
+    // 防透支：术值余额不可为负（与 applyCredit 对称的纵深防御；结算类扣分若超额则回滚）
+    if (newScore < 0) {
+      if (ownTxId) await payload.db.rollbackTransaction(ownTxId)
+      if (args.throwOnError) throw new Error('术值余额不足')
+      payload.logger?.error(`awardContribution 拒绝：术值不足 user=${userId} 需 ${-points}`)
+      return
+    }
     await payload.update({
       collection: 'users',
       id: userId,
-      data: { contributionScore: (user.contributionScore || 0) + points },
+      data: { contributionScore: newScore },
       overrideAccess: true,
       ...wtx,
     })

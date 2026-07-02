@@ -123,9 +123,11 @@ export interface Config {
   fallbackLocale: null;
   globals: {
     'site-settings': SiteSetting;
+    'economy-settings': EconomySetting;
   };
   globalsSelect: {
     'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
+    'economy-settings': EconomySettingsSelect<false> | EconomySettingsSelect<true>;
   };
   locale: null;
   widgets: {
@@ -1243,6 +1245,26 @@ export interface SiteSetting {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "economy-settings".
+ */
+export interface EconomySetting {
+  id: string;
+  exchangeEnabled?: boolean | null;
+  alpha?: number | null;
+  /**
+   * 接入 New API /api/log 自动回填前手动填；0 = 兑换池空、自动关闭兑换。1 分 = 1 credit
+   */
+  monthlyRealizedMarginCents?: number | null;
+  pointsPerCredit?: number | null;
+  minCreditPerTx?: number | null;
+  perTxMaxCredit?: number | null;
+  perUserDailyMaxCredit?: number | null;
+  perUserMonthlyMaxCredit?: number | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "site-settings_select".
  */
 export interface SiteSettingsSelect<T extends boolean = true> {
@@ -1250,6 +1272,23 @@ export interface SiteSettingsSelect<T extends boolean = true> {
   slogan?: T;
   featuredSkills?: T;
   announcement?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "economy-settings_select".
+ */
+export interface EconomySettingsSelect<T extends boolean = true> {
+  exchangeEnabled?: T;
+  alpha?: T;
+  monthlyRealizedMarginCents?: T;
+  pointsPerCredit?: T;
+  minCreditPerTx?: T;
+  perTxMaxCredit?: T;
+  perUserDailyMaxCredit?: T;
+  perUserMonthlyMaxCredit?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

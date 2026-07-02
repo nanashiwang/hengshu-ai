@@ -25,6 +25,7 @@ import { Bounties } from './collections/Bounties'
 import { Reports } from './collections/Reports'
 import { Media } from './collections/Media'
 import { SiteSettings } from './globals/SiteSettings'
+import { EconomySettings } from './globals/EconomySettings'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -62,7 +63,7 @@ export default buildConfig({
     // ── 系统设置 ──
     Media,
   ],
-  globals: [SiteSettings],
+  globals: [SiteSettings, EconomySettings],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   db: postgresAdapter({
