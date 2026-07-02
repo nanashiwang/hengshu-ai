@@ -3,6 +3,7 @@ import config from '@payload-config'
 import { awardContribution } from '@/lib/contribution'
 import { applyCredit } from '@/lib/credit'
 import { getEconomyConfig } from '@/lib/economy'
+import { getNewApiAdmin } from '@/lib/newapiAdmin'
 import { getClientIp, hashIp } from '@/lib/clientMeta'
 
 // POST /v1/auth/register —— 邀请码注册
@@ -123,6 +124,11 @@ export async function POST(request: Request) {
   } catch (e) {
     payload.logger?.error(`注册赠送 credit 失败: ${(e as Error).message}`)
   }
+
+  // 预建 New API 子令牌（best-effort；stub 模式 no-op，real 模式让首次兑换有令牌可调配额）
+  getNewApiAdmin()
+    .provisionSubToken(newUser.id as string)
+    .catch((e) => payload.logger?.error(`预建子令牌失败: ${(e as Error).message}`))
 
   return Response.json({ ok: true, userId: newUser.id })
 }
