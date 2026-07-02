@@ -17,6 +17,7 @@ import { Favorites } from './collections/Favorites'
 import { InviteCodes } from './collections/InviteCodes'
 import { ContributionLogs } from './collections/ContributionLogs'
 import { ContributionRules } from './collections/ContributionRules'
+import { CreditLogs } from './collections/CreditLogs'
 import { RunnerClients } from './collections/RunnerClients'
 import { DeviceCodes } from './collections/DeviceCodes'
 import { SkillInstalls } from './collections/SkillInstalls'
@@ -50,6 +51,7 @@ export default buildConfig({
     InviteCodes,
     ContributionLogs,
     ContributionRules,
+    CreditLogs,
     Favorites,
     RunnerClients,
     DeviceCodes,

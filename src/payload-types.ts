@@ -78,6 +78,7 @@ export interface Config {
     'invite-codes': InviteCode;
     'contribution-logs': ContributionLog;
     'contribution-rules': ContributionRule;
+    'credit-logs': CreditLog;
     favorites: Favorite;
     'runner-clients': RunnerClient;
     'device-codes': DeviceCode;
@@ -103,6 +104,7 @@ export interface Config {
     'invite-codes': InviteCodesSelect<false> | InviteCodesSelect<true>;
     'contribution-logs': ContributionLogsSelect<false> | ContributionLogsSelect<true>;
     'contribution-rules': ContributionRulesSelect<false> | ContributionRulesSelect<true>;
+    'credit-logs': CreditLogsSelect<false> | CreditLogsSelect<true>;
     favorites: FavoritesSelect<false> | FavoritesSelect<true>;
     'runner-clients': RunnerClientsSelect<false> | RunnerClientsSelect<true>;
     'device-codes': DeviceCodesSelect<false> | DeviceCodesSelect<true>;
@@ -212,6 +214,10 @@ export interface User {
   level?: number | null;
   contributionScore?: number | null;
   consumptionScore?: number | null;
+  /**
+   * 1 credit = ¥0.01 零售。权威值，恒等于 credit-logs 之和；仅服务端事务写入
+   */
+  creditBalance?: number | null;
   ratioScore?: number | null;
   inviteCount?: number | null;
   warningCount?: number | null;
@@ -560,6 +566,21 @@ export interface ContributionRule {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "credit-logs".
+ */
+export interface CreditLog {
+  id: string;
+  user: string | User;
+  type: 'recharge' | 'exchange' | 'consume' | 'refund' | 'adjust';
+  amount: number;
+  balanceAfter?: number | null;
+  idempotencyKey?: string | null;
+  description?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "favorites".
  */
 export interface Favorite {
@@ -728,6 +749,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'contribution-rules';
         value: string | ContributionRule;
+      } | null)
+    | ({
+        relationTo: 'credit-logs';
+        value: string | CreditLog;
       } | null)
     | ({
         relationTo: 'favorites';
@@ -974,6 +999,7 @@ export interface UsersSelect<T extends boolean = true> {
   level?: T;
   contributionScore?: T;
   consumptionScore?: T;
+  creditBalance?: T;
   ratioScore?: T;
   inviteCount?: T;
   warningCount?: T;
@@ -1037,6 +1063,20 @@ export interface ContributionRulesSelect<T extends boolean = true> {
   dailyLimit?: T;
   selfActionExcluded?: T;
   enabled?: T;
+  description?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "credit-logs_select".
+ */
+export interface CreditLogsSelect<T extends boolean = true> {
+  user?: T;
+  type?: T;
+  amount?: T;
+  balanceAfter?: T;
+  idempotencyKey?: T;
   description?: T;
   updatedAt?: T;
   createdAt?: T;

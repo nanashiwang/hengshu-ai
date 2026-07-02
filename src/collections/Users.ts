@@ -60,6 +60,14 @@ export const Users: CollectionConfig = {
       access: { update: isAdminField },
     },
     {
+      name: 'creditBalance',
+      type: 'number',
+      defaultValue: 0,
+      label: 'credit 余额（算力燃料）',
+      access: { update: isAdminField },
+      admin: { description: '1 credit = ¥0.01 零售。权威值，恒等于 credit-logs 之和；仅服务端事务写入' },
+    },
+    {
       name: 'ratioScore',
       type: 'number',
       virtual: true,
