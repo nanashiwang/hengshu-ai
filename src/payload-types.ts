@@ -526,6 +526,11 @@ export interface ContributionLog {
     | 'consume'
     | 'other';
   points: number;
+  /**
+   * 引发本次发放的用户（如收藏者/调用者），用于一次性奖励幂等去重
+   */
+  actor?: (string | null) | User;
+  idempotencyKey?: string | null;
   relatedSkill?: (string | null) | Skill;
   relatedBounty?: (string | null) | Bounty;
   description?: string | null;
@@ -1049,6 +1054,8 @@ export interface ContributionLogsSelect<T extends boolean = true> {
   user?: T;
   actionType?: T;
   points?: T;
+  actor?: T;
+  idempotencyKey?: T;
   relatedSkill?: T;
   relatedBounty?: T;
   description?: T;

@@ -148,28 +148,16 @@ export const Skills: CollectionConfig = {
           const authorId =
             typeof doc.author === 'object' ? doc.author?.id : doc.author
           if (authorId) {
-            // 幂等：每个 Skill 的发布奖励只发一次，防止反复 published↔非published 刷 +50
-            const already = await req.payload.count({
-              collection: 'contribution-logs',
-              where: {
-                and: [
-                  { relatedSkill: { equals: doc.id } },
-                  { actionType: { equals: 'skill_published' } },
-                ],
-              },
-              overrideAccess: true,
+            // 幂等：每个 Skill 的发布奖励只发一次（idempotencyKey 唯一索引硬保证，根治并发双发竞态）
+            await awardContribution(req.payload, {
+              userId: authorId,
+              actionType: 'skill_published',
+              points: 50,
+              relatedSkill: doc.id,
+              description: `Skill「${doc.title}」发布通过`,
+              idempotencyKey: `pub:${doc.id}`,
               req,
             })
-            if (already.totalDocs === 0) {
-              await awardContribution(req.payload, {
-                userId: authorId,
-                actionType: 'skill_published',
-                points: 50,
-                relatedSkill: doc.id,
-                description: `Skill「${doc.title}」发布通过`,
-                req,
-              })
-            }
           }
         }
         return doc

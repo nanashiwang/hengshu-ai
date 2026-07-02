@@ -30,6 +30,7 @@ export async function awardContribution(
     relatedSkill?: string
     relatedBounty?: string
     description?: string
+    idempotencyKey?: string // 一次性奖励去重（如 fav:<actor>:<skill>）：命中则跳过
     req?: Partial<PayloadRequest>
     throwOnError?: boolean // 结算类调用：内部出错时抛出而非静默吞，供上层事务回滚
   },
@@ -42,6 +43,16 @@ export async function awardContribution(
   // ── 阶段一：确定金额与门槛（结算类绕过规则表）──
   let points: number | undefined
   try {
+    // 幂等：一次性奖励去重（命中则不再发放；唯一索引为并发/重放硬后备）
+    if (args.idempotencyKey) {
+      const dup = await payload.count({
+        collection: 'contribution-logs',
+        where: { idempotencyKey: { equals: args.idempotencyKey } },
+        overrideAccess: true,
+        ...tx,
+      })
+      if (dup.totalDocs > 0) return
+    }
     if (isSettlement) {
       points = args.points
     } else {
@@ -123,6 +134,8 @@ export async function awardContribution(
         user: userId,
         actionType,
         points,
+        actor: actorId,
+        idempotencyKey: args.idempotencyKey,
         relatedSkill: args.relatedSkill,
         relatedBounty: args.relatedBounty,
         description: args.description,

@@ -28,6 +28,21 @@ export const ContributionLogs: CollectionConfig = {
       options: CONTRIBUTION_ACTIONS.map((a) => ({ label: a, value: a })),
     },
     { name: 'points', type: 'number', required: true, label: '贡献值变化' },
+    {
+      name: 'actor',
+      type: 'relationship',
+      relationTo: 'users',
+      label: '触发者',
+      admin: { description: '引发本次发放的用户（如收藏者/调用者），用于一次性奖励幂等去重' },
+    },
+    {
+      name: 'idempotencyKey',
+      type: 'text',
+      unique: true, // 唯一索引：一次性奖励(收藏/发布等)的并发/重放硬幂等（多条 null 允许）
+      index: true,
+      label: '幂等键',
+      admin: { readOnly: true },
+    },
     { name: 'relatedSkill', type: 'relationship', relationTo: 'skills', label: '关联 Skill' },
     { name: 'relatedBounty', type: 'relationship', relationTo: 'bounties', label: '关联悬赏' },
     { name: 'description', type: 'textarea', label: '描述' },

@@ -78,6 +78,8 @@ export const Favorites: CollectionConfig = {
             actorId: favUserId,
             relatedSkill: skillId,
             description: 'Skill 被收藏',
+            // 一次性奖励：同一收藏者对同一 Skill 只发一次，杜绝收藏→取消→再收藏循环刷分（取消也不回收）
+            idempotencyKey: `fav:${favUserId}:${skillId}`,
             req,
           })
         }
