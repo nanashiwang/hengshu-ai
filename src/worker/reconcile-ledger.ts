@@ -4,8 +4,10 @@ import type { Payload } from 'payload'
 import config from '../payload.config'
 
 // 台账对账 worker：从真值源重算，修复增量写入(read-modify-write)在并发下的丢更新漂移。
-//   ① 术值：contributionScore 应恒等于 SUM(contribution-logs.points)（唯一写入点在 awardContribution，必记等额流水）
-//   ② Skill 指标：runCount/successRate/avgCost/avgLatencyMs/formatSuccessRate 应可由 skill-runs 唯一重算
+//   ① 术值：contributionScore == SUM(contribution-logs.points)
+//   ② Skill 指标：runCount/successRate/avgCost/avgLatencyMs/formatSuccessRate 由 skill-runs 重算
+//   ③ credit：creditBalance == SUM(credit-logs.amount)（资金不变量）
+//   ④ 计数：favoriteCount=COUNT(favorites)，reviewCount/avgRating 由 visible reviews 重算
 // 默认 dry-run 只报漂移；加 --apply（或 APPLY=1）才写回。
 //   运行：npm run worker:reconcile          # 只看漂移
 //        npm run worker:reconcile -- --apply # 应用修复
@@ -13,6 +15,7 @@ import config from '../payload.config'
 //    rank 交给 `npm run worker:skillrank` 单独负责，避免三方口径永不收敛而反复误改。
 const APPLY = process.argv.includes('--apply') || process.env.APPLY === '1'
 const round4 = (n: number) => Math.round(n * 10000) / 10000
+const round2 = (n: number) => Math.round(n * 100) / 100
 // 浮点容差：热路径 updateSkillMetrics 用逐步舍入的滑动平均(累积误差)，reconciler 用一次性 sum/count；
 // 仅当差异超出容差才判漂移，避免常态性误报与无谓写回。
 const RATE_EPS = 5e-5 // 比率类(0-1)
@@ -123,11 +126,93 @@ async function reconcileSkillMetrics(payload: Payload) {
   )
 }
 
+// ③ credit 台账对账：creditBalance == SUM(credit-logs.amount)（唯一写入点 applyCredit 必记等额流水）
+async function reconcileCredit(payload: Payload) {
+  const sums = new Map<string, number>()
+  await forEachDoc(payload, 'credit-logs', (d) => {
+    const uid = typeof d.user === 'object' ? d.user?.id : d.user
+    if (!uid) return
+    sums.set(String(uid), (sums.get(String(uid)) || 0) + (d.amount || 0))
+  })
+  const users: any[] = []
+  await forEachDoc(payload, 'users', (u) => users.push(u))
+  let drifted = 0
+  let totalAbsDrift = 0
+  for (const u of users) {
+    const expected = round2(sums.get(String(u.id)) || 0)
+    const actual = round2(u.creditBalance || 0)
+    if (Math.abs(expected - actual) < 1e-6) continue
+    drifted++
+    totalAbsDrift += Math.abs(expected - actual)
+    payload.logger.warn(`credit 漂移 user=${u.id}(${u.username || '—'}): 账面 ${actual} → 应为 ${expected}`)
+    if (APPLY) {
+      await payload.update({ collection: 'users', id: u.id, data: { creditBalance: expected }, overrideAccess: true })
+    }
+  }
+  payload.logger.info(
+    `credit 对账：用户 ${users.length}，漂移 ${drifted}，累计绝对漂移 ${round2(totalAbsDrift)}${APPLY ? '（已修复）' : '（dry-run，未写回）'}`,
+  )
+}
+
+// ④ 计数对账：favoriteCount=COUNT(favorites)；reviewCount/avgRating 由 visible reviews 重算（口径对齐 recomputeSkillRating）
+async function reconcileCounts(payload: Payload) {
+  const favBySkill = new Map<string, number>()
+  await forEachDoc(payload, 'favorites', (f) => {
+    const sid = typeof f.skill === 'object' ? f.skill?.id : f.skill
+    if (!sid) return
+    favBySkill.set(String(sid), (favBySkill.get(String(sid)) || 0) + 1)
+  })
+  const revBySkill = new Map<string, { count: number; ratingSum: number; ratingN: number }>()
+  await forEachDoc(payload, 'reviews', (r) => {
+    if (r.status !== 'visible') return // 口径对齐：仅可见评论计入
+    const sid = typeof r.skill === 'object' ? r.skill?.id : r.skill
+    if (!sid) return
+    const a = revBySkill.get(String(sid)) || { count: 0, ratingSum: 0, ratingN: 0 }
+    a.count++
+    if (typeof r.rating === 'number' && r.rating > 0) {
+      a.ratingSum += r.rating
+      a.ratingN++
+    }
+    revBySkill.set(String(sid), a)
+  })
+  const skills: any[] = []
+  await forEachDoc(payload, 'skills', (s) => skills.push(s))
+  let drifted = 0
+  for (const s of skills) {
+    const favoriteCount = favBySkill.get(String(s.id)) || 0
+    const rev = revBySkill.get(String(s.id))
+    const reviewCount = rev?.count || 0
+    const avgRating = rev && rev.ratingN > 0 ? round2(rev.ratingSum / rev.ratingN) : 0
+    const changed =
+      favoriteCount !== (s.favoriteCount || 0) ||
+      reviewCount !== (s.reviewCount || 0) ||
+      Math.abs(avgRating - round2(s.avgRating || 0)) > 1e-6
+    if (!changed) continue
+    drifted++
+    payload.logger.warn(
+      `计数漂移 skill=${s.slug || s.id}: fav ${s.favoriteCount || 0}→${favoriteCount} review ${s.reviewCount || 0}→${reviewCount} rating ${round2(s.avgRating || 0)}→${avgRating}`,
+    )
+    if (APPLY) {
+      await payload.update({
+        collection: 'skills',
+        id: s.id,
+        data: { favoriteCount, reviewCount, avgRating },
+        overrideAccess: true,
+      })
+    }
+  }
+  payload.logger.info(
+    `计数对账：Skill ${skills.length}，漂移 ${drifted}${APPLY ? '（已修复）' : '（dry-run，未写回）'}`,
+  )
+}
+
 async function run() {
   const payload = await getPayload({ config })
   payload.logger.info(`台账对账启动（${APPLY ? 'APPLY 写回模式' : 'dry-run 只报账'}）`)
   await reconcileLedger(payload)
+  await reconcileCredit(payload)
   await reconcileSkillMetrics(payload)
+  await reconcileCounts(payload)
   payload.logger.info('台账对账完成')
   process.exit(0)
 }

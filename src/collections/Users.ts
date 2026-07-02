@@ -163,6 +163,11 @@ export const Users: CollectionConfig = {
           ...opts,
         })
         if (activeBounties.totalDocs > 0) throw new Error('该用户有进行中/争议中的悬赏，请先结算或取消后再删账号')
+        // 阻断资金蒸发：credit 是真金（¥），余额非 0 时删账号会静默丢钱且留悬空流水，必须先退款/清零
+        const u = await p.findByID({ collection: 'users', id, depth: 0, ...opts }).catch(() => null)
+        if (u && Math.abs((u as any).creditBalance || 0) > 1e-9) {
+          throw new Error('该用户 credit 余额非 0，请先退款或清零后再删账号')
+        }
         // 删除用户私有从属记录（favorites/reviews 触发各自 afterDelete 修正 Skill 计数）
         for (const collection of [
           'favorites',
@@ -170,6 +175,7 @@ export const Users: CollectionConfig = {
           'skill-installs',
           'runner-clients',
           'contribution-logs',
+          'credit-logs',
           'device-codes',
         ] as const) {
           await p.delete({ collection, where: { user: { equals: id } }, ...opts })
