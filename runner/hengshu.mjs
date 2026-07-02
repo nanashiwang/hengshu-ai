@@ -129,7 +129,7 @@ function removeInstalled(slug) {
 
 function parseArgs(argv) {
   const a = { _: [], in: {} }
-  const BOOL = new Set(['raw', 'report', 'anon'])
+  const BOOL = new Set(['raw', 'report', 'anon', 'allow-unsigned'])
   for (let i = 0; i < argv.length; i++) {
     const t = argv[i]
     if (t === '--in') {
@@ -192,7 +192,7 @@ async function cmdWhoami(args) {
 }
 
 // ───────── install / list / remove ─────────
-async function installSlug(hub, token, slug) {
+async function installSlug(hub, token, slug, opts = {}) {
   const res = await fetch(`${hub}/v1/runner/install`, {
     method: 'POST',
     headers: bearer(token),
@@ -201,7 +201,9 @@ async function installSlug(hub, token, slug) {
   const data = await res.json().catch(() => ({}))
   if (!res.ok || !data.ok) throw new Error(data.error || `安装失败（${res.status}）`)
 
-  // 校验和 + ed25519 验签（签名无效或校验和不符则拒装）
+  // 校验和 + ed25519 验签：默认强制"有校验和 + 已签名 + 签名有效"，杜绝克隆站镜像换签/去签重分发。
+  // --allow-unsigned 显式豁免（自建/离线调试用）。
+  const allowUnsigned = !!opts.allowUnsigned
   let verify = { signed: false }
   try {
     const YAML = (await import('yaml')).default
@@ -210,9 +212,14 @@ async function installSlug(hub, token, slug) {
     verify = verifyManifest(manifest, pub)
     if (!verify.checksumOk) throw new Error('manifest 校验和不匹配，拒绝安装')
     if (verify.signed && !verify.sigValid) throw new Error('manifest 签名无效，拒绝安装')
+    if (!allowUnsigned) {
+      if (!manifest.integrity?.checksum) throw new Error('manifest 缺少校验和，拒绝安装（--allow-unsigned 可跳过）')
+      if (!verify.signed) throw new Error('manifest 未签名，拒绝安装（--allow-unsigned 可跳过）')
+    }
   } catch (e) {
     if (/拒绝安装/.test(e.message)) throw e
-    // 解析失败不阻断（向后兼容未签名/旧包）
+    // 非"拒绝安装"类错误(YAML 解析/取公钥失败)默认也拒装——静默放行=换签攻击面；除非 --allow-unsigned
+    if (!allowUnsigned) throw new Error(`manifest 校验失败，拒绝安装：${e.message}（--allow-unsigned 可跳过）`)
   }
 
   saveInstalled(slug, data.manifest, {
@@ -228,8 +235,8 @@ async function installSlug(hub, token, slug) {
 async function cmdInstall(args) {
   const { hub, token } = requireAuth(args)
   const slug = args._[0]
-  if (!slug) throw new Error('用法：hengshu install <slug>')
-  const data = await installSlug(hub, token, slug)
+  if (!slug) throw new Error('用法：hengshu install <slug> [--allow-unsigned]')
+  const data = await installSlug(hub, token, slug, { allowUnsigned: !!args['allow-unsigned'] })
   console.log(`✅ 已安装 ${data.name} (v${data.version}) → ${skillDir(slug)}/skill.yaml`)
   const v = data._verify || {}
   const tag = v.signed ? (v.sigValid ? '· ✓ 签名有效' : '· ✗ 签名无效') : '· ⚠ 未签名'
@@ -284,7 +291,7 @@ async function cmdUpdate(args) {
   const out = updates.filter((u) => u.outdated)
   if (out.length === 0) return console.log('✅ 全部为最新')
   for (const u of out) {
-    const data = await installSlug(hub, token, u.slug)
+    const data = await installSlug(hub, token, u.slug, { allowUnsigned: !!args['allow-unsigned'] })
     console.log(`⬆️  ${u.slug} 已更新到 v${data.version}`)
   }
 }
