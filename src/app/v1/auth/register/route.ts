@@ -10,24 +10,75 @@ import { normalizeRegisterCreditAmount, registerCreditIdempotencyKey } from '@/l
 import { acquireInviteCodeLock } from '@/lib/dbLocks'
 import { getRegistrationEmailRequired, resolveRegistrationEmail } from '@/lib/siteSettings'
 
+function isFormRegisterRequest(request: Request): boolean {
+  const contentType = request.headers.get('content-type') || ''
+  return contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')
+}
+
+async function readRegisterBody(request: Request, formMode: boolean) {
+  if (formMode) {
+    const form = await request.formData()
+    return {
+      email: form.get('email'),
+      inviteCode: form.get('inviteCode'),
+      password: form.get('password'),
+      username: form.get('username'),
+    }
+  }
+  return request.json()
+}
+
+function appendForwardedCookies(headers: Headers, sourceHeaders: Headers) {
+  const cookies =
+    typeof (sourceHeaders as any).getSetCookie === 'function'
+      ? (sourceHeaders as any).getSetCookie()
+      : sourceHeaders.get('set-cookie')
+        ? [sourceHeaders.get('set-cookie') as string]
+        : []
+  for (const cookie of cookies) headers.append('Set-Cookie', cookie)
+}
+
+function formFailure(message: string): Response {
+  const params = new URLSearchParams({ error: message })
+  return new Response(null, { status: 303, headers: { Location: `/register?${params.toString()}` } })
+}
+
+async function formSuccess(request: Request, email: string, password: string): Promise<Response> {
+  const loginRes = await fetch(`${new URL(request.url).origin}/api/users/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  if (!loginRes.ok) return formFailure('注册成功但自动登录失败，请去登录')
+
+  const headers = new Headers({ Location: '/console' })
+  appendForwardedCookies(headers, loginRes.headers)
+  return new Response(null, { status: 303, headers })
+}
+
 // POST /v1/auth/register —— 用户注册；邀请码可选，填写时绑定邀请关系并消耗邀请码。
 export async function POST(request: Request) {
   const payload = await getPayload({ config })
+  const formMode = isFormRegisterRequest(request)
+  const fail = (message: string, status = 400) =>
+    formMode ? formFailure(message) : Response.json({ error: message }, { status })
 
   let body: any = {}
   try {
-    body = await request.json()
+    body = await readRegisterBody(request, formMode)
   } catch {
-    return Response.json({ error: '请求体无效' }, { status: 400 })
+    return fail('请求体无效', 400)
   }
-  const { username, password, inviteCode } = body
+  const username = typeof body.username === 'string' ? body.username.trim() : ''
+  const password = typeof body.password === 'string' ? body.password : ''
+  const inviteCode = typeof body.inviteCode === 'string' ? body.inviteCode : ''
   const emailRequired = await getRegistrationEmailRequired(payload)
   const accountEmail = resolveRegistrationEmail(body.email, emailRequired)
   if (emailRequired && !accountEmail) {
-    return Response.json({ error: '邮箱为必填' }, { status: 400 })
+    return fail('邮箱为必填', 400)
   }
   if (!username || !password) {
-    return Response.json({ error: '用户名、密码均为必填' }, { status: 400 })
+    return fail('用户名、密码均为必填', 400)
   }
 
   // 反女巫：采集注册 IP 哈希。同 IP 24h 内注册数宽松上限（兜底极端批量；阈值宽松以规避 CGNAT/共享出口 IP 的误伤）。
@@ -42,7 +93,7 @@ export async function POST(request: Request) {
         overrideAccess: true,
       })
       if (recent.totalDocs >= 20) {
-        return Response.json({ error: '同一网络注册过于频繁，请稍后再试' }, { status: 429 })
+        return fail('同一网络注册过于频繁，请稍后再试', 429)
       }
     } catch {
       /* 频控查询失败降级放行，不阻断注册 */
@@ -57,7 +108,7 @@ export async function POST(request: Request) {
         overrideAccess: true,
       })
       if (recent.totalDocs >= 5) {
-        return Response.json({ error: '同一设备注册过于频繁，请稍后再试' }, { status: 429 })
+        return fail('同一设备注册过于频繁，请稍后再试', 429)
       }
     } catch {
       /* 设备频控查询失败降级放行；邀请制仍是第一道门槛 */
@@ -93,11 +144,11 @@ export async function POST(request: Request) {
       code = codes.docs[0]
       if (!code || code.status !== 'unused') {
         await rollbackTx()
-        return Response.json({ error: '邀请码无效或已使用' }, { status: 400 })
+        return fail('邀请码无效或已使用', 400)
       }
       if (code.expiresAt && new Date(code.expiresAt) < new Date()) {
         await rollbackTx()
-        return Response.json({ error: '邀请码已过期' }, { status: 400 })
+        return fail('邀请码已过期', 400)
       }
       inviterId = typeof code.inviter === 'object' ? code.inviter?.id : code.inviter || undefined
     }
@@ -136,7 +187,7 @@ export async function POST(request: Request) {
     await rollbackTx()
     // 通用文案防账号枚举：不回显"邮箱已存在/用户名已占用"等可区分错误；原始错误仅落服务端日志
     payload.logger?.error(`注册失败: ${e?.message}`)
-    return Response.json({ error: '注册失败，请检查信息或稍后重试' }, { status: 400 })
+    return fail('注册失败，请检查信息或稍后重试', 400)
   }
 
   // 给邀请人发术值（分值/每日上限由 contribution-rules 的 invite 规则决定）；
@@ -191,5 +242,6 @@ export async function POST(request: Request) {
     .then(() => (freeGranted > 0 ? syncNewApiQuotaToBalance(payload, newUser.id as string) : undefined))
     .catch((e) => payload.logger?.error(`预建/同步子令牌失败: ${(e as Error).message}`))
 
+  if (formMode) return formSuccess(request, accountEmail, password)
   return Response.json({ ok: true, userId: newUser.id, loginEmail: accountEmail })
 }
