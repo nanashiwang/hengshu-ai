@@ -10,7 +10,7 @@ import { normalizeRegisterCreditAmount, registerCreditIdempotencyKey } from '@/l
 import { acquireInviteCodeLock } from '@/lib/dbLocks'
 import { getRegistrationEmailRequired, resolveRegistrationEmail } from '@/lib/siteSettings'
 
-// POST /v1/auth/register —— 邀请码注册
+// POST /v1/auth/register —— 用户注册；邀请码可选，填写时绑定邀请关系并消耗邀请码。
 export async function POST(request: Request) {
   const payload = await getPayload({ config })
 
@@ -29,12 +29,8 @@ export async function POST(request: Request) {
   if (!username || !password) {
     return Response.json({ error: '用户名、密码均为必填' }, { status: 400 })
   }
-  if (!inviteCode) {
-    return Response.json({ error: '需要邀请码' }, { status: 400 })
-  }
 
-  // 反女巫：采集注册 IP 哈希。同 IP 24h 内注册数宽松上限（兜底极端批量；注册本已被邀请码强约束；
-  // 阈值宽松以规避 CGNAT/共享出口 IP 的误伤）。
+  // 反女巫：采集注册 IP 哈希。同 IP 24h 内注册数宽松上限（兜底极端批量；阈值宽松以规避 CGNAT/共享出口 IP 的误伤）。
   const ipHashValue = hashIp(getClientIp(request.headers))
   const deviceHashValue = hashDeviceId(body.deviceId)
   if (ipHashValue) {
@@ -68,7 +64,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const normalizedInviteCode = String(inviteCode).trim().toUpperCase()
+  const normalizedInviteCode = typeof inviteCode === 'string' ? inviteCode.trim().toUpperCase() : ''
   let inviterId: string | undefined
   let newUser: any
   let txId: string | number | undefined
@@ -79,31 +75,32 @@ export async function POST(request: Request) {
     await payload.db.rollbackTransaction(id).catch(() => undefined)
   }
 
-  // 邀请码校验、建用户、标记已用必须在同一事务内；同邀请码加咨询锁防并发复用。
+  // 填写邀请码时，校验、建用户、标记已用必须在同一事务内；同邀请码加咨询锁防并发复用。
   try {
     txId = (await payload.db.beginTransaction?.()) || undefined
     const txReq = txId ? ({ transactionID: txId } as any) : undefined
     const tx = txReq ? { req: txReq } : {}
-    if (txId) await acquireInviteCodeLock(payload, txId, normalizedInviteCode)
-
-    const codes = await payload.find({
-      collection: 'invite-codes',
-      where: { code: { equals: normalizedInviteCode } },
-      limit: 1,
-      overrideAccess: true,
-      ...tx,
-    })
-    const code = codes.docs[0]
-    if (!code || code.status !== 'unused') {
-      await rollbackTx()
-      return Response.json({ error: '邀请码无效或已使用' }, { status: 400 })
+    let code: any
+    if (normalizedInviteCode) {
+      if (txId) await acquireInviteCodeLock(payload, txId, normalizedInviteCode)
+      const codes = await payload.find({
+        collection: 'invite-codes',
+        where: { code: { equals: normalizedInviteCode } },
+        limit: 1,
+        overrideAccess: true,
+        ...tx,
+      })
+      code = codes.docs[0]
+      if (!code || code.status !== 'unused') {
+        await rollbackTx()
+        return Response.json({ error: '邀请码无效或已使用' }, { status: 400 })
+      }
+      if (code.expiresAt && new Date(code.expiresAt) < new Date()) {
+        await rollbackTx()
+        return Response.json({ error: '邀请码已过期' }, { status: 400 })
+      }
+      inviterId = typeof code.inviter === 'object' ? code.inviter?.id : code.inviter || undefined
     }
-    if (code.expiresAt && new Date(code.expiresAt) < new Date()) {
-      await rollbackTx()
-      return Response.json({ error: '邀请码已过期' }, { status: 400 })
-    }
-
-    inviterId = typeof code.inviter === 'object' ? code.inviter?.id : code.inviter || undefined
 
     newUser = await payload.create({
       collection: 'users',
@@ -120,13 +117,15 @@ export async function POST(request: Request) {
       },
     })
 
-    await payload.update({
-      collection: 'invite-codes',
-      id: code.id,
-      overrideAccess: true,
-      ...tx,
-      data: { status: 'used', usedBy: newUser.id },
-    })
+    if (code) {
+      await payload.update({
+        collection: 'invite-codes',
+        id: code.id,
+        overrideAccess: true,
+        ...tx,
+        data: { status: 'used', usedBy: newUser.id },
+      })
+    }
 
     if (txId) {
       const id = txId

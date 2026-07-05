@@ -48,7 +48,7 @@ export function RegisterForm({ emailRequired }: { emailRequired: boolean }) {
     <div className="mx-auto max-w-sm py-8">
       <h1 className="mb-1 text-xl font-semibold">注册衡术 Hengshu</h1>
       <p className="mb-6 text-sm text-[var(--muted)]">
-        采用邀请制。已有账号？
+        已有账号？
         <Link href="/login" className="ml-1 text-[var(--accent)]">
           去登录
         </Link>
@@ -58,7 +58,7 @@ export function RegisterForm({ emailRequired }: { emailRequired: boolean }) {
         className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--panel)] p-6"
       >
         {error && <div className="text-sm text-[var(--danger)]">{error}</div>}
-        <Field label="邀请码" value={form.inviteCode} onChange={(v) => set('inviteCode', v)} placeholder="输入你的邀请码" required />
+        <Field label="邀请码（可选）" value={form.inviteCode} onChange={(v) => set('inviteCode', v)} placeholder="有邀请码可填写" />
         <Field label="用户名" value={form.username} onChange={(v) => set('username', v)} placeholder="昵称" required />
         <Field
           label={emailRequired ? '邮箱' : '邮箱（可选）'}
