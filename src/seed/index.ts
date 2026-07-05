@@ -3,16 +3,15 @@ import { getPayload } from 'payload'
 import config from '../payload.config'
 import { SKILL_CATEGORIES } from '../lib/constants'
 import { SEED_SKILLS } from './skills'
-import { resolveSeedAdminCredentials, shouldCreateWelcomeInvite } from './security'
+import { shouldCreateWelcomeInvite } from './security'
 
 async function seed() {
   const payload = await getPayload({ config })
   payload.logger.info('开始注入种子数据…')
 
   // ── 管理员（官方 Skill 作者）──
-  // 优先复用系统中已存在的管理员（如你通过 /admin 创建的首个用户已自动成为超管）；
-  // 若没有任何管理员，则创建默认管理员。
-  let admin = (
+  // 只复用真实首管；没有管理员时不再创建默认 admin@yuanheng.ai，避免抢占“首个注册账号即管理员”规则。
+  const admin = (
     await payload.find({
       collection: 'users',
       where: { role: { equals: 'admin' } },
@@ -21,28 +20,10 @@ async function seed() {
       overrideAccess: true,
     })
   ).docs[0]
-  if (admin) {
-    payload.logger.info(`· 复用现有管理员作为官方 Skill 作者：${admin.email}`)
-  } else {
-    const adminCreds = resolveSeedAdminCredentials()
-    admin = await payload.create({
-      collection: 'users',
-      overrideAccess: true,
-      data: {
-        email: adminCreds.email,
-        username: 'admin',
-        password: adminCreds.password,
-        role: 'admin',
-        level: 99,
-        inviteCount: 10,
-      },
-    })
-    payload.logger.info(
-      adminCreds.generated
-        ? `✓ 默认管理员已创建（开发一次性随机密码）：${adminCreds.email} / ${adminCreds.password}`
-        : `✓ 默认管理员已创建：${adminCreds.email}（密码来自 SEED_ADMIN_PASSWORD）`,
-    )
+  if (!admin) {
+    throw new Error('未找到管理员。请先通过注册/后台创建第一个账号；系统会自动把首个用户设为管理员，然后再运行 seed。')
   }
+  payload.logger.info(`· 复用现有管理员作为官方 Skill 作者：${admin.email}`)
 
   // ── 分类 ──
   const catMap: Record<string, string> = {}
