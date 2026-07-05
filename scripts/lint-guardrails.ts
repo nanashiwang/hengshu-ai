@@ -634,7 +634,7 @@ function checkRuntimeGuardrails() {
   )
   assertIncludes(
     'src/proxy.ts',
-    'origin !== selfOrigin',
+    '!allowedOrigins.has(origin)',
     'V1_CSRF_ORIGIN_CHECK',
     'write APIs must reject mismatched Origin headers',
   )
