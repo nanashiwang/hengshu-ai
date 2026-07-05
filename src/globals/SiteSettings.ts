@@ -24,6 +24,15 @@ export const SiteSettings: GlobalConfig = {
       hasMany: true,
       label: '首页精选 Skill',
     },
+    {
+      name: 'registrationEmailRequired',
+      type: 'checkbox',
+      defaultValue: false,
+      label: '注册必须填写邮箱',
+      admin: {
+        description: '开启时注册页要求填写邮箱；关闭时用户可不填，系统会生成内部占位邮箱用于账号登录态。',
+      },
+    },
     { name: 'announcement', type: 'textarea', label: '公告' },
   ],
 }

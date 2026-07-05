@@ -233,7 +233,13 @@ export interface User {
    * banned = 禁止登录且冻结一切经济操作（挣分/兑换/运行）
    */
   accountStatus?: ('active' | 'banned') | null;
+  /**
+   * 权威值，恒等于 contribution-logs 之和；仅服务端事务/对账 worker 写入
+   */
   contributionScore?: number | null;
+  /**
+   * 派生/历史指标，禁止后台手改
+   */
   consumptionScore?: number | null;
   /**
    * 1 credit = ¥0.01 零售。权威值，恒等于 credit-logs 之和；仅服务端事务写入
@@ -248,7 +254,7 @@ export interface User {
   deviceHash?: string | null;
   newapiUserId?: string | null;
   /**
-   * 服务端 AES-GCM 加密存储；旧明文数据读取时兼容，用户下次保存会自动加密
+   * 服务端 AES-GCM 加密存储；仅 /v1/me/settings 可写，不在后台或 REST 回显
    */
   newapiKeyEncrypted?: string | null;
   updatedAt: string;
@@ -1498,6 +1504,10 @@ export interface SiteSetting {
   siteName?: string | null;
   slogan?: string | null;
   featuredSkills?: (string | Skill)[] | null;
+  /**
+   * 开启时注册页要求填写邮箱；关闭时用户可不填，系统会生成内部占位邮箱用于账号登录态。
+   */
+  registrationEmailRequired?: boolean | null;
   announcement?: string | null;
   updatedAt?: string | null;
   createdAt?: string | null;
@@ -1542,6 +1552,7 @@ export interface SiteSettingsSelect<T extends boolean = true> {
   siteName?: T;
   slogan?: T;
   featuredSkills?: T;
+  registrationEmailRequired?: T;
   announcement?: T;
   updatedAt?: T;
   createdAt?: T;

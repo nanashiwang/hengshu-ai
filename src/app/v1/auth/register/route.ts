@@ -8,6 +8,7 @@ import { syncNewApiQuotaToBalance } from '@/lib/newapiQuota'
 import { getClientIp, hashDeviceId, hashIp } from '@/lib/clientMeta'
 import { normalizeRegisterCreditAmount, registerCreditIdempotencyKey } from '@/lib/registerCredit'
 import { acquireInviteCodeLock } from '@/lib/dbLocks'
+import { getRegistrationEmailRequired, resolveRegistrationEmail } from '@/lib/siteSettings'
 
 // POST /v1/auth/register —— 邀请码注册
 export async function POST(request: Request) {
@@ -19,9 +20,14 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: '请求体无效' }, { status: 400 })
   }
-  const { email, username, password, inviteCode } = body
-  if (!email || !username || !password) {
-    return Response.json({ error: '邮箱、用户名、密码均为必填' }, { status: 400 })
+  const { username, password, inviteCode } = body
+  const emailRequired = await getRegistrationEmailRequired(payload)
+  const accountEmail = resolveRegistrationEmail(body.email, emailRequired)
+  if (emailRequired && !accountEmail) {
+    return Response.json({ error: '邮箱为必填' }, { status: 400 })
+  }
+  if (!username || !password) {
+    return Response.json({ error: '用户名、密码均为必填' }, { status: 400 })
   }
   if (!inviteCode) {
     return Response.json({ error: '需要邀请码' }, { status: 400 })
@@ -104,7 +110,7 @@ export async function POST(request: Request) {
       overrideAccess: true,
       ...tx,
       data: {
-        email,
+        email: accountEmail,
         username,
         password,
         role: 'user',
@@ -186,5 +192,5 @@ export async function POST(request: Request) {
     .then(() => (freeGranted > 0 ? syncNewApiQuotaToBalance(payload, newUser.id as string) : undefined))
     .catch((e) => payload.logger?.error(`预建/同步子令牌失败: ${(e as Error).message}`))
 
-  return Response.json({ ok: true, userId: newUser.id })
+  return Response.json({ ok: true, userId: newUser.id, loginEmail: accountEmail })
 }
