@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { getPayloadClient } from '@/lib/payload'
 import { getCurrentUser } from '@/lib/auth'
 import { RunStudio } from '@/components/RunStudio'
+import { approvedPlatformModels } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,8 +36,12 @@ export default async function RunPage({
   }
 
   const user = await getCurrentUser()
+  const fullUser = user
+    ? await payload.findByID({ collection: 'users', id: user.id, depth: 0, overrideAccess: true }).catch(() => null)
+    : null
   const inputSchema = (version?.inputSchema || {}) as Record<string, any>
   const models = ((version?.recommendedModels as any)?.cloud || []) as string[]
+  const platformModels = [...approvedPlatformModels()]
 
   return (
     <div className="space-y-4">
@@ -52,6 +57,8 @@ export default async function RunPage({
         inputSchema={inputSchema}
         loggedIn={!!user}
         models={models}
+        platformModels={platformModels}
+        hasByok={!!(fullUser as any)?.newapiKeyEncrypted}
       />
     </div>
   )

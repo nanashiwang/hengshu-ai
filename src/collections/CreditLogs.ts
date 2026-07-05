@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
-import { isAdmin, ownerOrAdmin } from '@/access'
+import { ownerOrAdmin } from '@/access'
 import { CREDIT_TX_TYPES } from '@/lib/constants'
+import { validateCreditTxAmount } from '@/lib/credit'
 import { rowActionsField } from './fields/rowActions'
 
 // credit（算力燃料币）台账。不变量：user.creditBalance == SUM(credit-logs.amount)。
@@ -15,9 +16,22 @@ export const CreditLogs: CollectionConfig = {
   },
   access: {
     read: ownerOrAdmin('user'),
-    create: isAdmin,
-    update: isAdmin,
-    delete: isAdmin,
+    create: () => false,
+    update: () => false,
+    delete: () => false,
+  },
+  hooks: {
+    beforeValidate: [
+      ({ data }) => {
+        const type = data?.type
+        const amount = Number(data?.amount)
+        if (CREDIT_TX_TYPES.includes(type) && data?.amount != null) {
+          const error = validateCreditTxAmount(type, amount)
+          if (error) throw new Error(error)
+        }
+        return data
+      },
+    ],
   },
   fields: [
     rowActionsField('credit-logs'),

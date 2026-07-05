@@ -1,7 +1,10 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
-import { adminOrSelf, fieldAdminOrSelf, isAdmin, isAdminField } from '@/access'
+import { adminOrSelf, fieldAdminOrSelf, isActiveAccount, isAdmin, isAdminField } from '@/access'
+import { normalizeNewApiKeyForStorage } from '@/lib/userSecrets'
 import { rowActionsField } from './fields/rowActions'
+
+const secureCookies = process.env.NODE_ENV === 'production' || (process.env.NEXT_PUBLIC_SERVER_URL || '').startsWith('https://')
 
 export const Users: CollectionConfig = {
   slug: 'users',
@@ -10,7 +13,7 @@ export const Users: CollectionConfig = {
     tokenExpiration: 7 * 24 * 60 * 60, // 7 天
     maxLoginAttempts: 5,
     lockTime: 10 * 60 * 1000,
-    cookies: { sameSite: 'Lax' },
+    cookies: { sameSite: 'Lax', secure: secureCookies },
   },
   admin: {
     useAsTitle: 'username',
@@ -20,7 +23,7 @@ export const Users: CollectionConfig = {
   access: {
     // 仅管理/审核员可进入后台面板；普通用户与创作者走前台
     admin: ({ req: { user } }) =>
-      Boolean(user && ['admin', 'reviewer', 'enterprise_admin'].includes(user.role as string)),
+      Boolean(isActiveAccount(user) && ['admin', 'reviewer', 'enterprise_admin'].includes(user.role as string)),
     read: adminOrSelf,
     create: isAdmin, // 首个用户由 Payload 引导流程创建；其余经邀请码端点(overrideAccess)或管理员
     update: adminOrSelf,
@@ -65,21 +68,23 @@ export const Users: CollectionConfig = {
       defaultValue: 0,
       index: true, // 贡献榜 sort -contributionScore 热路径
       label: '贡献值',
-      access: { update: isAdminField },
+      access: { create: () => false, update: () => false },
+      admin: { description: '权威值，恒等于 contribution-logs 之和；仅服务端事务/对账 worker 写入' },
     },
     {
       name: 'consumptionScore',
       type: 'number',
       defaultValue: 0,
       label: '消耗值',
-      access: { update: isAdminField },
+      access: { create: () => false, update: () => false },
+      admin: { description: '派生/历史指标，禁止后台手改' },
     },
     {
       name: 'creditBalance',
       type: 'number',
       defaultValue: 0,
       label: 'credit 余额（算力燃料）',
-      access: { update: isAdminField },
+      access: { create: () => false, update: () => false },
       admin: { description: '1 credit = ¥0.01 零售。权威值，恒等于 credit-logs 之和；仅服务端事务写入' },
     },
     {
@@ -123,6 +128,14 @@ export const Users: CollectionConfig = {
       admin: { readOnly: true, hidden: true },
     },
     {
+      name: 'deviceHash',
+      type: 'text',
+      index: true,
+      label: '设备哈希（反女巫）',
+      access: { read: isAdminField },
+      admin: { readOnly: true, hidden: true },
+    },
+    {
       name: 'newapiUserId',
       type: 'text',
       label: '模型网关 用户 ID',
@@ -132,9 +145,12 @@ export const Users: CollectionConfig = {
       name: 'newapiKeyEncrypted',
       type: 'text',
       label: '模型网关 Key',
-      access: { read: fieldAdminOrSelf, update: fieldAdminOrSelf },
+      // BYOK_DIRECT_FIELD_ACCESS_BLOCKED: 只允许服务端设置接口 overrideAccess 写入，避免后台/REST 直写明文或读出密文。
+      access: { read: () => false, create: () => false, update: () => false },
       admin: {
-        description: 'MVP 阶段服务端保存；生产需加密存储',
+        hidden: true,
+        readOnly: true,
+        description: '服务端 AES-GCM 加密存储；仅 /v1/me/settings 可写，不在后台或 REST 回显',
         position: 'sidebar',
       },
     },
@@ -161,6 +177,13 @@ export const Users: CollectionConfig = {
             data.role = 'admin'
             data.level = 99
             if (data.inviteCount == null) data.inviteCount = 10
+          }
+        }
+        if (data && Object.prototype.hasOwnProperty.call(data, 'newapiKeyEncrypted')) {
+          const userData = data as Record<string, unknown>
+          const normalized = normalizeNewApiKeyForStorage(userData.newapiKeyEncrypted)
+          if (typeof normalized !== 'undefined') {
+            userData.newapiKeyEncrypted = normalized
           }
         }
         return data
@@ -190,14 +213,16 @@ export const Users: CollectionConfig = {
         if (u && Math.abs((u as any).creditBalance || 0) > 1e-9) {
           throw new Error('该用户 credit 余额非 0，请先退款或清零后再删账号')
         }
+        const creditLogs = await p.count({ collection: 'credit-logs', where: { user: { equals: id } }, ...opts })
+        if (creditLogs.totalDocs > 0) throw new Error('该用户存在 credit 流水，按资金台账留痕要求禁止删号；请封禁或匿名化')
+        const contributionLogs = await p.count({ collection: 'contribution-logs', where: { user: { equals: id } }, ...opts })
+        if (contributionLogs.totalDocs > 0) throw new Error('该用户存在术值流水，按台账留痕要求禁止删号；请封禁或匿名化')
         // 删除用户私有从属记录（favorites/reviews 触发各自 afterDelete 修正 Skill 计数）
         for (const collection of [
           'favorites',
           'reviews',
           'skill-installs',
           'runner-clients',
-          'contribution-logs',
-          'credit-logs',
           'device-codes',
         ] as const) {
           await p.delete({ collection, where: { user: { equals: id } }, ...opts })

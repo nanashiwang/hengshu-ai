@@ -1,4 +1,4 @@
-// 模型网关（OpenAI 兼容）客户端。无 Key 时走 mock 回退，保证骨架可跑通。
+// 模型网关（OpenAI 兼容）客户端。开发未配网关时走 mock；生产缺网关必须 fail-closed。
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
@@ -42,6 +42,20 @@ export class NewApiError extends Error {
   }
 }
 
+const SECRET_TEXT_RE = /(sk-[A-Za-z0-9/_+\-=]{8,}|Bearer\s+[A-Za-z0-9._~+/\-=]{8,}|enc:v1:[A-Za-z0-9._~+/\-=]+)/g
+
+function redactLiteral(text: string, value: string): string {
+  const secret = value.trim()
+  if (!secret || secret.length < 8) return text
+  return text.split(secret).join('<redacted>')
+}
+
+export function redactGatewayErrorText(text: string, extraSecrets: string[] = []): string {
+  let out = String(text || '').replace(SECRET_TEXT_RE, '<redacted>')
+  for (const secret of [process.env.MODEL_GATEWAY_KEY || '', ...extraSecrets]) out = redactLiteral(out, secret)
+  return out
+}
+
 // 构造透传给网关的 metadata 请求头（X-YH-*）
 function metadataHeaders(m?: GatewayMetadata): Record<string, string> {
   if (!m) return {}
@@ -58,8 +72,11 @@ export async function chatCompletion(opts: RunOpts): Promise<NewApiResult> {
   const apiKey = opts.apiKey || process.env.MODEL_GATEWAY_KEY
   const start = Date.now()
 
-  // 未配置网关 → mock 回退
+  // 未配置网关 → 开发 mock 回退；生产 fail-closed，避免公网用户拿到模拟输出还被计入运行/口碑。
   if (!baseUrl || !apiKey) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new NewApiError('模型网关未配置，生产环境禁止 mock 运行', 503)
+    }
     return mockCompletion(opts, start)
   }
 
@@ -81,7 +98,7 @@ export async function chatCompletion(opts: RunOpts): Promise<NewApiResult> {
   const latencyMs = Date.now() - start
   if (!res.ok) {
     const errText = await res.text().catch(() => '')
-    throw new NewApiError(`模型网关 ${res.status}: ${errText.slice(0, 300)}`, res.status)
+    throw new NewApiError(`模型网关 ${res.status}: ${redactGatewayErrorText(errText.slice(0, 300), [apiKey])}`, res.status)
   }
 
   const data: any = await res.json()

@@ -2,6 +2,7 @@ import type { Payload, PayloadRequest } from 'payload'
 
 type NotifyType =
   | 'skill_favorited'
+  | 'skill_updated'
   | 'review'
   | 'bounty_accepted'
   | 'bounty_submitted'

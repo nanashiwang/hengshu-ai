@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { approvedPlatformModels } from '@/lib/constants'
+import { approvedPlatformFallback, approvedPlatformModels, requireApprovedPlatformModelList } from '@/lib/constants'
 import { creditsFromYuan } from '@/lib/credit'
 
 describe('approvedPlatformModels — 平台代付国产白名单(6l)', () => {
@@ -17,6 +17,18 @@ describe('approvedPlatformModels — 平台代付国产白名单(6l)', () => {
     expect(s.has('grok-4.3')).toBe(false)
   })
 
+
+  it('平台代付 fallback 不接受境外默认模型', () => {
+    vi.stubEnv('APPROVED_PLATFORM_MODELS', '')
+    expect(approvedPlatformFallback('claude-haiku-4-5-20251001')).toBe('deepseek-chat')
+  })
+
+  it('平台代付 fallback 尊重已备案自定义默认模型', () => {
+    vi.stubEnv('APPROVED_PLATFORM_MODELS', 'qwen-plus,glm-4')
+    expect(approvedPlatformFallback('glm-4')).toBe('glm-4')
+    expect(approvedPlatformFallback('claude-sonnet-4-6')).toBe('qwen-plus')
+  })
+
   it('env 覆盖：逗号分隔+去空格', () => {
     vi.stubEnv('APPROVED_PLATFORM_MODELS', 'deepseek-chat, glm-4 ,custom-model')
     const s = approvedPlatformModels()
@@ -24,6 +36,13 @@ describe('approvedPlatformModels — 平台代付国产白名单(6l)', () => {
     expect(s.has('glm-4')).toBe(true)
     expect(s.has('qwen-plus')).toBe(false) // 覆盖后默认表失效
     expect(s.size).toBe(3)
+  })
+
+  it('显式空白名单不回退默认表，由真钱调用方 fail-closed', () => {
+    vi.stubEnv('APPROVED_PLATFORM_MODELS', ', ,')
+    expect(approvedPlatformModels().size).toBe(0)
+    expect(approvedPlatformFallback('deepseek-chat')).toBe(null)
+    expect(() => requireApprovedPlatformModelList()).toThrow('平台代付白名单不能为空')
   })
 })
 

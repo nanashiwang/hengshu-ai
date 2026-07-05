@@ -9,6 +9,7 @@ interface Category {
 
 // 创作者发布 Skill 表单（前台，替代 Payload 后台裸 CRUD）
 export function SkillForm({ categories }: { categories: Category[] }) {
+  const [submissionKey, setSubmissionKey] = useState(() => newSubmissionKey())
   const [form, setForm] = useState({
     title: '',
     categorySlug: '',
@@ -35,7 +36,7 @@ export function SkillForm({ categories }: { categories: Category[] }) {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, idempotencyKey: submissionKey }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -64,6 +65,7 @@ export function SkillForm({ categories }: { categories: Category[] }) {
             type="button"
             onClick={() => {
               setDone(false)
+              setSubmissionKey(newSubmissionKey())
               setForm({ title: '', categorySlug: '', description: '', systemPrompt: '', promptTemplate: '', inputSchema: '' })
             }}
             className="text-[var(--accent)]"
@@ -137,4 +139,13 @@ export function SkillForm({ categories }: { categories: Category[] }) {
       </div>
     </form>
   )
+}
+
+function newSubmissionKey(): string {
+  try {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return `skill:${crypto.randomUUID()}`
+  } catch {
+    // ignore
+  }
+  return `skill:${Date.now().toString(36)}:${Math.random().toString(36).slice(2)}`
 }

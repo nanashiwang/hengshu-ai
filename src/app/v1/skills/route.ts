@@ -3,6 +3,7 @@ import type { PayloadRequest } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
 import { slugify } from '@/lib/slug'
+import { normalizeSkillSubmissionKey } from '@/lib/skillSubmission'
 
 // POST /v1/skills —— 创作者发布 Skill（创建 Skill + 首个版本，状态 pending 走审核）。
 // 放开给任意登录用户：提交进 pending，由审核员/管理员审核后 published。
@@ -20,8 +21,21 @@ export async function POST(request: Request) {
   }
   const title = typeof body.title === 'string' ? body.title.trim() : ''
   const promptTemplate = typeof body.promptTemplate === 'string' ? body.promptTemplate.trim() : ''
+  const idempotencyKey = normalizeSkillSubmissionKey(body.idempotencyKey || request.headers.get('Idempotency-Key'))
   if (!title) return Response.json({ error: '请填写 Skill 名称' }, { status: 400 })
   if (!promptTemplate) return Response.json({ error: '请填写 User 模板' }, { status: 400 })
+
+  if (idempotencyKey) {
+    const existing = await payload.find({
+      collection: 'skills',
+      where: { and: [{ author: { equals: user.id } }, { clientSubmissionKey: { equals: idempotencyKey } }] },
+      limit: 1,
+      depth: 0,
+      overrideAccess: true,
+    })
+    const doc = existing.docs[0] as any
+    if (doc) return Response.json({ ok: true, id: doc.id, slug: doc.slug, idempotent: true })
+  }
 
   // 可选 JSON 字段解析（非法则拒绝，避免脏数据入库）
   const parseJson = (s: unknown): { ok: true; value: any } | { ok: false } => {
@@ -84,6 +98,7 @@ export async function POST(request: Request) {
         description: typeof body.description === 'string' ? body.description : undefined,
         category: categoryId,
         author: user.id,
+        clientSubmissionKey: idempotencyKey || undefined,
         status: 'pending',
         visibility: 'public',
       },
@@ -107,6 +122,17 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, id: skill.id, slug })
   } catch (e) {
     if (transactionID) await payload.db.rollbackTransaction(transactionID)
+    if (idempotencyKey) {
+      const existing = await payload.find({
+        collection: 'skills',
+        where: { and: [{ author: { equals: user.id } }, { clientSubmissionKey: { equals: idempotencyKey } }] },
+        limit: 1,
+        depth: 0,
+        overrideAccess: true,
+      })
+      const doc = existing.docs[0] as any
+      if (doc) return Response.json({ ok: true, id: doc.id, slug: doc.slug, idempotent: true })
+    }
     payload.logger?.error(`发布 Skill 失败: ${(e as Error).message}`)
     return Response.json({ error: '发布失败，请重试' }, { status: 400 })
   }

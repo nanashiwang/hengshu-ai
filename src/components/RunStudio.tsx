@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { modelPaymentMeta } from '@/lib/platformModelUi'
 
 interface FieldDef {
   type?: string
@@ -29,26 +30,36 @@ export function RunStudio({
   inputSchema,
   loggedIn,
   models,
+  platformModels,
+  hasByok,
 }: {
   slug: string
   inputSchema: Record<string, FieldDef>
   loggedIn: boolean
   models: string[]
+  platformModels: string[]
+  hasByok: boolean
 }) {
   const router = useRouter()
   const fields = Object.entries(inputSchema || {})
+  const selectableModels = models.filter((m) => !modelPaymentMeta(m, platformModels, hasByok).disabled)
   const [values, setValues] = useState<Record<string, string>>({})
   const [mode, setMode] = useState<'single' | 'compare'>('single')
   const [routeMode, setRouteMode] = useState('balanced')
-  const [selected, setSelected] = useState<string[]>(models.slice(0, Math.min(2, models.length)))
+  const [selected, setSelected] = useState<string[]>(
+    selectableModels.slice(0, Math.min(2, selectableModels.length)),
+  )
   const [loading, setLoading] = useState(false)
   const [single, setSingle] = useState<any>(null)
   const [compare, setCompare] = useState<any[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const set = (k: string, v: string) => setValues((s) => ({ ...s, [k]: v }))
-  const toggleModel = (m: string) =>
+  const toggleModel = (m: string) => {
+    const meta = modelPaymentMeta(m, platformModels, hasByok)
+    if (meta.disabled) return
     setSelected((s) => (s.includes(m) ? s.filter((x) => x !== m) : [...s, m]))
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -153,6 +164,9 @@ export function RunStudio({
         {mode === 'single' ? (
           <div>
             <label className="mb-1 block text-sm">路由模式</label>
+            <p className="mb-2 text-xs text-[var(--muted)]">
+              未绑定 BYOK 时仅使用「平台代付」模型；境外/非白名单模型需在设置中绑定自带 Key。
+            </p>
             <div className="flex flex-wrap gap-2">
               {ROUTE_MODES.map((m) => (
                 <button
@@ -175,20 +189,38 @@ export function RunStudio({
               <p className="text-xs text-[var(--muted)]">该 Skill 未配置推荐模型。</p>
             ) : (
               <div className="space-y-1.5">
-                {models.map((m) => (
-                  <label
-                    key={m}
-                    className="flex cursor-pointer items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-xs"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.includes(m)}
-                      onChange={() => toggleModel(m)}
-                      disabled={!selected.includes(m) && selected.length >= 4}
-                    />
-                    <span className="font-mono">{m}</span>
-                  </label>
-                ))}
+                {models.map((m) => {
+                  const meta = modelPaymentMeta(m, platformModels, hasByok)
+                  const disabled = meta.disabled || (!selected.includes(m) && selected.length >= 4)
+                  return (
+                    <label
+                      key={m}
+                      title={meta.help}
+                      className={`flex items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-xs ${
+                        disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(m)}
+                        onChange={() => toggleModel(m)}
+                        disabled={disabled}
+                      />
+                      <span className="min-w-0 flex-1 truncate font-mono">{m}</span>
+                      <span
+                        className={`shrink-0 rounded border px-1.5 py-0.5 ${
+                          meta.kind === 'platform'
+                            ? 'border-[var(--accent-2)] text-[var(--accent-2)]'
+                            : meta.kind === 'byok'
+                              ? 'border-[var(--accent)] text-[var(--accent)]'
+                              : 'border-[var(--warn)] text-[var(--warn)]'
+                        }`}
+                      >
+                        {meta.label}
+                      </span>
+                    </label>
+                  )
+                })}
               </div>
             )}
           </div>

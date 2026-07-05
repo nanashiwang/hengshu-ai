@@ -1,5 +1,5 @@
 import type { CollectionConfig } from 'payload'
-import { isAdmin } from '@/access'
+import { isAdmin, isAdminField } from '@/access'
 
 // OAuth Device Code 流程的临时凭据（系统内部用，admin 隐藏）。
 export const DeviceCodes: CollectionConfig = {
@@ -29,6 +29,7 @@ export const DeviceCodes: CollectionConfig = {
     { name: 'user', type: 'relationship', relationTo: 'users' },
     { name: 'runnerClient', type: 'relationship', relationTo: 'runner-clients' },
     { name: 'meta', type: 'json' }, // 申请时上报的 runnerVersion/os/arch
+    { name: 'ipHash', type: 'text', index: true, access: { read: isAdminField }, admin: { hidden: true } },
     { name: 'expiresAt', type: 'date' },
   ],
 }

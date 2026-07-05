@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin, ownerOrAdmin } from '@/access'
 import { ROUTE_MODES } from '@/lib/constants'
+import { decryptJsonSecret, decryptSecret, encryptJsonSecret, encryptSecret } from '@/lib/secrets'
 import { rowActionsField } from './fields/rowActions'
 
 export const SkillRuns: CollectionConfig = {
@@ -16,6 +17,25 @@ export const SkillRuns: CollectionConfig = {
     create: isAdmin, // 仅由运行端点 overrideAccess 写入
     update: isAdmin,
     delete: isAdmin,
+  },
+
+  hooks: {
+    beforeChange: [
+      ({ data }) => {
+        if (data?.inputJson != null) data.inputJson = encryptJsonSecret(data.inputJson)
+        if (typeof data?.outputText === 'string') data.outputText = encryptSecret(data.outputText) || ''
+        if (data?.outputJson != null) data.outputJson = encryptJsonSecret(data.outputJson)
+        return data
+      },
+    ],
+    afterRead: [
+      ({ doc }) => {
+        if (doc?.inputJson != null) doc.inputJson = decryptJsonSecret(doc.inputJson) as any
+        if (typeof doc?.outputText === 'string') doc.outputText = decryptSecret(doc.outputText)
+        if (doc?.outputJson != null) doc.outputJson = decryptJsonSecret(doc.outputJson) as any
+        return doc
+      },
+    ],
   },
   fields: [
     rowActionsField('skill-runs'),
@@ -37,7 +57,8 @@ export const SkillRuns: CollectionConfig = {
     { name: 'completionTokens', type: 'number', label: '输出 token' },
     { name: 'totalTokens', type: 'number', label: '总 token' },
     { name: 'estimatedCost', type: 'number', label: '估算成本(元)' },
-    { name: 'chargedAmount', type: 'number', label: '实际收费' },
+    { name: 'chargedAmount', type: 'number', label: '实际收费(元)' },
+    { name: 'chargedCredits', type: 'number', defaultValue: 0, label: '实际扣费 credit' },
     { name: 'savedAmount', type: 'number', defaultValue: 0, label: '省钱回执(元)', admin: { description: '相比默认premium模型省下的估算金额(省钱路由的累计价值)' } },
     { name: 'latencyMs', type: 'number', label: '耗时(ms)' },
     { name: 'success', type: 'checkbox', defaultValue: false, label: '是否成功' },

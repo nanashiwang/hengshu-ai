@@ -1,5 +1,6 @@
 import type { Payload, PayloadRequest } from 'payload'
 import type { CreditTxType } from './constants'
+import { acquireUserLedgerLock } from './dbLocks'
 
 // 元 → credit 换算（1 credit = ¥0.01）。cost.ts 的 estimateCost 以人民币元计，
 // 台账以 credit 计——换算只在此一处定义，防止"元/分"单位错位（放大 100 倍事故）。
@@ -12,6 +13,22 @@ export interface ApplyCreditResult {
   balance?: number
   skipped?: boolean // 幂等命中：此交易此前已应用
   error?: string
+}
+
+export function normalizeCreditAmount(amount: number): number {
+  return Math.round(amount * 100) / 100
+}
+
+export function validateCreditTxAmount(type: CreditTxType, amount: number): string | null {
+  if (!Number.isFinite(amount) || amount === 0) return 'credit 流水 amount 必须是非 0 有限数字'
+  if (Math.abs(normalizeCreditAmount(amount) - amount) > 1e-9) {
+    return 'credit 流水 amount 最多保留 2 位小数，避免余额快照与流水求和不一致'
+  }
+  if (type === 'consume' && amount >= 0) return 'consume 流水必须为负数，禁止把模型消费记成入账'
+  if (['recharge', 'exchange', 'refund'].includes(type) && amount <= 0) {
+    return `${type} 流水必须为正数，禁止把入账记成扣费`
+  }
+  return null
 }
 
 /**
@@ -38,17 +55,28 @@ export async function applyCredit(
   },
 ): Promise<ApplyCreditResult> {
   const { userId, type, amount, idempotencyKey, req } = args
-  if (!userId || !amount) return { ok: false, error: '参数缺失' }
+  if (!userId) return { ok: false, error: '参数缺失' }
+  const amountError = validateCreditTxAmount(type, amount)
+  if (amountError) {
+    if (args.throwOnError) throw new Error(amountError)
+    return { ok: false, error: amountError }
+  }
+  const normalizedAmount = normalizeCreditAmount(amount)
 
   let ownTxId: number | string | undefined
   let writeReq = req
-  if (!req) {
+  if (!req?.transactionID) {
     ownTxId = (await payload.db.beginTransaction?.()) || undefined
-    if (ownTxId) writeReq = { transactionID: ownTxId }
+    if (ownTxId) writeReq = { ...(req || {}), transactionID: ownTxId }
   }
   const wtx = writeReq ? { req: writeReq } : {}
 
   try {
+    const txId = writeReq?.transactionID ? await writeReq.transactionID : undefined
+    if (txId) {
+      await acquireUserLedgerLock(payload, txId, 'credit', userId)
+    }
+
     // 幂等前置查重
     if (idempotencyKey) {
       const dup = await payload.count({
@@ -71,7 +99,7 @@ export async function applyCredit(
       ...wtx,
     })
     const balance = (user as any).creditBalance || 0
-    const newBalance = Math.round((balance + amount) * 100) / 100 // credit 精度 2 位（1credit=¥0.01）
+    const newBalance = normalizeCreditAmount(balance + normalizedAmount) // credit 精度 2 位（1credit=¥0.01）
     if (newBalance < 0 && !args.allowNegativeBalance) {
       if (ownTxId) await payload.db.rollbackTransaction(ownTxId)
       return { ok: false, error: 'credit 余额不足' }
@@ -89,7 +117,7 @@ export async function applyCredit(
       data: {
         user: userId,
         type,
-        amount,
+        amount: normalizedAmount,
         balanceAfter: newBalance,
         idempotencyKey,
         description: args.description,

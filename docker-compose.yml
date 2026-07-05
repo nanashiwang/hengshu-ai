@@ -56,6 +56,15 @@ services:
     ports:
       # 主机 8787 → 容器 3000（避开本机 dev 的 3000）
       - '8787:3000'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     volumes:
       # 上传文件持久化：容器重建/更新不丢（见 docs/生产部署清单 P1-1）
       - mediadata:/app/media

@@ -2,6 +2,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
 import { runSkill } from '@/lib/skillRunner'
+import { decryptSecret } from '@/lib/secrets'
 import type { RouteMode } from '@/lib/constants'
 
 // POST /v1/skills/{slug}/run —— 对外运行端点（产品文档 §3.3）
@@ -64,7 +65,7 @@ export async function POST(
   const fullUser = await payload
     .findByID({ collection: 'users', id: user.id, overrideAccess: true, depth: 0 })
     .catch(() => null)
-  const userApiKey = (fullUser as any)?.newapiKeyEncrypted || undefined
+  const userApiKey = decryptSecret((fullUser as any)?.newapiKeyEncrypted) || undefined
 
   const result = await runSkill({
     payload,
@@ -83,7 +84,9 @@ export async function POST(
       ? 402
       : result.errorCode === 'MODEL_REQUIRES_BYOK'
         ? 403
-        : result.errorCode === 'RATE_LIMITED'
+        : result.errorCode === 'PLATFORM_TOKEN_UNAVAILABLE'
+          ? 503
+          : result.errorCode === 'RATE_LIMITED'
           ? 429
           : 422
   return Response.json(result, { status })

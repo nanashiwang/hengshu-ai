@@ -1,6 +1,8 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { genUserCode, randomToken } from '@/lib/runnerAuth'
+import { getClientIp, hashIp } from '@/lib/clientMeta'
+import { getServerUrl } from '@/lib/siteUrl'
 
 // POST /v1/auth/device/code —— Runner 申请设备码（无需登录）
 export async function POST(request: Request) {
@@ -10,6 +12,19 @@ export async function POST(request: Request) {
     body = await request.json()
   } catch {
     /* 容忍空 body */
+  }
+
+  const ipHashValue = hashIp(getClientIp(request.headers))
+  if (ipHashValue) {
+    const since = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+    const recent = await payload.count({
+      collection: 'device-codes',
+      where: { and: [{ ipHash: { equals: ipHashValue } }, { createdAt: { greater_than_equal: since } }] },
+      overrideAccess: true,
+    })
+    if (recent.totalDocs >= 20) {
+      return Response.json({ error: '设备码申请过于频繁，请稍后再试' }, { status: 429 })
+    }
   }
 
   const deviceCode = randomToken(40)
@@ -23,12 +38,13 @@ export async function POST(request: Request) {
       deviceCode,
       userCode,
       status: 'pending',
-      meta: { runnerVersion: body.runnerVersion, os: body.os, arch: body.arch },
+      meta: { runnerVersion: body.runnerVersion, os: body.os, arch: body.arch, label: body.label },
+      ipHash: ipHashValue || undefined,
       expiresAt,
     },
   })
 
-  const base = (process.env.NEXT_PUBLIC_SERVER_URL || '').replace(/\/$/, '')
+  const base = getServerUrl()
   return Response.json({
     device_code: deviceCode,
     user_code: userCode,

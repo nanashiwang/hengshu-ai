@@ -1,8 +1,8 @@
 import type { Payload } from 'payload'
 import { renderTemplate } from './promptRender'
 import { validateInput, checkOutputFormat } from './schemaValidate'
-import { selectModel } from './route'
-import { chatCompletion, estimateTokens, type NewApiResult } from './newapi'
+import { rankPersonalizedRoute, selectModel } from './route'
+import { chatCompletion, estimateTokens, redactGatewayErrorText, type NewApiResult } from './newapi'
 import { estimateCost } from './cost'
 import { anonHash, bucketSize } from './compat'
 import { generateRunId } from './slug'
@@ -10,7 +10,10 @@ import { skillRankFromAggregates } from './skillrank'
 import { awardContribution } from './contribution'
 import { applyCredit, creditsFromYuan } from './credit'
 import { classifyError } from './errorTaxonomy'
-import { approvedPlatformModels, type RouteMode } from './constants'
+import { getNewApiAdmin } from './newapiAdmin'
+import { prepareNewApiSubTokenForRun, syncNewApiQuotaToBalance } from './newapiQuota'
+import { approvedPlatformFallback, approvedPlatformModels, type RouteMode } from './constants'
+import { consumeRunRateLimit } from './rateLimit'
 
 export interface RunSkillArgs {
   payload: Payload
@@ -45,10 +48,38 @@ export interface RunSkillResult {
   skillRunId?: string
 }
 
-// 每用户真实调用频控（60 秒窗口，按 skill-runs 落库行计数——保护的是钱与网关，不是 CPU）
+// 每用户真实调用频控（60 秒窗口；Redis 原子计数优先，BYOK 可降级 DB 计数）
 const RUN_RATE_LIMIT_PER_MIN = Math.max(1, Number(process.env.RUN_RATE_LIMIT_PER_MIN || 12))
 // 平台代付 credit 预检的输出 token 上限假设（预检用上限，实扣用真实用量）
 const PRECHECK_COMPLETION_TOKENS = 2000
+
+async function personalizedModelsForRun(
+  payload: Payload,
+  userId: string | undefined,
+  skillId: string | undefined,
+  mode: RouteMode,
+): Promise<string[]> {
+  if (!userId || !skillId) return []
+  try {
+    const res = await payload.find({
+      collection: 'skill-runs',
+      where: {
+        and: [{ user: { equals: userId } }, { skill: { equals: skillId } }],
+      },
+      limit: 200,
+      depth: 0,
+      sort: '-createdAt',
+      overrideAccess: true,
+    })
+    return rankPersonalizedRoute(
+      (res.docs as any[]).filter((r) => r.countedInMetrics !== false),
+      mode,
+    )
+  } catch (e) {
+    payload.logger?.error(`个人化路由读取失败 user=${userId} skill=${skillId}: ${(e as Error).message}`)
+    return []
+  }
+}
 
 /** 运行编排：校验输入 → 渲染 → 选模型 → 调用(带 fallback) → 校验输出 → 写 SkillRun → 更新指标 → 发贡献值 */
 export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
@@ -74,58 +105,62 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
     fallbacks = []
     mode = routeMode || 'balanced'
   } else {
+    const requestedMode: RouteMode = routeMode || (version?.routePolicy?.default as RouteMode) || 'balanced'
+    const personalized = !args.benchmark
+      ? await personalizedModelsForRun(payload, user?.id, skill?.id ? String(skill.id) : undefined, requestedMode)
+      : []
     ;({ model, fallbacks, mode } = selectModel(
       version?.routePolicy,
       version?.recommendedModels,
-      routeMode,
+      requestedMode,
       fallbackDefault,
+      { personalized },
     ))
   }
 
   // 3b. 护栏（总纲 6a+6l）：mock 全免；BYOK 仅频控；平台代付=白名单+频控+credit 预检
   //     benchmark(系统评测 #8)：跳过频控/预检/扣费，但仍受白名单约束(合规)；不排除自跑、不计履约指标。
   const gatewayConfigured = !!process.env.MODEL_GATEWAY_BASE_URL?.trim()
+  const adminForRun = getNewApiAdmin()
   const platformKeyPath =
-    gatewayConfigured && !userApiKey && !!process.env.MODEL_GATEWAY_KEY?.trim()
-  const isRealCall = gatewayConfigured && !!(userApiKey || process.env.MODEL_GATEWAY_KEY?.trim())
+    gatewayConfigured && !userApiKey && (!!process.env.MODEL_GATEWAY_KEY?.trim() || adminForRun.mode === 'real')
+  const isRealCall = gatewayConfigured && !!(userApiKey || process.env.MODEL_GATEWAY_KEY?.trim() || platformKeyPath)
 
   if (isRealCall && user?.id && !args.benchmark) {
-    // 频控：60 秒窗口内该用户已落库运行数（护栏拒绝不写行，故只计真实执行）
-    try {
-      const winStart = new Date(Date.now() - 60_000).toISOString()
-      const recent = await payload.count({
-        collection: 'skill-runs',
-        where: {
-          and: [{ user: { equals: user.id } }, { createdAt: { greater_than_equal: winStart } }],
-        },
-        overrideAccess: true,
-      })
-      if (recent.totalDocs >= RUN_RATE_LIMIT_PER_MIN) {
-        return {
-          ok: false,
-          runId,
-          errorCode: 'RATE_LIMITED',
-          errors: [`运行过于频繁（每分钟上限 ${RUN_RATE_LIMIT_PER_MIN} 次），请稍后再试`],
-        }
-      }
-    } catch (e) {
-      // 钱相关 fail-closed：平台代付路径频控查询失败则拒绝（防 DB 抖动期被利用关闭频控刷平台代付）；
-      // BYOK 用户自付，查询失败放行不影响平台成本。
-      payload.logger?.error(`运行频控检查失败: ${(e as Error).message}`)
-      if (platformKeyPath) {
-        return {
-          ok: false,
-          runId,
-          errorCode: 'RATE_LIMITED',
-          errors: ['系统繁忙，请稍后再试'],
-        }
+    const rateLimit = await consumeRunRateLimit({
+      payload,
+      userId: user.id,
+      limit: RUN_RATE_LIMIT_PER_MIN,
+      platformPaid: platformKeyPath,
+    })
+    if (!rateLimit.allowed) {
+      return {
+        ok: false,
+        runId,
+        errorCode: 'RATE_LIMITED',
+        errors: [
+          rateLimit.unavailable
+            ? '系统繁忙，请稍后再试'
+            : `运行过于频繁（每分钟上限 ${RUN_RATE_LIMIT_PER_MIN} 次），请稍后再试`,
+        ],
       }
     }
   }
 
   let preCheckedUserBalance: number | null = null
+  let platformCallApiKey = userApiKey
   let platformMaxTokens: number | undefined // 平台代付时把预检上限作为硬约束传给网关，防超额透支
   if (platformKeyPath) {
+    // 生产平台代付必须走用户子令牌；只配置全局 MODEL_GATEWAY_KEY 不能上线，避免绕过 per-user quota 隔离。
+    if (!args.benchmark && adminForRun.mode !== 'real' && process.env.NODE_ENV === 'production') {
+      return {
+        ok: false,
+        runId,
+        errorCode: 'PLATFORM_TOKEN_UNAVAILABLE',
+        errors: ['平台子令牌未配置，请改用自带 Key（BYOK）或稍后再试'],
+      }
+    }
+
     // 白名单：平台代付仅限已备案国产模型；候选链过滤，境外模型请 BYOK
     const approved = approvedPlatformModels()
     let chain = [model, ...fallbacks].filter((m) => approved.has(m))
@@ -139,8 +174,17 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
           errors: [`模型 ${model} 仅支持自带 Key（BYOK）调用；平台代付仅限已备案国产模型`],
         }
       }
-      // 正常路由场景：作者 routePolicy 全是境外模型时，平台代付降级到已备案国产默认模型（合规兜底，避免 403 跑不通）
-      chain = [fallbackDefault]
+      // 正常路由场景：作者 routePolicy/环境默认全是境外模型时，平台代付降级到已备案国产模型。
+      const safeFallback = approvedPlatformFallback(fallbackDefault)
+      if (!safeFallback) {
+        return {
+          ok: false,
+          runId,
+          errorCode: 'MODEL_REQUIRES_BYOK',
+          errors: ['平台代付模型白名单为空，请自带 Key（BYOK）调用'],
+        }
+      }
+      chain = [safeFallback]
     }
     model = chain[0]
     fallbacks = chain.slice(1)
@@ -186,6 +230,34 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
         errors: ['平台代付需要登录账户以扣减 credit'],
       }
     }
+
+    // RealAdmin 模式下，平台代付必须使用该用户的 New API 子令牌，不能再走全局平台 Key。
+    // stub 模式保留全局 Key 路径，方便本地开发；生产若子令牌不可用则 fail-closed。
+    if (!args.benchmark && user?.id) {
+      const admin = adminForRun
+      if (admin.mode === 'real') {
+        try {
+          const tok = await prepareNewApiSubTokenForRun(admin, user.id, preCheckedUserBalance || 0)
+          if (!tok.key) {
+            return {
+              ok: false,
+              runId,
+              errorCode: 'PLATFORM_TOKEN_UNAVAILABLE',
+              errors: ['平台子令牌未就绪，请稍后重试或改用自带 Key（BYOK）'],
+            }
+          }
+          platformCallApiKey = tok.key
+        } catch (e) {
+          payload.logger?.error(`平台子令牌准备失败 user=${user.id}: ${(e as Error).message}`)
+          return {
+            ok: false,
+            runId,
+            errorCode: 'PLATFORM_TOKEN_UNAVAILABLE',
+            errors: ['平台子令牌暂不可用，请稍后重试或改用自带 Key（BYOK）'],
+          }
+        }
+      }
+    }
   }
 
   // 4. 调用（主选失败则尝试 fallback）
@@ -202,7 +274,7 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
       result = await chatCompletion({
         model: m,
         messages,
-        apiKey: userApiKey,
+        apiKey: platformCallApiKey,
         maxTokens: platformMaxTokens, // 平台代付：硬约束输出上限=预检假设，杜绝超额透支；BYOK/mock 为 undefined 不限制
         metadata: {
           runId,
@@ -268,6 +340,11 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
         // 扣费失败：不虚报已扣，chargedCredits 归 0，chargedAmount 也据此记 0，留待对账补扣
         payload.logger?.error(`运行扣费失败 run=${runId}: ${charge.error || '未知'}`)
         chargedCredits = 0
+      } else if (!charge.skipped) {
+        // 网关也会扣子令牌 quota；本地扣费提交后按权威余额回推绝对 quota，防刻度误差/异步漂移累积。
+        syncNewApiQuotaToBalance(payload, user.id).catch((e) =>
+          payload.logger?.error(`运行后网关配额同步失败 run=${runId}: ${(e as Error).message}`),
+        )
       }
     }
   }
@@ -286,13 +363,14 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
         model: usedModel,
         routeMode: mode,
         inputJson: input,
-        outputText: result?.text || lastError || '',
+        outputText: result?.text || (errorType ? `模型调用失败（${errorType}）` : '模型调用失败'),
         outputJson,
         promptTokens: result?.promptTokens || 0,
         completionTokens: result?.completionTokens || 0,
         totalTokens: result?.totalTokens || 0,
         estimatedCost: cost,
         chargedAmount: chargedCredits > 0 ? cost : 0, // 仅平台代付且扣费成功计费；BYOK/失败记 0
+        chargedCredits,
         savedAmount,
         latencyMs: result?.latencyMs || 0,
         success,
@@ -386,7 +464,7 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
   }
 
   // 失败对外只给归一化文案（errorType），不透传上游网关原始错误体(可能含内部路由/分组/配额细节)
-  if (!success && lastError) payload.logger?.error(`运行失败 run=${runId} model=${usedModel}: ${lastError}`)
+  if (!success && lastError) payload.logger?.error(`运行失败 run=${runId} model=${usedModel}: ${redactGatewayErrorText(lastError)}`)
   const publicError = success
     ? undefined
     : [errorType ? `模型调用失败（${errorType}），请重试或更换模型` : '模型调用失败，请重试或更换模型']

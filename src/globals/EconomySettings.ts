@@ -1,5 +1,6 @@
 import type { GlobalConfig } from 'payload'
-import { isAdmin } from '@/access'
+import { isAdmin, isAdminField } from '@/access'
+import { guardEconomySettingsUpdate } from '@/lib/economySettingsGuard'
 
 // 变现经济参数（占位可调，上线前用真实数校准）。read/update 仅管理员；前台经兑换端点取安全子集。
 export const EconomySettings: GlobalConfig = {
@@ -43,6 +44,26 @@ export const EconomySettings: GlobalConfig = {
       },
     },
     {
+      name: 'marginSource',
+      type: 'select',
+      defaultValue: 'manual',
+      label: '毛利来源',
+      access: { update: isAdminField },
+      admin: { description: 'newapi=/api/log 真值；local=本平台 consume 流水估算；manual=手填占位，不允许开放兑换' },
+      options: [
+        { label: '手动占位', value: 'manual' },
+        { label: 'New API 日志', value: 'newapi' },
+        { label: '本地流水估算', value: 'local' },
+      ],
+    },
+    {
+      name: 'marginReconciledAt',
+      type: 'date',
+      label: '毛利对账时间',
+      access: { update: isAdminField },
+      admin: { description: '由 worker:reconcile-newapi 写入；必须是本月对账，兑换开关才生效' },
+    },
+    {
       name: 'pointsPerCredit',
       type: 'number',
       defaultValue: 10,
@@ -53,4 +74,9 @@ export const EconomySettings: GlobalConfig = {
     { name: 'perUserDailyMaxCredit', type: 'number', defaultValue: 1000, label: '单用户每日上限 credit' },
     { name: 'perUserMonthlyMaxCredit', type: 'number', defaultValue: 5000, label: '单用户每月上限 credit' },
   ],
+  hooks: {
+    beforeChange: [
+      ({ data, originalDoc, context }) => guardEconomySettingsUpdate({ data, originalDoc, context }),
+    ],
+  },
 }

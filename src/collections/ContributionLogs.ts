@@ -1,5 +1,5 @@
 import type { CollectionConfig } from 'payload'
-import { isAdmin, ownerOrAdmin } from '@/access'
+import { ownerOrAdmin } from '@/access'
 import { CONTRIBUTION_ACTIONS } from '@/lib/constants'
 import { rowActionsField } from './fields/rowActions'
 
@@ -13,9 +13,9 @@ export const ContributionLogs: CollectionConfig = {
   },
   access: {
     read: ownerOrAdmin('user'),
-    create: isAdmin, // 仅服务端 overrideAccess 写入
-    update: isAdmin,
-    delete: isAdmin,
+    create: () => false, // 仅服务端 overrideAccess 写入
+    update: () => false,
+    delete: () => false,
   },
   fields: [
     rowActionsField('contribution-logs'),

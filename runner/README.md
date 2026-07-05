@@ -13,6 +13,9 @@ node runner/hengshu.mjs login --hub http://localhost:3000
 # 查看登录归属
 node runner/hengshu.mjs whoami
 
+# 轮换本机 Runner 令牌（旧令牌立即失效）
+node runner/hengshu.mjs rotate-token
+
 # 运行（默认连本地 Ollama）
 node runner/hengshu.mjs run xhs-title-generator \
   --hub http://localhost:3000 \
@@ -24,7 +27,7 @@ node runner/hengshu.mjs run ./xhs-title-generator-1.0.0.yaml \
   --endpoint https://your-gateway/v1 --model your-model --key sk-xxx
 ```
 
-登录令牌保存在 `~/.hengshu/config.json`（chmod 600）。
+登录令牌保存在 `~/.hengshu/config.json`（chmod 600）；如怀疑泄漏，可执行 `rotate-token` 轮换，或在控制台撤销该 Runner 后重新登录。
 
 ## 选项（run）
 
@@ -36,9 +39,11 @@ node runner/hengshu.mjs run ./xhs-title-generator-1.0.0.yaml \
 | `--hub <url>` | 传入 slug 时从该 Hub 拉取 manifest（默认 `~/.hengshu/config.json` 的 hub 或 `http://localhost:3000`） |
 | `--in <key=value>` | 预填输入字段（可重复） |
 | `--raw` | 只输出模型原文 |
+| `--report` | 回传兼容报告（不含输入/输出原文） |
+| `--anon` | 与 `--report` 搭配，匿名回传 |
 
 ## 支持的模型后端
 
 任意 **OpenAI 兼容** `/chat/completions` endpoint：Ollama、LM Studio、vLLM、llama.cpp server、LocalAI，或你自己的网关。
 
-> 路线：后续将加 `install / list / update / outdated / remove / doctor`（S4）与匿名兼容报告回流（S5）。
+> Runner 默认拒绝未签名/签名无效的远端 manifest；自建调试可显式加 `--allow-unsigned`。

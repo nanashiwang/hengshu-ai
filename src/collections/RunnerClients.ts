@@ -22,13 +22,22 @@ export const RunnerClients: CollectionConfig = {
     { name: 'user', type: 'relationship', relationTo: 'users', required: true, label: '用户' },
     { name: 'runnerId', type: 'text', required: true, unique: true, index: true, label: 'Runner ID' },
     {
+      name: 'tokenHash',
+      type: 'text',
+      index: true,
+      label: '访问令牌哈希',
+      access: { read: () => false },
+      admin: { hidden: true },
+    },
+    {
       name: 'token',
       type: 'text',
       index: true,
       label: '访问令牌',
       access: { read: () => false }, // 任何 API 响应都不返回（overrideAccess 例外）
-      admin: { hidden: true },
+      admin: { hidden: true, description: '旧版兼容字段；新令牌仅存 tokenHash，不再存明文' },
     },
+    { name: 'tokenExpiresAt', type: 'date', label: '令牌过期时间' },
     { name: 'runnerVersion', type: 'text', label: '版本' },
     { name: 'os', type: 'text', label: '系统' },
     { name: 'arch', type: 'text', label: '架构' },
@@ -49,14 +58,14 @@ export const RunnerClients: CollectionConfig = {
   hooks: {
     beforeDelete: [
       async ({ id, req }) => {
-        // 删 Runner 前解除引用，避免 skill-installs / compat-reports 的 runner 悬空
-        await req.payload.update({
+        // 撤销 Runner 时删除其安装记录，避免 runner=NULL 后 user+skill+runner 唯一约束被 NULL 绕过。
+        await req.payload.delete({
           collection: 'skill-installs',
           where: { runner: { equals: id } },
-          data: { runner: null },
           overrideAccess: true,
           req,
         })
+        // 兼容报告/设备码保留历史，但解除 Runner 引用。
         await req.payload.update({
           collection: 'compat-reports',
           where: { runner: { equals: id } },

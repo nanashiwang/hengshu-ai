@@ -1,5 +1,6 @@
 import type { Payload } from 'payload'
 import { randomBytes, randomUUID } from 'crypto'
+import { hmacDigest } from './secrets'
 
 // 生成不可猜的随机令牌（url-safe）
 export function randomToken(bytes = 36): string {
@@ -8,6 +9,19 @@ export function randomToken(bytes = 36): string {
 
 export function newRunnerId(): string {
   return randomUUID()
+}
+
+export function runnerTokenHash(token: string): string {
+  return hmacDigest(token, 'runner-token')
+}
+
+export function runnerTokenExpiresAt(): string {
+  const days = Math.max(1, Number(process.env.RUNNER_TOKEN_TTL_DAYS || 90))
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
+}
+
+export function allowLegacyRunnerTokenAuth(): boolean {
+  return process.env.ALLOW_LEGACY_RUNNER_TOKEN_AUTH === '1' || process.env.NODE_ENV !== 'production'
 }
 
 // 人类可输入的设备授权码，形如 ABCD-7K9M（去除易混字符）
@@ -34,19 +48,40 @@ export async function runnerFromBearer(
   const token = m[1].trim()
   if (!token) return null
 
+  const tokenHash = runnerTokenHash(token)
+  const where: any = allowLegacyRunnerTokenAuth()
+    ? { or: [{ tokenHash: { equals: tokenHash } }, { token: { equals: token } }] }
+    : { tokenHash: { equals: tokenHash } }
   const res = await payload.find({
     collection: 'runner-clients',
-    where: { token: { equals: token } },
+    where,
     limit: 1,
     overrideAccess: true,
   })
   const runner = res.docs[0]
   if (!runner) return null
+  if (runner.tokenExpiresAt && new Date(runner.tokenExpiresAt) < new Date()) return null
+
+  // 开发/迁移期兼容旧明文 token，一旦命中就自愈为 hash 并清掉明文；生产默认不走此分支。
+  if (allowLegacyRunnerTokenAuth() && (runner as any).token === token) {
+    payload
+      .update({
+        collection: 'runner-clients',
+        id: runner.id,
+        data: {
+          tokenHash: (runner as any).tokenHash || tokenHash,
+          tokenExpiresAt: (runner as any).tokenExpiresAt || runnerTokenExpiresAt(),
+          token: null,
+        },
+        overrideAccess: true,
+      })
+      .catch((e) => payload.logger?.error(`Runner legacy token 自愈失败: ${(e as Error).message}`))
+  }
 
   const userId = typeof runner.user === 'object' ? runner.user?.id : runner.user
   const user = await payload
     .findByID({ collection: 'users', id: userId, overrideAccess: true })
     .catch(() => null)
-  if (!user) return null
+  if (!user || (user as any).accountStatus === 'banned') return null
   return { user, runner }
 }

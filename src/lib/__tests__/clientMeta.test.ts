@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { getClientIp, hashIp } from '@/lib/clientMeta'
+import { getClientIp, hashDeviceId, hashIp, normalizeDeviceId } from '@/lib/clientMeta'
 
 function h(map: Record<string, string>): Headers {
   const hd = new Headers()
@@ -56,5 +56,26 @@ describe('hashIp', () => {
 
   it('空 IP → 空串', () => {
     expect(hashIp('')).toBe('')
+  })
+})
+
+describe('deviceId 规范化与哈希', () => {
+  it('只接受 16-128 位短 ASCII token，并会 trim', () => {
+    expect(normalizeDeviceId('  0123456789abcdef  ')).toBe('0123456789abcdef')
+    expect(normalizeDeviceId('short')).toBe('')
+    expect(normalizeDeviceId('含中文0123456789abcdef')).toBe('')
+    expect(normalizeDeviceId('x'.repeat(129))).toBe('')
+    expect(normalizeDeviceId(null)).toBe('')
+  })
+
+  it('hashDeviceId 确定性 + 不含原文；无效输入返回空串', () => {
+    vi.stubEnv('PAYLOAD_SECRET', 'test-secret')
+    const id = '018f4e20-8f4b-7b16-a35d-123456789abc'
+    const a = hashDeviceId(id)
+    expect(a).toBe(hashDeviceId(id))
+    expect(a).toHaveLength(32)
+    expect(a).not.toContain(id)
+    expect(hashDeviceId('short')).toBe('')
+    vi.unstubAllEnvs()
   })
 })

@@ -26,7 +26,7 @@ export type RouteMode = (typeof ROUTE_MODES)[number]
 // ── 合规架构切割(总纲 6l)：平台 Key 代付仅限已备案国产模型 ──
 // 境外模型(Claude/GPT/Grok 等)仅 BYOK 显式配置可用；平台不代理未备案模型，避免与被整治中转站同一法律定性。
 // 可用 APPROVED_PLATFORM_MODELS 环境变量覆盖（逗号分隔）。
-const DEFAULT_PLATFORM_MODELS = [
+export const DEFAULT_PLATFORM_MODELS = [
   'deepseek-chat',
   'deepseek-reasoner',
   'qwen-plus',
@@ -37,17 +37,32 @@ const DEFAULT_PLATFORM_MODELS = [
   'kimi-k2',
   'moonshot-v1-8k',
 ]
-export function approvedPlatformModels(): Set<string> {
-  const env = process.env.APPROVED_PLATFORM_MODELS
-  if (env) {
-    return new Set(
-      env
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
-    )
+
+type Env = Record<string, string | undefined>
+
+export function approvedPlatformModelList(env: Env = process.env): string[] {
+  const raw = env.APPROVED_PLATFORM_MODELS
+  if (!raw?.trim()) return [...DEFAULT_PLATFORM_MODELS]
+  return [...new Set(raw.split(',').map((s) => s.trim()).filter(Boolean))]
+}
+
+export function approvedPlatformModels(env: Env = process.env): Set<string> {
+  return new Set(approvedPlatformModelList(env))
+}
+
+export function requireApprovedPlatformModelList(env: Env = process.env): string[] {
+  const models = approvedPlatformModelList(env)
+  if (models.length === 0) {
+    throw new Error('APPROVED_PLATFORM_MODELS 显式配置后解析为空；平台代付白名单不能为空')
   }
-  return new Set(DEFAULT_PLATFORM_MODELS)
+  return models
+}
+
+export function approvedPlatformFallback(preferred?: string, env: Env = process.env): string | null {
+  const models = approvedPlatformModels(env)
+  if (preferred && models.has(preferred)) return preferred
+  if (models.has('deepseek-chat')) return 'deepseek-chat'
+  return models.values().next().value || null
 }
 
 // credit（算力燃料币）台账交易类型。1 credit = ¥0.01 零售。credit 永不反向变现金。

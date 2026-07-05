@@ -56,17 +56,19 @@ export interface BenchmarkResult {
 
 export async function benchmarkSkill(
   payload: Payload,
-  args: { skill: any; version: any; models?: string[] },
+  args: { skill: any; version: any; models?: string[]; maxAttempts?: number },
 ): Promise<BenchmarkResult> {
   const { skill, version } = args
   const inputs = deriveInputs(version)
   const models = pickModels(version, args.models)
+  const maxAttempts = Math.max(1, Number(args.maxAttempts || MAX_EXAMPLES * MAX_MODELS))
 
   let attempted = 0
   let mocked = 0
   let reported = 0
   for (const model of models) {
     for (const input of inputs) {
+      if (attempted >= maxAttempts) break
       attempted++
       try {
         const r = await runSkill({
@@ -84,6 +86,7 @@ export async function benchmarkSkill(
         payload.logger?.error(`benchmark 运行失败 skill=${skill.slug} model=${model}: ${(e as Error).message}`)
       }
     }
+    if (attempted >= maxAttempts) break
   }
 
   // 重算 LocalScore（benchmark 报告已写入 compat-reports，此处收敛出初始分）

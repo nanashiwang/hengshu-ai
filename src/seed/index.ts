@@ -3,9 +3,7 @@ import { getPayload } from 'payload'
 import config from '../payload.config'
 import { SKILL_CATEGORIES } from '../lib/constants'
 import { SEED_SKILLS } from './skills'
-
-const ADMIN_EMAIL = 'admin@yuanheng.ai'
-const ADMIN_PASSWORD = 'admin12345'
+import { resolveSeedAdminCredentials, shouldCreateWelcomeInvite } from './security'
 
 async function seed() {
   const payload = await getPayload({ config })
@@ -26,19 +24,24 @@ async function seed() {
   if (admin) {
     payload.logger.info(`· 复用现有管理员作为官方 Skill 作者：${admin.email}`)
   } else {
+    const adminCreds = resolveSeedAdminCredentials()
     admin = await payload.create({
       collection: 'users',
       overrideAccess: true,
       data: {
-        email: ADMIN_EMAIL,
+        email: adminCreds.email,
         username: 'admin',
-        password: ADMIN_PASSWORD,
+        password: adminCreds.password,
         role: 'admin',
         level: 99,
         inviteCount: 10,
       },
     })
-    payload.logger.info(`✓ 默认管理员已创建（首个用户自动成为超管）：${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`)
+    payload.logger.info(
+      adminCreds.generated
+        ? `✓ 默认管理员已创建（开发一次性随机密码）：${adminCreds.email} / ${adminCreds.password}`
+        : `✓ 默认管理员已创建：${adminCreds.email}（密码来自 SEED_ADMIN_PASSWORD）`,
+    )
   }
 
   // ── 分类 ──
@@ -120,22 +123,26 @@ async function seed() {
     payload.logger.info(`✓ Skill 已创建：${s.title}`)
   }
 
-  // ── 测试邀请码 ──
-  let invite = (
-    await payload.find({
-      collection: 'invite-codes',
-      where: { code: { equals: 'WELCOME1' } },
-      limit: 1,
-      overrideAccess: true,
-    })
-  ).docs[0]
-  if (!invite) {
-    invite = await payload.create({
-      collection: 'invite-codes',
-      overrideAccess: true,
-      data: { code: 'WELCOME1', inviter: admin.id, status: 'unused' },
-    })
-    payload.logger.info('✓ 测试邀请码：WELCOME1')
+  // ── 开发测试邀请码 ──
+  if (shouldCreateWelcomeInvite()) {
+    let invite = (
+      await payload.find({
+        collection: 'invite-codes',
+        where: { code: { equals: 'WELCOME1' } },
+        limit: 1,
+        overrideAccess: true,
+      })
+    ).docs[0]
+    if (!invite) {
+      invite = await payload.create({
+        collection: 'invite-codes',
+        overrideAccess: true,
+        data: { code: 'WELCOME1', inviter: admin.id, status: 'unused' },
+      })
+      payload.logger.info('✓ 开发测试邀请码：WELCOME1')
+    }
+  } else {
+    payload.logger.info('· 生产环境跳过固定测试邀请码 WELCOME1')
   }
 
   payload.logger.info('种子完成 ✅')

@@ -1,0 +1,51 @@
+import * as migration_20260702_173109_p0_hardening_and_recharge from './20260702_173109_p0_hardening_and_recharge';
+import * as migration_20260702_180021_margin_reconcile_gate from './20260702_180021_margin_reconcile_gate';
+import * as migration_20260702_181548_recharge_code_hash from './20260702_181548_recharge_code_hash';
+import * as migration_20260702_184401_skill_run_charged_credits from './20260702_184401_skill_run_charged_credits';
+import * as migration_20260703_052000_notification_and_compat_indexes from './20260703_052000_notification_and_compat_indexes';
+import * as migration_20260703_060000_user_device_hash from './20260703_060000_user_device_hash';
+import * as migration_20260703_063000_skill_submission_key from './20260703_063000_skill_submission_key';
+import * as migration_20260703_064500_audit_logs from './20260703_064500_audit_logs';
+
+export const migrations = [
+  {
+    up: migration_20260702_173109_p0_hardening_and_recharge.up,
+    down: migration_20260702_173109_p0_hardening_and_recharge.down,
+    name: '20260702_173109_p0_hardening_and_recharge',
+  },
+  {
+    up: migration_20260702_180021_margin_reconcile_gate.up,
+    down: migration_20260702_180021_margin_reconcile_gate.down,
+    name: '20260702_180021_margin_reconcile_gate',
+  },
+  {
+    up: migration_20260702_181548_recharge_code_hash.up,
+    down: migration_20260702_181548_recharge_code_hash.down,
+    name: '20260702_181548_recharge_code_hash',
+  },
+  {
+    up: migration_20260702_184401_skill_run_charged_credits.up,
+    down: migration_20260702_184401_skill_run_charged_credits.down,
+    name: '20260702_184401_skill_run_charged_credits',
+  },
+  {
+    up: migration_20260703_052000_notification_and_compat_indexes.up,
+    down: migration_20260703_052000_notification_and_compat_indexes.down,
+    name: '20260703_052000_notification_and_compat_indexes',
+  },
+  {
+    up: migration_20260703_060000_user_device_hash.up,
+    down: migration_20260703_060000_user_device_hash.down,
+    name: '20260703_060000_user_device_hash',
+  },
+  {
+    up: migration_20260703_063000_skill_submission_key.up,
+    down: migration_20260703_063000_skill_submission_key.down,
+    name: '20260703_063000_skill_submission_key',
+  },
+  {
+    up: migration_20260703_064500_audit_logs.up,
+    down: migration_20260703_064500_audit_logs.down,
+    name: '20260703_064500_audit_logs',
+  },
+];

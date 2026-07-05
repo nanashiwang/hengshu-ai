@@ -18,6 +18,7 @@ import { InviteCodes } from './collections/InviteCodes'
 import { ContributionLogs } from './collections/ContributionLogs'
 import { ContributionRules } from './collections/ContributionRules'
 import { CreditLogs } from './collections/CreditLogs'
+import { RechargeCodes } from './collections/RechargeCodes'
 import { Notifications } from './collections/Notifications'
 import { ModelPriceSnapshots } from './collections/ModelPriceSnapshots'
 import { ScoreSnapshots } from './collections/ScoreSnapshots'
@@ -26,12 +27,19 @@ import { DeviceCodes } from './collections/DeviceCodes'
 import { SkillInstalls } from './collections/SkillInstalls'
 import { Bounties } from './collections/Bounties'
 import { Reports } from './collections/Reports'
+import { AuditLogs } from './collections/AuditLogs'
 import { Media } from './collections/Media'
 import { SiteSettings } from './globals/SiteSettings'
 import { EconomySettings } from './globals/EconomySettings'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
+const payloadSecret = (() => {
+  const secret = process.env.PAYLOAD_SECRET || ''
+  if (secret.length >= 16) return secret
+  if (process.env.NODE_ENV === 'production') throw new Error('PAYLOAD_SECRET 必须在生产环境配置为强随机值')
+  return 'hengshu-dev-secret'
+})()
 
 export default buildConfig({
   admin: {
@@ -56,6 +64,7 @@ export default buildConfig({
     ContributionLogs,
     ContributionRules,
     CreditLogs,
+    RechargeCodes,
     Favorites,
     RunnerClients,
     DeviceCodes,
@@ -64,6 +73,7 @@ export default buildConfig({
     // ── 审核治理 ──
     Reviews,
     Reports,
+    AuditLogs,
     // ── 系统设置 ──
     Media,
     ModelPriceSnapshots,
@@ -71,7 +81,7 @@ export default buildConfig({
   ],
   globals: [SiteSettings, EconomySettings],
   editor: lexicalEditor(),
-  secret: process.env.PAYLOAD_SECRET || '',
+  secret: payloadSecret,
   db: postgresAdapter({
     pool: {
       connectionString: process.env.DATABASE_URL,

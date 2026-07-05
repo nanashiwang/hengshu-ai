@@ -4,6 +4,7 @@
  *
  *   hengshu login [--hub <url>]                设备码登录
  *   hengshu whoami                             查看登录归属
+ *   hengshu rotate-token                       轮换本机 Runner 令牌
  *   hengshu install <slug>                     安装 Skill 到本地 ~/.hengshu/skills
  *   hengshu list                               列出已安装 Skill
  *   hengshu run <slug|file> [选项]              运行（已装则离线读本地）
@@ -189,6 +190,16 @@ async function cmdWhoami(args) {
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || '令牌无效，请重新登录')
   console.log(`用户：${data.user?.username}  ·  Runner：${data.runnerId}  ·  信任级别：${data.trustedLevel}`)
+}
+
+async function cmdRotateToken(args) {
+  const cfg = readConfig()
+  const { hub, token } = requireAuth(args)
+  const res = await fetch(`${hub}/v1/runner/rotate`, { method: 'POST', headers: bearer(token) })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || !data.access_token) throw new Error(data.error || '轮换失败，请重新登录')
+  writeConfig({ ...cfg, hub, token: data.access_token, runnerId: data.runner_id || cfg.runnerId })
+  console.log(`✅ Runner 令牌已轮换并保存到 ${CONFIG_PATH}`)
 }
 
 // ───────── install / list / remove ─────────
@@ -553,6 +564,7 @@ async function main() {
   const table = {
     login: cmdLogin,
     whoami: cmdWhoami,
+    'rotate-token': cmdRotateToken,
     install: cmdInstall,
     list: cmdList,
     run: cmdRun,
@@ -562,7 +574,7 @@ async function main() {
     doctor: cmdDoctor,
   }
   if (table[cmd]) return table[cmd](args)
-  console.log('用法：hengshu <login|whoami|install|list|run|outdated|update|remove|doctor> [选项]')
+  console.log('用法：hengshu <login|whoami|rotate-token|install|list|run|outdated|update|remove|doctor> [选项]')
   process.exit(cmd ? 1 : 0)
 }
 

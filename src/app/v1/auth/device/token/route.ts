@@ -1,5 +1,6 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { clearPendingAccessToken, pendingAccessTokenFromMeta } from '@/lib/deviceAuth'
 
 // POST /v1/auth/device/token —— Runner 轮询换取访问令牌
 export async function POST(request: Request) {
@@ -38,13 +39,18 @@ export async function POST(request: Request) {
     .catch(() => null)
   if (!rc) return Response.json({ error: 'server_error' }, { status: 500 })
 
-  // 单次消费：发出 token 后标记 consumed
+  const meta = (code.meta || {}) as any
+  const accessToken = pendingAccessTokenFromMeta(meta) || (process.env.NODE_ENV !== 'production' ? (rc as any).token : '')
+  if (!accessToken) return Response.json({ error: 'server_error' }, { status: 500 })
+
+  // 单次消费：发出 token 后标记 consumed，并清除临时 token 密文/旧明文
+  const nextMeta = clearPendingAccessToken(meta)
   await payload.update({
     collection: 'device-codes',
     id: code.id,
     overrideAccess: true,
-    data: { status: 'consumed' },
+    data: { status: 'consumed', meta: nextMeta },
   })
 
-  return Response.json({ access_token: (rc as any).token, runner_id: (rc as any).runnerId })
+  return Response.json({ access_token: accessToken, runner_id: (rc as any).runnerId })
 }

@@ -2,6 +2,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
 import { runSkill } from '@/lib/skillRunner'
+import { decryptSecret } from '@/lib/secrets'
 
 const MAX_MODELS = 4
 
@@ -15,6 +16,7 @@ export async function POST(
 
   const { user } = await payload.auth({ headers: await nextHeaders() })
   if (!user) return Response.json({ error: '请先登录' }, { status: 401 })
+  if ((user as any).accountStatus === 'banned') return Response.json({ error: '账号已被封禁' }, { status: 403 })
 
   let body: any = {}
   try {
@@ -66,7 +68,7 @@ export async function POST(
   const fullUser = await payload
     .findByID({ collection: 'users', id: user.id, overrideAccess: true, depth: 0 })
     .catch(() => null)
-  const userApiKey = (fullUser as any)?.newapiKeyEncrypted || undefined
+  const userApiKey = decryptSecret((fullUser as any)?.newapiKeyEncrypted) || undefined
 
   // 串行跑各模型（forceModel 固定模型、skipAggregate 不污染聚合指标）。
   // 刻意串行而非并行：让每个 runSkill 看到前一个已扣减的 credit 余额与已落库的频控计数，

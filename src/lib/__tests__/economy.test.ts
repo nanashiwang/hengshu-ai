@@ -1,11 +1,14 @@
-import { describe, it, expect } from 'vitest'
-import { exchangePoolTotal, monthStartISO, dayStartISO } from '@/lib/economy'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import type { EconomyConfig } from '@/lib/economy'
+import { exchangePoolTotal, getEconomyConfig, monthStartISO, dayStartISO } from '@/lib/economy'
 
-const cfg = (over: Partial<any> = {}) => ({
+const cfg = (over: Partial<EconomyConfig> = {}): EconomyConfig => ({
   exchangeEnabled: true,
   freeCreditOnRegister: 0,
   alpha: 0.3,
   monthlyRealizedMarginCents: 0,
+  marginSource: 'manual',
+  marginReconciledAt: undefined,
   pointsPerCredit: 10,
   minCreditPerTx: 10,
   perTxMaxCredit: 500,
@@ -44,5 +47,88 @@ describe('时间窗起点（TZ 无关不变量）', () => {
     expect(ds.getDate()).toBe(src.getDate())
     expect(ds.getHours()).toBe(0)
     expect(ds.getMinutes()).toBe(0)
+  })
+})
+
+describe('getEconomyConfig — 兑换开关必须有本月机器对账毛利', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  const payloadWithGlobal = (global: Record<string, unknown>) =>
+    ({
+      findGlobal: async () => global,
+    }) as any
+
+  const oldReconcileAt = () => {
+    const d = new Date(monthStartISO())
+    d.setMonth(d.getMonth() - 1)
+    return d.toISOString()
+  }
+
+  it('管理员手填毛利不能打开兑换', async () => {
+    const got = await getEconomyConfig(
+      payloadWithGlobal({
+        exchangeEnabled: true,
+        monthlyRealizedMarginCents: 10000,
+        marginSource: 'manual',
+        marginReconciledAt: new Date().toISOString(),
+      }),
+    )
+    expect(got.exchangeEnabled).toBe(false)
+  })
+
+  it('旧月份对账不能打开兑换', async () => {
+    const got = await getEconomyConfig(
+      payloadWithGlobal({
+        exchangeEnabled: true,
+        monthlyRealizedMarginCents: 10000,
+        marginSource: 'newapi',
+        marginReconciledAt: oldReconcileAt(),
+      }),
+    )
+    expect(got.exchangeEnabled).toBe(false)
+  })
+
+  it('未来对账时间不能打开兑换，避免一次未来时间让旧毛利长期有效', async () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    const got = await getEconomyConfig(
+      payloadWithGlobal({
+        exchangeEnabled: true,
+        monthlyRealizedMarginCents: 10000,
+        marginSource: 'newapi',
+        marginReconciledAt: future,
+      }),
+    )
+    expect(got.exchangeEnabled).toBe(false)
+  })
+
+  it('本月 newapi 对账后允许兑换开关生效', async () => {
+    const got = await getEconomyConfig(
+      payloadWithGlobal({
+        exchangeEnabled: true,
+        monthlyRealizedMarginCents: 10000,
+        marginSource: 'newapi',
+        marginReconciledAt: new Date().toISOString(),
+      }),
+    )
+    expect(got.exchangeEnabled).toBe(true)
+  })
+
+  it('local 估算必须切到 local 来源并显式确认才允许兑换开关生效', async () => {
+    const base = {
+      exchangeEnabled: true,
+      monthlyRealizedMarginCents: 10000,
+      marginSource: 'local',
+      marginReconciledAt: new Date().toISOString(),
+    }
+
+    expect((await getEconomyConfig(payloadWithGlobal(base))).exchangeEnabled).toBe(false)
+
+    vi.stubEnv('ALLOW_LOCAL_MARGIN_EXCHANGE', '1')
+    expect((await getEconomyConfig(payloadWithGlobal(base))).exchangeEnabled).toBe(false)
+
+    vi.stubEnv('NEWAPI_USAGE_SOURCE', 'local')
+    expect((await getEconomyConfig(payloadWithGlobal(base))).exchangeEnabled).toBe(true)
   })
 })

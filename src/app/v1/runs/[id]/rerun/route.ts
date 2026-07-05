@@ -2,6 +2,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
 import { runSkill } from '@/lib/skillRunner'
+import { decryptSecret } from '@/lib/secrets'
 
 // POST /v1/runs/{id}/rerun  { model } —— 用同一历史输入换模型重跑（私人台账切换成本核心钩子）。
 // 只能重跑自己的运行；走与普通运行相同的护栏(credit/BYOK/频控)。
@@ -45,7 +46,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const fullUser = await payload
     .findByID({ collection: 'users', id: user.id, overrideAccess: true, depth: 0 })
     .catch(() => null)
-  const userApiKey = (fullUser as any)?.newapiKeyEncrypted || undefined
+  const userApiKey = decryptSecret((fullUser as any)?.newapiKeyEncrypted) || undefined
 
   const result = await runSkill({
     payload,
@@ -63,7 +64,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       ? 402
       : result.errorCode === 'MODEL_REQUIRES_BYOK'
         ? 403
-        : result.errorCode === 'RATE_LIMITED'
+        : result.errorCode === 'PLATFORM_TOKEN_UNAVAILABLE'
+          ? 503
+          : result.errorCode === 'RATE_LIMITED'
           ? 429
           : 422
   return Response.json(result, { status })

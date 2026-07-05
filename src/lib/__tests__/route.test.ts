@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { selectModel, rankDataDrivenRoute } from '@/lib/route'
+import { selectModel, rankDataDrivenRoute, rankPersonalizedRoute } from '@/lib/route'
 
 describe('selectModel — 任务级路由选主模型 + fallback', () => {
   it('优先 strategies[mode][0]', () => {
@@ -61,6 +61,22 @@ describe('selectModel — 任务级路由选主模型 + fallback', () => {
     const r = selectModel({ strategies: { cheap: ['author-model'] } }, null, 'cheap', 'def')
     expect(r.model).toBe('author-model')
   })
+
+  it('个人化路由优先于全站 dataDriven 和作者手填(#15 per-user)', () => {
+    const r = selectModel(
+      {
+        strategies: { cheap: ['author-model'] },
+        dataDriven: { cheap: ['global-model'] },
+      },
+      { cloud: ['cloud-model'] },
+      'cheap',
+      'def',
+      { personalized: ['my-cheap', 'my-backup'] },
+    )
+    expect(r.model).toBe('my-cheap')
+    expect(r.source).toBe('personalized')
+    expect(r.fallbacks).toEqual(['my-backup', 'global-model', 'cloud-model', 'def'])
+  })
 })
 
 describe('rankDataDrivenRoute — 由兼容聚合排数据驱动路由', () => {
@@ -95,5 +111,34 @@ describe('rankDataDrivenRoute — 由兼容聚合排数据驱动路由', () => {
       { modelName: 'x', successRate: 0.2, avgLatencyMs: 100, formatRate: 0.2, lowSample: false },
     ])
     expect(r.cheap).toEqual([])
+  })
+})
+
+describe('rankPersonalizedRoute — 用户私人台账路由', () => {
+  const runs = [
+    { model: 'cheap-ok', success: true, formatValid: true, estimatedCost: 0.001, latencyMs: 900 },
+    { model: 'cheap-ok', success: true, formatValid: true, estimatedCost: 0.001, latencyMs: 800 },
+    { model: 'fast-ok', success: true, formatValid: true, estimatedCost: 0.01, latencyMs: 120 },
+    { model: 'fast-ok', success: true, formatValid: true, estimatedCost: 0.01, latencyMs: 100 },
+    { model: 'flaky', success: false, formatValid: false, estimatedCost: 0, latencyMs: 0 },
+    { model: 'flaky', success: true, formatValid: true, estimatedCost: 0.0001, latencyMs: 50 },
+    { model: 'one-shot', success: true, formatValid: true, estimatedCost: 0.0001, latencyMs: 20 },
+  ]
+
+  it('cheap 模式按用户自己的成功历史选最低成本，排除低样本和低成功率', () => {
+    const r = rankPersonalizedRoute(runs, 'cheap')
+    expect(r[0]).toBe('cheap-ok')
+    expect(r).toContain('fast-ok')
+    expect(r).not.toContain('flaky')
+    expect(r).not.toContain('one-shot')
+  })
+
+  it('fast 模式按用户自己的历史延迟排序', () => {
+    const r = rankPersonalizedRoute(runs, 'fast')
+    expect(r[0]).toBe('fast-ok')
+  })
+
+  it('样本不足时不产生个人化路由，避免单次偶然结果劫持', () => {
+    expect(rankPersonalizedRoute([{ model: 'm', success: true, formatValid: true }], 'balanced')).toEqual([])
   })
 })

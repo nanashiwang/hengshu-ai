@@ -6,6 +6,10 @@ import { rowActionsField } from './fields/rowActions'
 // 信任模型：raw 报告永不直接上榜，聚合后展示；社区报告仅展示不计术值（verified 通道留后续）。
 export const CompatReports: CollectionConfig = {
   slug: 'compat-reports',
+  indexes: [
+    { fields: ['skill', 'createdAt'] },
+    { fields: ['modelName', 'createdAt'] },
+  ],
   labels: { singular: '兼容报告', plural: '兼容报告' },
   admin: {
     useAsTitle: 'id',

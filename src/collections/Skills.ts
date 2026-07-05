@@ -1,7 +1,9 @@
 import type { CollectionConfig } from 'payload'
-import { isAdmin, isCreatorOrAbove, publishedOrPrivileged } from '@/access'
+import { isActiveAccount, isAdmin, isCreatorOrAbove, publishedOrPrivileged } from '@/access'
 import { slugify } from '@/lib/slug'
 import { awardContribution } from '@/lib/contribution'
+import { enqueueBenchmarkJob } from '@/lib/benchmarkQueue'
+import { notifySkillSubscribers, shouldNotifySkillVersionUpdate } from '@/lib/skillSubscriberNotifications'
 import { rowActionsField } from './fields/rowActions'
 
 export const Skills: CollectionConfig = {
@@ -18,7 +20,7 @@ export const Skills: CollectionConfig = {
     read: publishedOrPrivileged,
     create: isCreatorOrAbove,
     update: ({ req: { user } }) => {
-      if (!user) return false
+      if (!isActiveAccount(user)) return false
       if (user.role === 'admin' || user.role === 'reviewer') return true
       return { author: { equals: user.id } }
     },
@@ -35,6 +37,14 @@ export const Skills: CollectionConfig = {
       admin: { position: 'sidebar' },
     },
     { name: 'description', type: 'textarea', label: '简介' },
+    {
+      name: 'clientSubmissionKey',
+      type: 'text',
+      unique: true,
+      index: true,
+      label: '客户端提交幂等键',
+      admin: { hidden: true, readOnly: true },
+    },
     { name: 'category', type: 'relationship', relationTo: 'categories', label: '分类' },
     {
       name: 'author',
@@ -150,6 +160,27 @@ export const Skills: CollectionConfig = {
     ],
     afterChange: [
       async ({ doc, previousDoc, operation, req }) => {
+        if (shouldNotifySkillVersionUpdate({ doc, previousDoc, operation })) {
+          const versionId = typeof doc.currentVersion === 'object' ? doc.currentVersion?.id : doc.currentVersion
+          const version =
+            versionId &&
+            (await req.payload
+              .findByID({
+                collection: 'skill-versions',
+                id: versionId,
+                overrideAccess: true,
+                depth: 0,
+                req,
+              })
+              .catch(() => null))
+          notifySkillSubscribers(req.payload, {
+            skill: doc,
+            version: version || null,
+            actorId: req.user?.id,
+            req,
+          }).catch((e) => req.payload.logger?.error(`Skill 更新订阅通知失败: ${(e as Error).message}`))
+        }
+
         // 发布通过审核：给作者 +50（仅在状态从非 published 变为 published 时）
         const becamePublished =
           doc.status === 'published' &&
@@ -169,6 +200,10 @@ export const Skills: CollectionConfig = {
               req,
             })
           }
+          // 发布即评测：只入 Redis 队列，真实跑测由 worker 串行处理并做成本上限控制；入队失败不阻断审核发布。
+          enqueueBenchmarkJob(req.payload, { skillId: doc.id, slug: doc.slug, reason: 'published' }).catch((e) =>
+            req.payload.logger?.error(`发布即评测入队异常 skill=${doc.id}: ${(e as Error).message}`),
+          )
         }
         return doc
       },

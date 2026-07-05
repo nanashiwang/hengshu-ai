@@ -1,6 +1,8 @@
 import { getPayloadClient } from '@/lib/payload'
 import { aggregateModelsGlobal } from '@/lib/compat'
 import { rankModels, type ModelRankRow } from '@/lib/modelrank'
+import { comparePriceTransparency } from '@/lib/priceTransparency'
+import { MODEL_PRICES } from '@/lib/constants'
 import { formatLatency, formatPercent } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
@@ -89,7 +91,7 @@ export default async function ModelsPage({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[860px] text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--panel)] text-left text-xs text-[var(--muted)]">
                 <th className="px-3 py-2 font-medium">#</th>
@@ -98,31 +100,53 @@ export default async function ModelsPage({
                 <th className="px-3 py-2 text-right font-medium">成功率</th>
                 <th className="px-3 py-2 text-right font-medium">延迟</th>
                 <th className="px-3 py-2 text-right font-medium">官方价/1k</th>
+                <th className="px-3 py-2 text-right font-medium">我到手价/1k</th>
                 <th className="px-3 py-2 text-right font-medium">性价比</th>
                 <th className="px-3 py-2 text-right font-medium">样本</th>
               </tr>
             </thead>
             <tbody>
-              {ranked.map((m, i) => (
-                <tr key={m.model} className="border-b border-[var(--border)] last:border-0">
-                  <td className="px-3 py-2.5 text-[var(--muted)]">{m.lowSample ? '—' : i + 1}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs">{m.model}</td>
-                  <td className="px-3 py-2.5 text-right font-semibold text-[var(--accent)]">
-                    {m.lowSample ? '积累中' : m.qualityScore}
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    {m.lowSample ? `已${m.samples}次` : formatPercent(m.successRate)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right">{formatLatency(m.avgLatencyMs)}</td>
-                  <td className="px-3 py-2.5 text-right">
-                    {m.officialPrice != null ? `¥${m.officialPrice}` : '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-[var(--accent-2)]">
-                    {m.valueScore != null && !m.lowSample ? m.valueScore : '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-[var(--muted)]">{m.samples}</td>
-                </tr>
-              ))}
+              {ranked.map((m, i) => {
+                const platform = MODEL_PRICES[m.model]
+                const price = comparePriceTransparency({
+                  official: { input: m.officialInputPrice, output: m.officialOutputPrice },
+                  platform: platform ? { input: platform.in, output: platform.out } : null,
+                })
+                return (
+                  <tr key={m.model} className="border-b border-[var(--border)] last:border-0">
+                    <td className="px-3 py-2.5 text-[var(--muted)]">{m.lowSample ? '—' : i + 1}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{m.model}</td>
+                    <td className="px-3 py-2.5 text-right font-semibold text-[var(--accent)]">
+                      {m.lowSample ? '积累中' : m.qualityScore}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {m.lowSample ? `已${m.samples}次` : formatPercent(m.successRate)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">{formatLatency(m.avgLatencyMs)}</td>
+                    <td className="px-3 py-2.5 text-right">
+                      {price.officialPrice != null ? `¥${price.officialPrice}` : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {price.platformPrice != null ? (
+                        <span className={price.byokCheaper ? 'font-semibold text-red-500' : ''}>
+                          ¥{price.platformPrice}
+                          {price.byokCheaper && (
+                            <span className="ml-1 text-[10px]" title="官方价低于平台到手价，BYOK 更省">
+                              BYOK更省
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-[var(--muted)]">待校准</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-[var(--accent-2)]">
+                      {m.valueScore != null && !m.lowSample ? m.valueScore : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-[var(--muted)]">{m.samples}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -130,7 +154,8 @@ export default async function ModelsPage({
 
       <p className="text-[11px] text-[var(--faint)]">
         方法论：逐条报告按时间指数衰减（半衰期 30 天）× 来源权重（verified/benchmark=1 · 社区=0.5 · 在线=0.3）加权。
-        质量 = 0.7×成功率 + 0.3×格式率。性价比 = 质量 ÷ 官方价。样本 &lt; 5 标"积累中"、不参与排名。
+        质量 = 0.7×成功率 + 0.3×格式率。性价比 = 质量 ÷ 官方价，排名不使用平台到手价。
+        "我到手价"来自当前平台估算价；若高于官方价则红标 BYOK 更省，真实 margin 仍以上线校准为准。
       </p>
     </div>
   )

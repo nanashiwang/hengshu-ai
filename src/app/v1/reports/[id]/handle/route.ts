@@ -1,7 +1,9 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
-import { anonHash } from '@/lib/compat'
+import { syncNewApiQuotaToBalance } from '@/lib/newapiQuota'
+import { suppressUserCompatReports } from '@/lib/moderation'
+import { recordAuditEvent } from '@/lib/audit'
 
 // POST /v1/reports/{id}/handle  { action, note? } —— 审核员/管理员处置举报（封禁闭环）。
 // action: dismiss(驳回) | resolve(标记已解决) | ban_target(封禁责任用户) | hide_target(隐藏内容)
@@ -48,14 +50,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!ownerId) return Response.json({ error: '无法定位责任用户' }, { status: 400 })
       if (String(ownerId) === String(user.id)) return Response.json({ error: '不能封禁自己' }, { status: 400 })
       await payload.update({ collection: 'users', id: ownerId, data: { accountStatus: 'banned' }, overrideAccess: true })
-      // 追溯降权：抑制该用户历史 online 兼容报告(anonHash 匹配)，权重归 0 不再影响 LocalScore/榜(6e 残余收口)
+      await recordAuditEvent(payload, {
+        event: 'user_banned',
+        actorId: user.id as string,
+        targetUserId: String(ownerId),
+        targetType,
+        targetId,
+        summary: '举报处置封禁责任用户',
+        metadata: { reportId: id, action, note: body.note },
+        request,
+      })
+      syncNewApiQuotaToBalance(payload, String(ownerId)).catch((e) =>
+        payload.logger?.error(`封禁后网关配额归零失败: ${(e as Error).message}`),
+      )
+      // 追溯降权：抑制该用户历史 online + Runner 兼容报告，权重归 0 不再影响 LocalScore/榜。
       try {
-        await payload.update({
-          collection: 'compat-reports',
-          where: { and: [{ anonymousUserHash: { equals: anonHash(String(ownerId)) } }, { source: { equals: 'online' } }] },
-          data: { suppressed: true },
-          overrideAccess: true,
-        })
+        await suppressUserCompatReports(payload, String(ownerId))
       } catch (e) {
         payload.logger?.error(`抑制被封用户报告失败: ${(e as Error).message}`)
       }
@@ -76,6 +86,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       data: { status: newStatus, handledBy: user.id, detail: body.note ? `${(report as any).detail || ''}\n[处置] ${body.note}`.slice(0, 2000) : (report as any).detail },
       overrideAccess: true,
     })
+    if (action !== 'ban_target') {
+      await recordAuditEvent(payload, {
+        event: 'report_handled',
+        actorId: user.id as string,
+        targetType,
+        targetId,
+        summary: `举报处置：${action}`,
+        metadata: { reportId: id, action, status: newStatus, note: body.note },
+        request,
+      })
+    }
     return Response.json({ ok: true, status: newStatus })
   } catch (e) {
     payload.logger?.error(`处置举报失败: ${(e as Error).message}`)

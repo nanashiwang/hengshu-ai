@@ -28,6 +28,18 @@ export async function resolvePublishedSkill(payload: Payload, slug: string) {
   return { skill, version }
 }
 
+function refId(v: unknown): string | null {
+  if (!v) return null
+  if (typeof v === 'object' && 'id' in v) return String((v as { id?: unknown }).id || '') || null
+  return String(v)
+}
+
+export function installedRecordNeedsRunner(data: Record<string, unknown> = {}, originalDoc?: Record<string, unknown> | null): boolean {
+  const status = String((data.status ?? originalDoc?.status ?? 'installed') || 'installed')
+  const runner = data.runner !== undefined ? data.runner : originalDoc?.runner
+  return status === 'installed' && !refId(runner)
+}
+
 // 幂等 upsert 安装记录（唯一 user + skill + runner）
 export async function upsertInstall(
   payload: Payload,
@@ -35,17 +47,17 @@ export async function upsertInstall(
     userId: string
     skillId: string
     versionId?: string
-    runnerId?: string
+    runnerId: string
     version?: string
     checksum?: string
   },
 ) {
   const { userId, skillId, versionId, runnerId, version, checksum } = args
+  if (!runnerId) throw new Error('安装记录必须绑定 Runner')
   const now = new Date().toISOString()
   const where: any = {
-    and: [{ user: { equals: userId } }, { skill: { equals: skillId } }],
+    and: [{ user: { equals: userId } }, { skill: { equals: skillId } }, { runner: { equals: runnerId } }],
   }
-  if (runnerId) where.and.push({ runner: { equals: runnerId } })
 
   const existing = await payload.find({
     collection: 'skill-installs',
@@ -103,7 +115,7 @@ export async function findInstall(
   payload: Payload,
   userId: string,
   skillId: string,
-  runnerId?: string,
+  runnerId: string,
 ) {
   const where: any = { and: [{ user: { equals: userId } }, { skill: { equals: skillId } }] }
   if (runnerId) where.and.push({ runner: { equals: runnerId } })

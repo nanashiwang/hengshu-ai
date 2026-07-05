@@ -79,6 +79,7 @@ export interface Config {
     'contribution-logs': ContributionLog;
     'contribution-rules': ContributionRule;
     'credit-logs': CreditLog;
+    'recharge-codes': RechargeCode;
     favorites: Favorite;
     'runner-clients': RunnerClient;
     'device-codes': DeviceCode;
@@ -86,6 +87,7 @@ export interface Config {
     notifications: Notification;
     reviews: Review;
     reports: Report;
+    'audit-logs': AuditLog;
     media: Media;
     'model-price-snapshots': ModelPriceSnapshot;
     'score-snapshots': ScoreSnapshot;
@@ -108,6 +110,7 @@ export interface Config {
     'contribution-logs': ContributionLogsSelect<false> | ContributionLogsSelect<true>;
     'contribution-rules': ContributionRulesSelect<false> | ContributionRulesSelect<true>;
     'credit-logs': CreditLogsSelect<false> | CreditLogsSelect<true>;
+    'recharge-codes': RechargeCodesSelect<false> | RechargeCodesSelect<true>;
     favorites: FavoritesSelect<false> | FavoritesSelect<true>;
     'runner-clients': RunnerClientsSelect<false> | RunnerClientsSelect<true>;
     'device-codes': DeviceCodesSelect<false> | DeviceCodesSelect<true>;
@@ -115,6 +118,7 @@ export interface Config {
     notifications: NotificationsSelect<false> | NotificationsSelect<true>;
     reviews: ReviewsSelect<false> | ReviewsSelect<true>;
     reports: ReportsSelect<false> | ReportsSelect<true>;
+    'audit-logs': AuditLogsSelect<false> | AuditLogsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     'model-price-snapshots': ModelPriceSnapshotsSelect<false> | ModelPriceSnapshotsSelect<true>;
     'score-snapshots': ScoreSnapshotsSelect<false> | ScoreSnapshotsSelect<true>;
@@ -172,6 +176,7 @@ export interface Skill {
   title: string;
   slug?: string | null;
   description?: string | null;
+  clientSubmissionKey?: string | null;
   category?: (string | null) | Category;
   author?: (string | null) | User;
   /**
@@ -240,9 +245,10 @@ export interface User {
   bio?: string | null;
   invitedBy?: (string | null) | User;
   ipHash?: string | null;
+  deviceHash?: string | null;
   newapiUserId?: string | null;
   /**
-   * MVP 阶段服务端保存；生产需加密存储
+   * 服务端 AES-GCM 加密存储；旧明文数据读取时兼容，用户下次保存会自动加密
    */
   newapiKeyEncrypted?: string | null;
   updatedAt: string;
@@ -406,6 +412,7 @@ export interface SkillRun {
   totalTokens?: number | null;
   estimatedCost?: number | null;
   chargedAmount?: number | null;
+  chargedCredits?: number | null;
   /**
    * 相比默认premium模型省下的估算金额(省钱路由的累计价值)
    */
@@ -497,7 +504,12 @@ export interface RunnerClient {
   id: string;
   user: string | User;
   runnerId: string;
+  tokenHash?: string | null;
+  /**
+   * 旧版兼容字段；新令牌仅存 tokenHash，不再存明文
+   */
   token?: string | null;
+  tokenExpiresAt?: string | null;
   runnerVersion?: string | null;
   os?: string | null;
   arch?: string | null;
@@ -610,6 +622,30 @@ export interface CreditLog {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "recharge-codes".
+ */
+export interface RechargeCode {
+  id: string;
+  /**
+   * 仅展示前后缀，明文不会落库
+   */
+  codePreview?: string | null;
+  codeHash?: string | null;
+  /**
+   * 仅创建/重置时填写；保存后立即转 HMAC，不保留明文
+   */
+  code?: string | null;
+  creditAmount: number;
+  status: 'unused' | 'used' | 'disabled';
+  usedBy?: (string | null) | User;
+  usedAt?: string | null;
+  expiresAt?: string | null;
+  note?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "favorites".
  */
 export interface Favorite {
@@ -639,6 +675,7 @@ export interface DeviceCode {
     | number
     | boolean
     | null;
+  ipHash?: string | null;
   expiresAt?: string | null;
   updatedAt: string;
   createdAt: string;
@@ -668,7 +705,17 @@ export interface SkillInstall {
 export interface Notification {
   id: string;
   user: string | User;
-  type?: ('skill_favorited' | 'review' | 'bounty_accepted' | 'bounty_submitted' | 'bounty_completed' | 'system') | null;
+  type?:
+    | (
+        | 'skill_favorited'
+        | 'skill_updated'
+        | 'review'
+        | 'bounty_accepted'
+        | 'bounty_submitted'
+        | 'bounty_completed'
+        | 'system'
+      )
+    | null;
   title: string;
   body?: string | null;
   link?: string | null;
@@ -706,6 +753,31 @@ export interface Report {
   detail?: string | null;
   status?: ('open' | 'reviewing' | 'resolved' | 'dismissed') | null;
   handledBy?: (string | null) | User;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "audit-logs".
+ */
+export interface AuditLog {
+  id: string;
+  event: string;
+  actor?: (string | null) | User;
+  targetUser?: (string | null) | User;
+  targetType?: string | null;
+  targetId?: string | null;
+  ipHash?: string | null;
+  summary?: string | null;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -833,6 +905,10 @@ export interface PayloadLockedDocument {
         value: string | CreditLog;
       } | null)
     | ({
+        relationTo: 'recharge-codes';
+        value: string | RechargeCode;
+      } | null)
+    | ({
         relationTo: 'favorites';
         value: string | Favorite;
       } | null)
@@ -859,6 +935,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'reports';
         value: string | Report;
+      } | null)
+    | ({
+        relationTo: 'audit-logs';
+        value: string | AuditLog;
       } | null)
     | ({
         relationTo: 'media';
@@ -922,6 +1002,7 @@ export interface SkillsSelect<T extends boolean = true> {
   title?: T;
   slug?: T;
   description?: T;
+  clientSubmissionKey?: T;
   category?: T;
   author?: T;
   forkedFrom?: T;
@@ -1026,6 +1107,7 @@ export interface SkillRunsSelect<T extends boolean = true> {
   totalTokens?: T;
   estimatedCost?: T;
   chargedAmount?: T;
+  chargedCredits?: T;
   savedAmount?: T;
   latencyMs?: T;
   success?: T;
@@ -1100,6 +1182,7 @@ export interface UsersSelect<T extends boolean = true> {
   bio?: T;
   invitedBy?: T;
   ipHash?: T;
+  deviceHash?: T;
   newapiUserId?: T;
   newapiKeyEncrypted?: T;
   updatedAt?: T;
@@ -1179,6 +1262,23 @@ export interface CreditLogsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "recharge-codes_select".
+ */
+export interface RechargeCodesSelect<T extends boolean = true> {
+  codePreview?: T;
+  codeHash?: T;
+  code?: T;
+  creditAmount?: T;
+  status?: T;
+  usedBy?: T;
+  usedAt?: T;
+  expiresAt?: T;
+  note?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "favorites_select".
  */
 export interface FavoritesSelect<T extends boolean = true> {
@@ -1194,7 +1294,9 @@ export interface FavoritesSelect<T extends boolean = true> {
 export interface RunnerClientsSelect<T extends boolean = true> {
   user?: T;
   runnerId?: T;
+  tokenHash?: T;
   token?: T;
+  tokenExpiresAt?: T;
   runnerVersion?: T;
   os?: T;
   arch?: T;
@@ -1216,6 +1318,7 @@ export interface DeviceCodesSelect<T extends boolean = true> {
   user?: T;
   runnerClient?: T;
   meta?: T;
+  ipHash?: T;
   expiresAt?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1279,6 +1382,22 @@ export interface ReportsSelect<T extends boolean = true> {
   detail?: T;
   status?: T;
   handledBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "audit-logs_select".
+ */
+export interface AuditLogsSelect<T extends boolean = true> {
+  event?: T;
+  actor?: T;
+  targetUser?: T;
+  targetType?: T;
+  targetId?: T;
+  ipHash?: T;
+  summary?: T;
+  metadata?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1399,6 +1518,14 @@ export interface EconomySetting {
    * 接入 New API /api/log 自动回填前手动填；0 = 兑换池空、自动关闭兑换。1 分 = 1 credit
    */
   monthlyRealizedMarginCents?: number | null;
+  /**
+   * newapi=/api/log 真值；local=本平台 consume 流水估算；manual=手填占位，不允许开放兑换
+   */
+  marginSource?: ('manual' | 'newapi' | 'local') | null;
+  /**
+   * 由 worker:reconcile-newapi 写入；必须是本月对账，兑换开关才生效
+   */
+  marginReconciledAt?: string | null;
   pointsPerCredit?: number | null;
   minCreditPerTx?: number | null;
   perTxMaxCredit?: number | null;
@@ -1429,6 +1556,8 @@ export interface EconomySettingsSelect<T extends boolean = true> {
   freeCreditOnRegister?: T;
   alpha?: T;
   monthlyRealizedMarginCents?: T;
+  marginSource?: T;
+  marginReconciledAt?: T;
   pointsPerCredit?: T;
   minCreditPerTx?: T;
   perTxMaxCredit?: T;

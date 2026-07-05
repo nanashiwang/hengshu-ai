@@ -1,8 +1,9 @@
 import type { Payload } from 'payload'
-import { createHmac, createHash } from 'crypto'
+import { createHash } from 'crypto'
 import { rankDataDrivenRoute } from './route'
 import { canonicalString } from './canonical'
 import { signCanonical, getSigningKeyId } from './signing'
+import { hmacDigest } from './secrets'
 
 // 规模分档（避免回传精确长度）
 export function bucketSize(n: number): string {
@@ -16,17 +17,21 @@ export function bucketSize(n: number): string {
 
 // 匿名标识：HMAC(runnerId + 服务端 salt)，不可逆向到 user
 export function anonHash(runnerId: string): string {
-  return createHmac('sha256', process.env.PAYLOAD_SECRET || 'hengshu-salt')
-    .update(String(runnerId))
-    .digest('hex')
-    .slice(0, 32)
+  return hmacDigest(String(runnerId), 'anon', 32)
 }
 
 // ── 护城河第0层：活体数据聚合 ──
 // 近期数据主导（模型月更、旧样本会腐坏）：按时间指数衰减加权；样本稀疏则诚实标注、不用误导性百分比霸榜。
 const HALF_LIFE_DAYS = 30 // 半衰期：30 天前的报告权重减半
+export const COMPAT_LOOKBACK_DAYS = 180 // 聚合只读近 180 天，防旧数据腐坏/全量同步重算拖垮热路径
 const MIN_MODEL_SAMPLE = 5 // 单模型报告数 < 此值 → lowSample（前端显示"战绩积累中"而非百分比）
 const CONF_FULL_N = 10 // LocalScore 置信满额所需的有效(衰减)样本量；不足则按置信度衰减分数
+
+export function compatLookbackStartISO(now = new Date()): string {
+  const d = new Date(now)
+  d.setDate(d.getDate() - COMPAT_LOOKBACK_DAYS)
+  return d.toISOString()
+}
 
 function decayWeight(createdAt: unknown, nowMs: number): number {
   const t = createdAt ? new Date(createdAt as string).getTime() : NaN
@@ -42,20 +47,35 @@ function sourceWeight(source: unknown): number {
   return SOURCE_WEIGHT[String(source)] ?? 0.5
 }
 
+async function fetchRecentCompatReports(payload: Payload, skillId?: string): Promise<any[]> {
+  const and: any[] = [{ createdAt: { greater_than_equal: compatLookbackStartISO() } }]
+  if (skillId) and.unshift({ skill: { equals: skillId } })
+  const docs: any[] = []
+  let page = 1
+  for (;;) {
+    const res = await payload.find({
+      collection: 'compat-reports',
+      where: { and },
+      limit: 500,
+      page,
+      depth: 0,
+      overrideAccess: true,
+      sort: 'id',
+    })
+    docs.push(...(res.docs as any[]))
+    if (!res.hasNextPage) break
+    page++
+  }
+  return docs
+}
+
 // 由兼容报告聚合重算 Skill 的 LocalScore（0-100）并写回（衰减加权 × 来源权重 + 置信度衰减）
 export async function recomputeLocalScore(payload: Payload, skillId: string) {
   const prevSkill = (await payload
     .findByID({ collection: 'skills', id: skillId, depth: 0, overrideAccess: true })
     .catch(() => null)) as any
   const prevScore: number | null = prevSkill ? prevSkill.localScore ?? 0 : null
-  const res = await payload.find({
-    collection: 'compat-reports',
-    where: { skill: { equals: skillId } },
-    limit: 5000,
-    depth: 0,
-    overrideAccess: true,
-  })
-  const reports = res.docs as any[]
+  const reports = await fetchRecentCompatReports(payload, skillId)
   let localScore = 0
   if (reports.length > 0) {
     const now = Date.now()
@@ -180,16 +200,10 @@ export interface ModelCompat {
   lowSample: boolean // 样本不足：前端应显示"战绩积累中"而非百分比
 }
 export async function aggregateByModel(payload: Payload, skillId: string): Promise<ModelCompat[]> {
-  const res = await payload.find({
-    collection: 'compat-reports',
-    where: { skill: { equals: skillId } },
-    limit: 5000,
-    depth: 0,
-    overrideAccess: true,
-  })
+  const reports = await fetchRecentCompatReports(payload, skillId)
   const now = Date.now()
   const byModel = new Map<string, any[]>()
-  for (const r of res.docs as any[]) {
+  for (const r of reports) {
     const m = r.modelName || 'unknown'
     if (!byModel.has(m)) byModel.set(m, [])
     byModel.get(m)!.push(r)
@@ -238,33 +252,20 @@ export async function aggregateModelsGlobal(payload: Payload): Promise<GlobalMod
     string,
     { wSum: number; wSuccess: number; wFormat: number; wLat: number; wLatSum: number; n: number }
   >()
-  let page = 1
-  for (;;) {
-    const res = await payload.find({
-      collection: 'compat-reports',
-      limit: 500,
-      page,
-      depth: 0,
-      overrideAccess: true,
-      sort: 'id',
-    })
-    for (const r of res.docs as any[]) {
-      const m = r.modelName
-      if (!m) continue
-      const a = byModel.get(m) || { wSum: 0, wSuccess: 0, wFormat: 0, wLat: 0, wLatSum: 0, n: 0 }
-      const w = r.suppressed ? 0 : decayWeight(r.createdAt, now) * sourceWeight(r.source)
-      a.wSum += w
-      if (r.success) a.wSuccess += w
-      if (r.formatValid) a.wFormat += w
-      if (typeof r.latencyMs === 'number') {
-        a.wLat += w * r.latencyMs
-        a.wLatSum += w
-      }
-      a.n++
-      byModel.set(m, a)
+  for (const r of await fetchRecentCompatReports(payload)) {
+    const m = r.modelName
+    if (!m) continue
+    const a = byModel.get(m) || { wSum: 0, wSuccess: 0, wFormat: 0, wLat: 0, wLatSum: 0, n: 0 }
+    const w = r.suppressed ? 0 : decayWeight(r.createdAt, now) * sourceWeight(r.source)
+    a.wSum += w
+    if (r.success) a.wSuccess += w
+    if (r.formatValid) a.wFormat += w
+    if (typeof r.latencyMs === 'number') {
+      a.wLat += w * r.latencyMs
+      a.wLatSum += w
     }
-    if (!res.hasNextPage) break
-    page++
+    a.n++
+    byModel.set(m, a)
   }
   const out: GlobalModelStat[] = []
   for (const [model, a] of byModel) {

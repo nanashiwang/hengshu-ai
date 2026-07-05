@@ -1,5 +1,6 @@
 import type { Payload, PayloadRequest } from 'payload'
 import type { ContributionAction } from './constants'
+import { acquireUserLedgerLock } from './dbLocks'
 
 // 结算类行为：金额由调用方权威给定（冻结 -frozenPoints / 发奖 +frozen / 退款 +frozen），
 // 必须绕过规则表——否则管理员一旦为这些 action 建规，basePoints 会覆盖金额甚至反转符号（造成双花/凭空造分），
@@ -37,12 +38,28 @@ export async function awardContribution(
 ): Promise<void> {
   const { userId, actionType, actorId, req } = args
   if (!userId) return
-  const tx = req ? { req } : {}
   const isSettlement = SETTLEMENT_ACTIONS.has(actionType)
 
-  // ── 阶段一：确定金额与门槛（结算类绕过规则表）──
-  let points: number | undefined
+  // 账本读写必须同一用户串行，避免余额/术值 read-modify-write 丢更新。
+  let ownTxId: number | string | undefined
+  let writeReq = req
+  if (!req?.transactionID) {
+    ownTxId = (await payload.db.beginTransaction?.()) || undefined
+    if (ownTxId) writeReq = { ...(req || {}), transactionID: ownTxId }
+  }
+  const tx = writeReq ? { req: writeReq } : {}
+
+  const commitOwnTx = async () => {
+    if (ownTxId) await payload.db.commitTransaction(ownTxId)
+  }
+
   try {
+    const txId = writeReq?.transactionID ? await writeReq.transactionID : undefined
+    if (txId) {
+      await acquireUserLedgerLock(payload, txId, 'contribution', userId)
+    }
+
+    // ── 阶段一：确定金额与门槛（结算类绕过规则表）──
     // 幂等：一次性奖励去重（命中则不再发放；唯一索引为并发/重放硬后备）
     if (args.idempotencyKey) {
       const dup = await payload.count({
@@ -51,8 +68,12 @@ export async function awardContribution(
         overrideAccess: true,
         ...tx,
       })
-      if (dup.totalDocs > 0) return
+      if (dup.totalDocs > 0) {
+        await commitOwnTx()
+        return
+      }
     }
+    let points: number | undefined
     if (isSettlement) {
       points = args.points
     } else {
@@ -65,11 +86,20 @@ export async function awardContribution(
       })
       const rule = ruleRes.docs[0] as any
 
-      if (rule && rule.enabled === false) return
-      if (rule?.selfActionExcluded && actorId && actorId === userId) return
+      if (rule && rule.enabled === false) {
+        await commitOwnTx()
+        return
+      }
+      if (rule?.selfActionExcluded && actorId && actorId === userId) {
+        await commitOwnTx()
+        return
+      }
 
       points = rule ? rule.basePoints : args.points
-      if (!points) return
+      if (!points) {
+        await commitOwnTx()
+        return
+      }
 
       if (rule?.dailyLimit && rule.dailyLimit > 0) {
         const start = new Date()
@@ -86,47 +116,36 @@ export async function awardContribution(
           overrideAccess: true,
           ...tx,
         })
-        if (todays.totalDocs >= rule.dailyLimit) return
+        if (todays.totalDocs >= rule.dailyLimit) {
+          await commitOwnTx()
+          return
+        }
       }
     }
-  } catch (e) {
-    if (args.throwOnError) throw e
-    payload.logger?.error(`awardContribution 规则判定失败: ${(e as Error).message}`)
-    return
-  }
-  if (!points) return
+    if (!points) {
+      await commitOwnTx()
+      return
+    }
 
-  // ── 阶段二：原子写入 update+create（无外部 req 时自开事务，防"改了分没记流水"破坏不变量）──
-  let ownTxId: number | string | undefined
-  let writeReq = req
-  if (!req) {
-    ownTxId = (await payload.db.beginTransaction?.()) || undefined
-    if (ownTxId) writeReq = { transactionID: ownTxId }
-  }
-  const wtx = writeReq ? { req: writeReq } : {}
-
-  try {
+    // ── 阶段二：原子写入 update+create（防"改了分没记流水"破坏不变量）──
     const user = await payload.findByID({
       collection: 'users',
       id: userId,
       overrideAccess: true,
       depth: 0,
-      ...wtx,
+      ...tx,
     })
     const newScore = (user.contributionScore || 0) + points
     // 防透支：术值余额不可为负（与 applyCredit 对称的纵深防御；结算类扣分若超额则回滚）
     if (newScore < 0) {
-      if (ownTxId) await payload.db.rollbackTransaction(ownTxId)
-      if (args.throwOnError) throw new Error('术值余额不足')
-      payload.logger?.error(`awardContribution 拒绝：术值不足 user=${userId} 需 ${-points}`)
-      return
+      throw new Error(`术值余额不足，需 ${-points}`)
     }
     await payload.update({
       collection: 'users',
       id: userId,
       data: { contributionScore: newScore },
       overrideAccess: true,
-      ...wtx,
+      ...tx,
     })
     await payload.create({
       collection: 'contribution-logs',
@@ -141,9 +160,9 @@ export async function awardContribution(
         description: args.description,
       },
       overrideAccess: true,
-      ...wtx,
+      ...tx,
     })
-    if (ownTxId) await payload.db.commitTransaction(ownTxId)
+    await commitOwnTx()
   } catch (e) {
     // 自开事务：回滚，避免“状态已改、术值未发”或“改了分没记流水”的不一致
     if (ownTxId) await payload.db.rollbackTransaction(ownTxId)

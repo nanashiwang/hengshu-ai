@@ -1,5 +1,7 @@
 import type { CollectionConfig } from 'payload'
+import { APIError } from 'payload'
 import { isAdmin, ownerOrAdmin } from '@/access'
+import { installedRecordNeedsRunner } from '@/lib/installs'
 import { rowActionsField } from './fields/rowActions'
 
 // 安装记录（≠下载）。一台 Runner 装某 Skill 一条；是「安装/有效安装/活跃安装」指标的来源。
@@ -40,4 +42,14 @@ export const SkillInstalls: CollectionConfig = {
     { name: 'installedAt', type: 'date', label: '安装时间' },
     { name: 'lastUsedAt', type: 'date', label: '最近使用' },
   ],
+  hooks: {
+    beforeValidate: [
+      ({ data, originalDoc }) => {
+        if (installedRecordNeedsRunner(data as any, originalDoc as any)) {
+          throw new APIError('已安装状态必须绑定 Runner；撤销 Runner 时请删除安装记录或先标记为已移除', 400)
+        }
+        return data
+      },
+    ],
+  },
 }

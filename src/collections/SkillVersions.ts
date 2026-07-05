@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
-import { isCreatorOrAbove, ownSkillVersionOrStaff, isAdmin } from '@/access'
+import { isCreatorOrAbove, ownSkillVersionOrStaff, readableSkillVersion, isAdmin } from '@/access'
 import { rowActionsField } from './fields/rowActions'
 
 export const SkillVersions: CollectionConfig = {
@@ -12,7 +12,7 @@ export const SkillVersions: CollectionConfig = {
     group: 'Skill 内容',
   },
   access: {
-    read: () => true,
+    read: readableSkillVersion,
     create: isCreatorOrAbove,
     update: ownSkillVersionOrStaff, // 修复越权：仅所属 Skill 作者/审核/管理可改
     delete: isAdmin,

@@ -17,11 +17,12 @@ export default function RegisterPage() {
     setLoading(true)
     setError(null)
     try {
+      const deviceId = getOrCreateDeviceId()
       // 1. 邀请码注册
       const res = await fetch('/v1/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, deviceId }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || data.ok === false) {
@@ -71,6 +72,22 @@ export default function RegisterPage() {
       </form>
     </div>
   )
+}
+
+function getOrCreateDeviceId(): string {
+  const key = 'hs_device_id'
+  try {
+    const existing = window.localStorage.getItem(key)
+    if (existing) return existing
+    const id =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+    window.localStorage.setItem(key, id)
+    return id
+  } catch {
+    return ''
+  }
 }
 
 function Field({

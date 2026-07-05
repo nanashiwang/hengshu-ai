@@ -20,6 +20,8 @@ export interface EconomyConfig {
   freeCreditOnRegister: number
   alpha: number
   monthlyRealizedMarginCents: number
+  marginSource: 'manual' | 'newapi' | 'local'
+  marginReconciledAt?: string
   pointsPerCredit: number
   minCreditPerTx: number
   perTxMaxCredit: number
@@ -32,6 +34,8 @@ const DEFAULTS: EconomyConfig = {
   freeCreditOnRegister: 0,
   alpha: 0.3,
   monthlyRealizedMarginCents: 0,
+  marginSource: 'manual',
+  marginReconciledAt: undefined,
   pointsPerCredit: 10,
   minCreditPerTx: 10,
   perTxMaxCredit: 500,
@@ -39,12 +43,30 @@ const DEFAULTS: EconomyConfig = {
   perUserMonthlyMaxCredit: 5000,
 }
 
+function localMarginAllowed(): boolean {
+  return process.env.NEWAPI_USAGE_SOURCE === 'local' && process.env.ALLOW_LOCAL_MARGIN_EXCHANGE === '1'
+}
+
+function isFreshReconcileTime(value?: string): boolean {
+  if (!value) return false
+  const reconciledAt = new Date(value)
+  if (!Number.isFinite(reconciledAt.getTime())) return false
+  const nowWithSkew = Date.now() + 5 * 60 * 1000
+  return reconciledAt >= new Date(monthStartISO()) && reconciledAt.getTime() <= nowWithSkew
+}
+
 export async function getEconomyConfig(payload: Payload): Promise<EconomyConfig> {
   const g = (await payload.findGlobal({ slug: 'economy-settings' }).catch(() => null)) as any
   if (!g) return { ...DEFAULTS }
   const num = (v: any, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d)
+  const marginSource = ['newapi', 'local', 'manual'].includes(g.marginSource) ? g.marginSource : 'manual'
+  const marginReconciledAt = typeof g.marginReconciledAt === 'string' ? g.marginReconciledAt : undefined
+  // local 只是本平台 consume 流水估算，不是 New API /api/log 真值；必须显式确认才允许开兑换。
+  const trustedMarginSource = marginSource === 'newapi' || (marginSource === 'local' && localMarginAllowed())
+  const freshMargin = trustedMarginSource && isFreshReconcileTime(marginReconciledAt)
   return {
-    exchangeEnabled: !!g.exchangeEnabled,
+    // 保命红线：管理员手填毛利/旧月份毛利不能让兑换开关生效；必须由 worker 本月对账写入。
+    exchangeEnabled: !!g.exchangeEnabled && freshMargin,
     // 赠送额度加硬上限（防管理员误设 99999 配合批量注册放血）：不超过单次兑换上限
     freeCreditOnRegister: Math.min(
       Math.max(1, num(g.perTxMaxCredit, DEFAULTS.perTxMaxCredit)),
@@ -52,6 +74,8 @@ export async function getEconomyConfig(payload: Payload): Promise<EconomyConfig>
     ),
     alpha: Math.min(1, Math.max(0, num(g.alpha, DEFAULTS.alpha))), // clamp[0,1]：防巨大 α 架空"永不亏 margin"红线
     monthlyRealizedMarginCents: Math.max(0, num(g.monthlyRealizedMarginCents, 0)),
+    marginSource: marginSource as 'manual' | 'newapi' | 'local',
+    marginReconciledAt,
     pointsPerCredit: Math.max(1, num(g.pointsPerCredit, DEFAULTS.pointsPerCredit)),
     minCreditPerTx: Math.max(1, num(g.minCreditPerTx, DEFAULTS.minCreditPerTx)),
     perTxMaxCredit: Math.max(1, num(g.perTxMaxCredit, DEFAULTS.perTxMaxCredit)),

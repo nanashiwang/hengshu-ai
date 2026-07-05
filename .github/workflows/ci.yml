@@ -16,9 +16,40 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Lint guardrails
+        run: npm run lint
       - name: Typecheck
         run: npm run typecheck
       - name: Test
         run: npm test
-# 说明：typecheck + 单测无需 DB/密钥，确定性绿。
-# build/lint 依赖 DATABASE_URL/PAYLOAD_SECRET 等运行期 env，待配置 CI secrets 后再加 job，避免长期红灯。
+
+  build:
+    name: production build
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: payload
+          POSTGRES_PASSWORD: payload
+          POSTGRES_DB: skillhub
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U payload -d skillhub"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://payload:payload@localhost:5432/skillhub
+      PAYLOAD_SECRET: ci-secret-32-bytes-long-enough
+      NEXT_PUBLIC_SERVER_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build

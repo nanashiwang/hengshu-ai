@@ -44,7 +44,7 @@ Cookie: payload-token=...
         <h2 className="text-lg font-semibold">模型网关联动</h2>
         <p className="text-sm text-[var(--muted)]">
           衡术通过 OpenAI 兼容接口调用模型网关（<code>MODEL_GATEWAY_BASE_URL</code> /{' '}
-          <code>MODEL_GATEWAY_KEY</code>）。未配置时运行会返回带 <code>MOCK</code> 标记的模拟输出，便于先行体验。
+          <code>MODEL_GATEWAY_KEY</code>）。开发环境未配置时会返回带 <code>MOCK</code> 标记的模拟输出；生产环境缺网关会直接拒绝运行。
         </p>
       </section>
 

@@ -4,7 +4,7 @@ import type { PayloadRequest } from 'payload'
 import { headers as nextHeaders } from 'next/headers'
 import { awardContribution } from '@/lib/contribution'
 import { applyCredit } from '@/lib/credit'
-import { getNewApiAdmin } from '@/lib/newapiAdmin'
+import { syncNewApiQuotaToBalance } from '@/lib/newapiQuota'
 import {
   getEconomyConfig,
   exchangePoolRemaining,
@@ -13,6 +13,8 @@ import {
   dayStartISO,
   monthStartISO,
 } from '@/lib/economy'
+import { recordAuditEvent } from '@/lib/audit'
+import { normalizeExternalIdempotencyKey, scopedIdempotencyKey } from '@/lib/idempotency'
 
 // GET /v1/economy/exchange —— 兑换状态（前台 UI 用，隐藏原始毛利）
 export async function GET() {
@@ -61,12 +63,12 @@ export async function POST(request: Request) {
     /* 容忍空 body */
   }
   const credit = Math.floor(Number(body.credit))
-  const idempotencyKey: string | undefined =
-    typeof body.idempotencyKey === 'string' && body.idempotencyKey ? body.idempotencyKey.slice(0, 80) : undefined
+  const externalIdempotencyKey = normalizeExternalIdempotencyKey(body.idempotencyKey)
+  const idempotencyKey = scopedIdempotencyKey('exchange', uid, externalIdempotencyKey)
 
   // 碰钱写操作强制幂等键：缺失则拒（防网络重试/双击产生两笔真实兑换，绕过全部去重）
   if (!idempotencyKey) {
-    return Response.json({ error: '缺少幂等键 idempotencyKey' }, { status: 400 })
+    return Response.json({ error: '缺少或无效的幂等键 idempotencyKey' }, { status: 400 })
   }
   if (!Number.isFinite(credit) || credit <= 0) {
     return Response.json({ error: '请填写有效的兑换 credit 数' }, { status: 400 })
@@ -153,10 +155,20 @@ export async function POST(request: Request) {
 
     await payload.db.commitTransaction(transactionID)
 
-    // 提交后尽力同步网关子令牌配额（stub 模式为 no-op；失败不影响权威账本，靠对账补偿）
-    getNewApiAdmin()
-      .adjustQuota(uid, credit)
-      .catch((e) => payload.logger?.error(`兑换后网关配额同步失败: ${(e as Error).message}`))
+    // 提交后尽力同步网关子令牌绝对配额（权威账本在本平台；失败不影响账本，靠对账补偿）
+    syncNewApiQuotaToBalance(payload, uid).catch((e) =>
+      payload.logger?.error(`兑换后网关配额同步失败: ${(e as Error).message}`),
+    )
+    await recordAuditEvent(payload, {
+      event: 'points_exchanged',
+      actorId: uid,
+      targetUserId: uid,
+      targetType: 'credit-log',
+      targetId: idempotencyKey,
+      summary: `术值兑换 ${credit} credit`,
+      metadata: { creditGranted: credit, pointsSpent: pointsCost },
+      request,
+    })
 
     return Response.json({
       ok: true,

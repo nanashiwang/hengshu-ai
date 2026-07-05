@@ -8,6 +8,7 @@ import { Pagination } from '@/components/Pagination'
 import { CopyButton } from '@/components/CopyButton'
 import { RerunButton } from '@/components/console/RerunButton'
 import { MarkNotificationsRead } from '@/components/console/MarkNotificationsRead'
+import { RevokeRunnerButton } from '@/components/console/RevokeRunnerButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -124,11 +125,15 @@ export default async function ConsoleSection({
       ) : (
         <ul className="divide-y divide-[var(--border)] text-sm">
           {(runners.docs as any[]).map((r) => (
-            <li key={r.id} className="flex items-center justify-between py-2">
-              <span className="font-mono text-xs">{String(r.runnerId).slice(0, 13)}…</span>
-              <span className="text-xs text-[var(--muted)]">
-                {r.os}/{r.arch} · {r.trustedLevel} · {timeAgo(r.lastSeenAt)}
+            <li key={r.id} className="flex items-center justify-between gap-3 py-2">
+              <span className="min-w-0">
+                <span className="block truncate font-mono text-xs">{String(r.runnerId).slice(0, 13)}…</span>
+                <span className="text-xs text-[var(--muted)]">
+                  {r.label ? `${r.label} · ` : ''}
+                  {r.os}/{r.arch} · {r.trustedLevel} · {timeAgo(r.lastSeenAt)}
+                </span>
               </span>
+              <RevokeRunnerButton runnerId={r.id} label={r.label || String(r.runnerId).slice(0, 8)} />
             </li>
           ))}
         </ul>
@@ -208,6 +213,7 @@ export default async function ConsoleSection({
                       <span>模型 {r.model}</span>
                       <span>路由 {r.routeMode || '—'}</span>
                       <span>成本 {formatCost(r.estimatedCost)}</span>
+                      {r.chargedCredits > 0 && <span>实扣 {r.chargedCredits} credit</span>}
                       {r.savedAmount > 0 && <span className="text-[var(--accent-2)]">省 {formatCost(r.savedAmount)}</span>}
                       {r.errorCode && <span className="text-[var(--danger)]">错误 {r.errorCode}</span>}
                     </div>

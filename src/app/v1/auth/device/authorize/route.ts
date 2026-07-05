@@ -1,13 +1,15 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
-import { newRunnerId, randomToken } from '@/lib/runnerAuth'
+import { newRunnerId, randomToken, runnerTokenExpiresAt, runnerTokenHash } from '@/lib/runnerAuth'
+import { metaWithPendingAccessToken } from '@/lib/deviceAuth'
 
 // POST /v1/auth/device/authorize —— 已登录用户在 /device 页授权某个设备码
 export async function POST(request: Request) {
   const payload = await getPayload({ config })
   const { user } = await payload.auth({ headers: await nextHeaders() })
   if (!user) return Response.json({ error: '请先登录' }, { status: 401 })
+  if ((user as any).accountStatus === 'banned') return Response.json({ error: '账号已被封禁' }, { status: 403 })
 
   let body: any = {}
   try {
@@ -31,15 +33,30 @@ export async function POST(request: Request) {
     return Response.json({ error: '设备码已过期' }, { status: 400 })
   }
 
-  // 创建 Runner 实例（带访问令牌）并标记设备码已授权
   const meta = (code.meta || {}) as any
+  if (!body.confirm) {
+    return Response.json({
+      requiresConfirmation: true,
+      device: {
+        runnerVersion: meta.runnerVersion || null,
+        os: meta.os || null,
+        arch: meta.arch || null,
+        label: meta.label || null,
+        expiresAt: code.expiresAt || null,
+      },
+    })
+  }
+
+  // 创建 Runner 实例：只落令牌哈希；原始令牌短暂放在 device-code.meta，Runner 轮询后即消费
+  const runnerToken = randomToken(48)
   const runner = await payload.create({
     collection: 'runner-clients',
     overrideAccess: true,
     data: {
       user: user.id,
       runnerId: newRunnerId(),
-      token: randomToken(48),
+      tokenHash: runnerTokenHash(runnerToken),
+      tokenExpiresAt: runnerTokenExpiresAt(),
       runnerVersion: meta.runnerVersion,
       os: meta.os,
       arch: meta.arch,
@@ -50,7 +67,7 @@ export async function POST(request: Request) {
     collection: 'device-codes',
     id: code.id,
     overrideAccess: true,
-    data: { status: 'authorized', user: user.id, runnerClient: runner.id },
+    data: { status: 'authorized', user: user.id, runnerClient: runner.id, meta: metaWithPendingAccessToken(meta, runnerToken) },
   })
 
   return Response.json({ ok: true })

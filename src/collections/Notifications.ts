@@ -27,6 +27,7 @@ export const Notifications: CollectionConfig = {
       defaultValue: 'system',
       options: [
         { label: '被收藏', value: 'skill_favorited' },
+        { label: 'Skill 更新', value: 'skill_updated' },
         { label: '新评价', value: 'review' },
         { label: '悬赏被接单', value: 'bounty_accepted' },
         { label: '悬赏已提交', value: 'bounty_submitted' },
