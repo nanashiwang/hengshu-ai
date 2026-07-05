@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -16,15 +16,15 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/users/login', {
+      const res = await fetch('/v1/auth/login', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(data?.errors?.[0]?.message || data?.message || '登录失败')
+        setError(data?.error || data?.errors?.[0]?.message || data?.message || '登录失败')
         return
       }
       router.push('/console')
@@ -50,7 +50,7 @@ export default function LoginPage() {
         className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--panel)] p-6"
       >
         {error && <div className="text-sm text-[var(--danger)]">{error}</div>}
-        <Field label="邮箱" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />
+        <Field label="邮箱 / 用户名" type="text" value={identifier} onChange={setIdentifier} placeholder="you@example.com 或用户名" />
         <Field label="密码" type="password" value={password} onChange={setPassword} placeholder="••••••••" />
         <button
           disabled={loading}
