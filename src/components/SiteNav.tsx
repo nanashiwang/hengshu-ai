@@ -15,7 +15,9 @@ const NAV = [
   { href: '/docs', label: '文档' },
 ]
 
-export async function SiteNav() {
+type ThemeMode = 'light' | 'dark'
+
+export async function SiteNav({ initialTheme = 'dark' }: { initialTheme?: ThemeMode }) {
   const user = await getCurrentUser()
   const u = user as any
   let unread = 0
@@ -59,7 +61,7 @@ export async function SiteNav() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2 text-sm">
-          <ThemeToggle />
+          <ThemeToggle initialTheme={initialTheme} />
           {u ? (
             <>
               <span

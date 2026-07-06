@@ -1,4 +1,5 @@
 import React from 'react'
+import { cookies } from 'next/headers'
 import './globals.css'
 import { SiteNav } from '@/components/SiteNav'
 
@@ -8,17 +9,29 @@ export const metadata = {
     '发现、运行、安装、评测和复用高质量 AI 技能，并通过贡献值机制获得更高权限和资源。',
 }
 
-// 在 React 注水前设置主题，并用原生事件接管右上角切换，避免前端 hydration 异常时按钮失效。
-const themeInitScript = `(function(){function clean(t){return t==='light'||t==='dark'?t:'dark'}function label(t){return t==='dark'?'切换到浅色主题':'切换到深色主题'}function icon(t){return t==='dark'?'☀':'☾'}function apply(t,save){t=clean(t);document.documentElement.setAttribute('data-theme',t);if(save){try{localStorage.setItem('skillhub-theme',t)}catch(e){}}document.querySelectorAll('[data-theme-toggle]').forEach(function(btn){btn.setAttribute('aria-label',label(t));btn.setAttribute('title',label(t));var i=btn.querySelector('[data-theme-icon]');if(i)i.textContent=icon(t)})}try{apply(localStorage.getItem('skillhub-theme')||'dark',false)}catch(e){apply('dark',false)}function bind(){apply(document.documentElement.getAttribute('data-theme')||'dark',false);document.addEventListener('click',function(e){var btn=e.target&&e.target.closest?e.target.closest('[data-theme-toggle]'):null;if(!btn)return;var cur=clean(document.documentElement.getAttribute('data-theme'));apply(cur==='dark'?'light':'dark',true)})}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',bind,{once:true})}else{bind()}})();`
+type ThemeMode = 'light' | 'dark'
 
-export default function FrontendLayout({ children }: { children: React.ReactNode }) {
+const THEME_KEY = 'skillhub-theme'
+
+function normalizeTheme(value?: string | null): ThemeMode {
+  return value === 'light' ? 'light' : 'dark'
+}
+
+// 在 React 注水前设置主题；同时写 cookie，让刷新时服务端也能直接渲染用户选择。
+function createThemeInitScript(initialTheme: ThemeMode) {
+  return `(function(){var KEY=${JSON.stringify(THEME_KEY)};var FALLBACK=${JSON.stringify(initialTheme)};function clean(t){return t==='light'||t==='dark'?t:null}function mode(t){return clean(t)||'dark'}function label(t){return t==='dark'?'切换到浅色主题':'切换到深色主题'}function icon(t){return t==='dark'?'☀':'☾'}function readCookie(){try{var m=document.cookie.match(new RegExp('(?:^|; )'+KEY+'=(light|dark)(?:;|$)'));return m?m[1]:null}catch(e){return null}}function persist(t){t=mode(t);try{localStorage.setItem(KEY,t)}catch(e){}try{document.cookie=KEY+'='+t+'; Path=/; Max-Age=31536000; SameSite=Lax'}catch(e){}}function pick(){var ls=null;try{ls=clean(localStorage.getItem(KEY))}catch(e){}var ck=clean(readCookie());var t=mode(ls||ck||FALLBACK);if(ls!==ck)persist(t);return t}function apply(t,save){t=mode(t);document.documentElement.setAttribute('data-theme',t);if(save)persist(t);document.querySelectorAll('[data-theme-toggle]').forEach(function(btn){btn.setAttribute('aria-label',label(t));btn.setAttribute('title',label(t));var i=btn.querySelector('[data-theme-icon]');if(i)i.textContent=icon(t)})}apply(pick(),false);function bind(){apply(document.documentElement.getAttribute('data-theme'),false);document.addEventListener('click',function(e){var target=e.target;var btn=target&&target.closest?target.closest('[data-theme-toggle]'):null;if(!btn)return;var cur=mode(document.documentElement.getAttribute('data-theme'));apply(cur==='dark'?'light':'dark',true)})}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',bind,{once:true})}else{bind()}})();`
+}
+
+export default async function FrontendLayout({ children }: { children: React.ReactNode }) {
+  const initialTheme = normalizeTheme((await cookies()).get(THEME_KEY)?.value)
+
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html lang="zh-CN" data-theme={initialTheme} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <script dangerouslySetInnerHTML={{ __html: createThemeInitScript(initialTheme) }} />
       </head>
       <body className="flex min-h-screen flex-col">
-        <SiteNav />
+        <SiteNav initialTheme={initialTheme} />
         <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-8 sm:px-6 lg:px-8">{children}</main>
         <footer className="border-t border-[var(--border)]">
           <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-2 px-4 py-8 text-xs text-[var(--faint)] sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
