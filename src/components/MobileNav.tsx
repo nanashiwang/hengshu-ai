@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
+import { NavLink } from './NavLink'
 
 interface NavItem {
   href: string
@@ -34,14 +34,13 @@ export function MobileNav({ items }: { items: NavItem[] }) {
           <div className="absolute left-0 right-0 top-full z-30 border-b border-[var(--border)] bg-[var(--bg-elev)] px-4 py-2 shadow-lg">
             <nav className="flex flex-col">
               {items.map((n) => (
-                <Link
+                <NavLink
                   key={n.href}
                   href={n.href}
+                  label={n.label}
+                  variant="mobile"
                   onClick={() => setOpen(false)}
-                  className="rounded-lg px-3 py-2.5 text-sm text-[var(--muted)] transition-colors hover:bg-[var(--panel-2)] hover:text-[var(--text)]"
-                >
-                  {n.label}
-                </Link>
+                />
               ))}
             </nav>
           </div>

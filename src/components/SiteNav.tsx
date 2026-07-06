@@ -4,6 +4,7 @@ import { getPayloadClient } from '@/lib/payload'
 import { formatNumber } from '@/lib/format'
 import { ThemeToggle } from './ThemeToggle'
 import { MobileNav } from './MobileNav'
+import { NavLink } from './NavLink'
 
 const NAV = [
   { href: '/skills', label: 'Skill 市场' },
@@ -50,13 +51,7 @@ export async function SiteNav({ initialTheme = 'dark' }: { initialTheme?: ThemeM
 
         <nav className="hidden items-center gap-1 text-sm sm:flex">
           {NAV.map((n) => (
-            <Link
-              key={n.href}
-              href={n.href}
-              className="rounded-lg px-3 py-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--panel-2)] hover:text-[var(--text)]"
-            >
-              {n.label}
-            </Link>
+            <NavLink key={n.href} href={n.href} label={n.label} />
           ))}
         </nav>
 
