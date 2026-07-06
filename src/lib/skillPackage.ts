@@ -355,7 +355,7 @@ export async function reviewSkillPackage(args: {
   try {
     const result = await chatCompletion({
       model: process.env.SKILL_REVIEW_MODEL || process.env.MODEL_GATEWAY_DEFAULT_MODEL || 'deepseek-chat',
-      gateway: { baseUrl, apiKey },
+      apiKey,
       temperature: 0,
       maxTokens: 700,
       messages: [
