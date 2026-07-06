@@ -116,10 +116,11 @@ describe('skill package analysis', () => {
     expect(analysis.issues.some((i) => i.code === 'SECRET_FILE_INCLUDED' && i.level === 'blocker')).toBe(true)
   })
 
-  it('requires hengshu.skill.yaml', () => {
+  it('allows packages without hengshu.skill.yaml but records a warning', () => {
     const pkg = zipStore({ 'README.md': '# only readme' })
     const analysis = analyzeSkillPackage('skill.zip', pkg)
-    expect(analysis.issues.some((i) => i.code === 'MANIFEST_MISSING' && i.level === 'blocker')).toBe(true)
+    expect(analysis.issues.some((i) => i.code === 'MANIFEST_MISSING' && i.level === 'warning')).toBe(true)
+    expect(analysis.issues.some((i) => i.level === 'blocker')).toBe(false)
   })
 
   it('uses the compliance-review skill prompt for package review context', () => {

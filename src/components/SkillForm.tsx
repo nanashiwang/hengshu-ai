@@ -135,9 +135,9 @@ export function SkillForm({ categories }: { categories: Category[] }) {
       <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 text-xs text-[var(--muted)]">
         <p className="mb-2 font-medium text-[var(--text)]">Skill 包要求</p>
         <ul className="list-disc space-y-1 pl-5">
-          <li>上传 .zip / .tar.gz / .tgz，包内必须包含 <code>hengshu.skill.yaml</code>。</li>
-          <li>AI 会审核用途、README、manifest、权限声明、风险文件和是否诱导收集敏感信息。</li>
-          <li>低风险 Prompt / 结构化 Skill 会自动上架；含网络、文件、Shell、脚本或不确定风险时转人工审核。</li>
+          <li>上传 .zip / .tar.gz / .tgz；建议包含 README，便于 AI 理解用途。</li>
+          <li><code>hengshu.skill.yaml</code> 是可选标准 manifest；提供后可获得更好的在线运行表单和本地安装体验。</li>
+          <li>低风险 Skill 会自动上架；含网络、文件、Shell、脚本或不确定风险时转人工审核。</li>
         </ul>
       </div>
 
@@ -174,7 +174,7 @@ export function SkillForm({ categories }: { categories: Category[] }) {
 
       <div>
         <label className={labelCls}>Skill 压缩包 *</label>
-        <p className={hintCls}>包内入口文件必须命名为 hengshu.skill.yaml / hengshu.skill.yml。</p>
+        <p className={hintCls}>无需强制 manifest；若有标准入口，请命名为 hengshu.skill.yaml / hengshu.skill.yml。</p>
         <input
           type="file"
           accept=".zip,.tar.gz,.tgz,application/zip,application/gzip"

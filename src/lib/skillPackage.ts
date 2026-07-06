@@ -227,7 +227,7 @@ function normalizePermissions(raw: any): SkillPackageAnalysis['permissions'] {
 function collectStaticIssues(analysis: SkillPackageAnalysis) {
   const issues = analysis.issues
   if (!analysis.manifestName) {
-    issues.push({ level: 'blocker', code: 'MANIFEST_MISSING', message: '压缩包必须包含 hengshu.skill.yaml 或 hengshu.skill.yml' })
+    issues.push({ level: 'warning', code: 'MANIFEST_MISSING', message: '未提供 hengshu.skill.yaml/yml，将按名称、简介和 README 生成兜底运行说明' })
   } else if (analysis.manifestName.split('/').length > 1) {
     issues.push({ level: 'warning', code: 'MANIFEST_NESTED', message: '建议把 hengshu.skill.yaml 放在压缩包根目录' })
   }

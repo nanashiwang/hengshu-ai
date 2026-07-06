@@ -131,6 +131,33 @@ function normalizeModels(models: any) {
   return out
 }
 
+function fallbackPromptTemplate(title: string, description: string, analysis: ReturnType<typeof analyzeSkillPackage>) {
+  const readme = (analysis.readmeText || '').slice(0, 3000)
+  const fileList = analysis.entries.slice(0, 80).map((e) => `- ${e.name}`).join('\n')
+  return [
+    `你正在运行用户上传的 Skill「${title}」。`,
+    description ? `简介：${description}` : '',
+    readme ? `README：\n${readme}` : '',
+    fileList ? `包内文件：\n${fileList}` : '',
+    '',
+    '用户本次补充要求：',
+    '{{request}}',
+    '',
+    '请严格根据上述 Skill 说明和用户补充要求完成任务；如果说明不足，请先说明缺少什么信息，不要编造不存在的能力。',
+  ].filter(Boolean).join('\n')
+}
+
+function fallbackInputSchema(analysis: ReturnType<typeof analyzeSkillPackage>) {
+  return analysis.inputSchema || {
+    request: {
+      type: 'text',
+      label: '本次使用要求',
+      required: false,
+      placeholder: '可补充你希望这个 Skill 如何处理本次任务；若不填，将仅按包内 README/简介执行。',
+    },
+  }
+}
+
 async function handlePackageSubmission(payload: Payload, request: Request, user: any) {
   let form: FormData
   try {
@@ -179,9 +206,7 @@ async function handlePackageSubmission(payload: Payload, request: Request, user:
   const review = await reviewSkillPackage({ title, category: category.name, description, analysis, env: runtimeEnv })
   const status = packageStatusForReview(review)
   const slug = await createUniqueSlug(payload, title)
-  const promptTemplate =
-    analysis.promptTemplate ||
-    `这是一个 Skill 包「${title}」。当前在线试用仅自动支持 Prompt Skill；请下载 Skill 包后使用本地 Runner 按包内 README 与 hengshu.skill.yaml 执行。`
+  const promptTemplate = analysis.promptTemplate || fallbackPromptTemplate(title, description, analysis)
 
   const transactionID = await payload.db.beginTransaction()
   const txReq: Partial<PayloadRequest> | undefined = transactionID ? { transactionID } : undefined
@@ -212,7 +237,7 @@ async function handlePackageSubmission(payload: Payload, request: Request, user:
         version: analysis.version || '1.0.0',
         systemPrompt: analysis.systemPrompt,
         promptTemplate,
-        inputSchema: analysis.inputSchema,
+        inputSchema: fallbackInputSchema(analysis),
         outputSchema: analysis.outputSchema,
         recommendedModels: normalizeModels(analysis.recommendedModels),
         routePolicy: analysis.routePolicy,
