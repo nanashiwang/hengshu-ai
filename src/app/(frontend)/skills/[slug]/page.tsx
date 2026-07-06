@@ -8,6 +8,7 @@ import { FavoriteButton } from '@/components/FavoriteButton'
 import { ReviewForm } from '@/components/ReviewForm'
 import { CopyButton } from '@/components/CopyButton'
 import { ForkButton } from '@/components/ForkButton'
+import { findStoredSkillPackage } from '@/lib/skillPackage'
 import {
   formatCost,
   formatLatency,
@@ -86,18 +87,24 @@ async function getSkill(slug: string, viewer: any) {
   })
   let checksum: string | null = null
   let signed = false
+  let packageAvailable = false
   if (version?.id) {
+    const pkg = await findStoredSkillPackage(String(skill.id), String(version.id)).catch(() => null)
+    if (pkg) {
+      packageAvailable = true
+      checksum = pkg.checksum
+    }
     const art = await payload.find({
       collection: 'skill-artifacts',
       where: { and: [{ skillVersion: { equals: version.id } }, { format: { equals: 'yaml' } }] },
       limit: 1,
     })
     const a = art.docs[0] as any
-    checksum = (a?.checksum as string) || null
+    checksum = checksum || (a?.checksum as string) || null
     signed = !!(a?.manifest && String(a.manifest).includes('signature:'))
   }
   const compat = await aggregateByModel(payload, skill.id as string)
-  return { skill, version, reviews: reviews.docs, versions: versions.docs, checksum, signed, compat }
+  return { skill, version, reviews: reviews.docs, versions: versions.docs, checksum, signed, compat, packageAvailable }
 }
 
 export default async function SkillDetailPage({
@@ -109,7 +116,7 @@ export default async function SkillDetailPage({
   const user = await getCurrentUser()
   const data = await getSkill(slug, user)
   if (!data) notFound()
-  const { skill, version, reviews, versions, checksum, signed, compat } = data
+  const { skill, version, reviews, versions, checksum, signed, compat, packageAvailable } = data
 
   // 收藏态
   let favorited = false
@@ -164,11 +171,11 @@ export default async function SkillDetailPage({
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto">
             <a
-              href={`/v1/skills/${skill.slug}/manifest?format=yaml`}
+              href={packageAvailable ? `/v1/skills/${skill.slug}/package` : `/v1/skills/${skill.slug}/manifest?format=yaml`}
               download
               className="btn btn-primary px-6 py-2.5"
             >
-              ⬇ 下载 Skill
+              {packageAvailable ? '⬇ 下载 Skill 包' : '⬇ 下载 Skill'}
             </a>
             <Link href={`/skills/${skill.slug}/run`} className="btn btn-secondary px-6 py-2.5">
               ▶ 在线试用
@@ -189,7 +196,7 @@ export default async function SkillDetailPage({
                 className="surface block flex-1 truncate px-2.5 py-1.5 text-[10px] text-[var(--muted)]"
                 title={checksum || '下载后用本地 Runner / 自有模型运行'}
               >
-                {checksum ? `🔒 ${checksum.replace('sha256:', '').slice(0, 18)}…${signed ? ' ✓签名' : ''}` : '下载后本地 Runner 运行'}
+                {checksum ? `🔒 ${checksum.replace('sha256:', '').slice(0, 18)}…${signed && !packageAvailable ? ' ✓签名' : ''}` : '下载后本地 Runner 运行'}
               </code>
               {checksum && <CopyButton value={checksum} label="复制校验和" title="复制完整 sha256 校验和" />}
             </div>

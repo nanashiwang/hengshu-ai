@@ -18,7 +18,7 @@ export default async function NewSkillPage() {
     <div>
       <h1 className="mb-1 text-lg font-semibold">发布 Skill</h1>
       <p className="mb-4 text-sm text-[var(--muted)]">
-        填写下面几段即可发布一个 Skill（结构化的参数化 prompt）。提交后进入待审核。
+        填写基础信息并上传标准 Skill 包。AI 审核低风险包后会自动上架；不确定风险转人工审核。
       </p>
       <SkillForm categories={categories} />
     </div>

@@ -7,56 +7,99 @@ interface Category {
   name: string
 }
 
-// 创作者发布 Skill 表单（前台，替代 Payload 后台裸 CRUD）
+type SubmitResult = {
+  status?: string
+  autoPublished?: boolean
+  review?: {
+    decision?: string
+    riskLevel?: string
+    summary?: string
+    findings?: string[]
+    reviewedBy?: string
+  }
+}
+
+const MAX_PACKAGE_MB = 15
+
+// 创作者发布 Skill：前台只收市场展示信息 + 标准 Skill 包，包内 manifest 负责运行声明。
 export function SkillForm({ categories }: { categories: Category[] }) {
   const [submissionKey, setSubmissionKey] = useState(() => newSubmissionKey())
   const [form, setForm] = useState({
     title: '',
     categorySlug: '',
     description: '',
-    systemPrompt: '',
-    promptTemplate: '',
-    inputSchema: '',
+    visibility: 'public',
   })
+  const [skillPackage, setSkillPackage] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState(false)
+  const [done, setDone] = useState<SubmitResult | null>(null)
   const set = (k: string, v: string) => setForm((s) => ({ ...s, [k]: v }))
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.title.trim() || !form.promptTemplate.trim()) {
-      setError('名称与 User 模板为必填')
+    if (!form.title.trim()) {
+      setError('请填写 Skill 名称')
       return
     }
+    if (!skillPackage) {
+      setError('请上传 Skill 压缩包')
+      return
+    }
+    if (!isSupportedPackage(skillPackage.name)) {
+      setError('Skill 包仅支持 .zip、.tar.gz、.tgz')
+      return
+    }
+    if (skillPackage.size > MAX_PACKAGE_MB * 1024 * 1024) {
+      setError(`Skill 包不能超过 ${MAX_PACKAGE_MB}MB`)
+      return
+    }
+
     setLoading(true)
     setError(null)
     try {
+      const body = new FormData()
+      body.set('title', form.title)
+      body.set('categorySlug', form.categorySlug)
+      body.set('description', form.description)
+      body.set('visibility', form.visibility)
+      body.set('idempotencyKey', submissionKey)
+      body.set('skillPackage', skillPackage)
       const res = await fetch('/v1/skills', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, idempotencyKey: submissionKey }),
+        body,
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) {
         setError(d?.error || '发布失败')
         return
       }
-      // 提交进 pending，审核通过后上架（详情页对非 published 不可见，故不跳详情、改为成功态）
-      setDone(true)
+      setDone(d)
     } catch (e: any) {
-      setError(e.message)
+      setError(e.message || '网络异常，发布失败')
     } finally {
       setLoading(false)
     }
   }
 
   if (done) {
+    const published = done.status === 'published' || done.autoPublished
     return (
       <div className="max-w-2xl rounded-lg border border-[var(--border)] bg-[var(--panel)] p-6 text-sm">
-        <p className="mb-2 text-base font-medium">✓ 已提交，进入待审核</p>
-        <p className="mb-4 text-[var(--muted)]">审核通过后即在市场上架。</p>
+        <p className="mb-2 text-base font-medium">
+          {published ? '✓ AI 审核通过，已自动上架' : done.status === 'rejected' ? '未通过自动审核' : '✓ 已提交，等待人工审核'}
+        </p>
+        <p className="mb-3 text-[var(--muted)]">
+          {done.review?.summary || (published ? 'Skill 已进入市场。' : '审核员确认后再上架。')}
+        </p>
+        {done.review?.findings?.length ? (
+          <ul className="mb-4 list-disc space-y-1 pl-5 text-xs text-[var(--muted)]">
+            {done.review.findings.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        ) : null}
         <div className="flex gap-4">
           <a href="/console" className="text-[var(--accent)]">
             返回控制台
@@ -64,9 +107,10 @@ export function SkillForm({ categories }: { categories: Category[] }) {
           <button
             type="button"
             onClick={() => {
-              setDone(false)
+              setDone(null)
               setSubmissionKey(newSubmissionKey())
-              setForm({ title: '', categorySlug: '', description: '', systemPrompt: '', promptTemplate: '', inputSchema: '' })
+              setSkillPackage(null)
+              setForm({ title: '', categorySlug: '', description: '', visibility: 'public' })
             }}
             className="text-[var(--accent)]"
           >
@@ -86,6 +130,15 @@ export function SkillForm({ categories }: { categories: Category[] }) {
     <form onSubmit={submit} className="max-w-2xl space-y-4">
       {error && <div className="rounded-md bg-[var(--panel-2)] px-3 py-2 text-sm text-[var(--danger)]">{error}</div>}
 
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 text-xs text-[var(--muted)]">
+        <p className="mb-2 font-medium text-[var(--text)]">Skill 包要求</p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>上传 .zip / .tar.gz / .tgz，包内必须包含 <code>hengshu.skill.yaml</code>。</li>
+          <li>AI 会审核用途、README、manifest、权限声明、风险文件和是否诱导收集敏感信息。</li>
+          <li>低风险 Prompt / 结构化 Skill 会自动上架；含网络、文件、Shell、脚本或不确定风险时转人工审核。</li>
+        </ul>
+      </div>
+
       <div>
         <label className={labelCls}>Skill 名称 *</label>
         <input value={form.title} onChange={(e) => set('title', e.target.value)} className={inputCls} placeholder="如：小红书标题生成器" required />
@@ -104,41 +157,49 @@ export function SkillForm({ categories }: { categories: Category[] }) {
       </div>
 
       <div>
+        <label className={labelCls}>可见性</label>
+        <select value={form.visibility} onChange={(e) => set('visibility', e.target.value)} className={inputCls}>
+          <option value="public">公开</option>
+          <option value="unlisted">不公开列出</option>
+          <option value="private">私有</option>
+        </select>
+      </div>
+
+      <div>
         <label className={labelCls}>简介</label>
-        <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={2} className={inputCls} placeholder="一句话说明这个 Skill 做什么" />
+        <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3} className={inputCls} placeholder="一句话说明这个 Skill 做什么、适合谁使用" />
       </div>
 
       <div>
-        <label className={labelCls}>System Prompt（角色/约束，可空）</label>
-        <textarea value={form.systemPrompt} onChange={(e) => set('systemPrompt', e.target.value)} rows={3} className={`${inputCls} font-mono`} placeholder="你是一个专业的文案助手…" />
-      </div>
-
-      <div>
-        <label className={labelCls}>User 模板 *</label>
-        <p className={hintCls}>Spec v1 的 user_template，支持 {'{{变量名}}'} 占位符（对应下方输入字段）。</p>
-        <textarea value={form.promptTemplate} onChange={(e) => set('promptTemplate', e.target.value)} rows={4} className={`${inputCls} font-mono`} placeholder={'为主题「{{topic}}」写 5 个小红书标题'} required />
-      </div>
-
-      <div>
-        <label className={labelCls}>输入字段定义（可选，JSON）</label>
-        <p className={hintCls}>定义模板里的变量，供运行时表单渲染。留空则无输入字段。</p>
-        <textarea
-          value={form.inputSchema}
-          onChange={(e) => set('inputSchema', e.target.value)}
-          rows={3}
-          className={`${inputCls} font-mono`}
-          placeholder={'{"topic":{"type":"string","label":"主题","required":true}}'}
+        <label className={labelCls}>Skill 压缩包 *</label>
+        <p className={hintCls}>包内入口文件必须命名为 hengshu.skill.yaml / hengshu.skill.yml。</p>
+        <input
+          type="file"
+          accept=".zip,.tar.gz,.tgz,application/zip,application/gzip"
+          onChange={(e) => setSkillPackage(e.target.files?.[0] || null)}
+          className={inputCls}
+          required
         />
+        {skillPackage && (
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            已选择：{skillPackage.name}（{(skillPackage.size / 1024).toFixed(1)} KB）
+          </p>
+        )}
       </div>
 
       <div className="flex items-center gap-3 pt-1">
         <button disabled={loading} className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
-          {loading ? '提交中…' : '提交发布（进审核）'}
+          {loading ? 'AI 审核中…' : '提交并自动审核'}
         </button>
-        <span className="text-xs text-[var(--muted)]">提交后进入待审核，审核通过即上架。</span>
+        <span className="text-xs text-[var(--muted)]">AI 通过会自动上架；不确定风险转人工。</span>
       </div>
     </form>
   )
+}
+
+function isSupportedPackage(fileName: string): boolean {
+  const lower = fileName.toLowerCase()
+  return lower.endsWith('.zip') || lower.endsWith('.tar.gz') || lower.endsWith('.tgz')
 }
 
 function newSubmissionKey(): string {
