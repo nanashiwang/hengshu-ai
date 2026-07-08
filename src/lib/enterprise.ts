@@ -1248,6 +1248,12 @@ export function evaluateEnterpriseAdoptionBaselineDrift(
   }
   const currentContract = current.version ? publicSkillContract(current.version, { slug: registry?.skill?.slug }) : null
   const reasons: string[] = []
+  if (baseline.contract?.versionId && !current.version?.id) {
+    reasons.push('version_missing')
+  }
+  if (baseline.contract?.contractHash && !currentContract?.contractHash) {
+    reasons.push('contract_missing')
+  }
   if (baseline.contract?.contractHash && currentContract?.contractHash && baseline.contract.contractHash !== currentContract.contractHash) {
     reasons.push('contractHash_changed')
   }
@@ -1268,7 +1274,7 @@ export function evaluateEnterpriseAdoptionBaselineDrift(
   if (baseline.certificate?.certificateHash && current.certificateSummary?.certificateHash && baseline.certificate.certificateHash !== current.certificateSummary.certificateHash) {
     reasons.push('certificate_hash_changed')
   }
-  const reapprovalRequired = reasons.some((r) => ['contractHash_changed', 'version_changed', 'certificate_status_worse'].includes(r))
+  const reapprovalRequired = reasons.some((r) => ['contract_missing', 'contractHash_changed', 'version_missing', 'version_changed', 'certificate_status_worse'].includes(r))
   return {
     status: reasons.length ? (reapprovalRequired ? 'reapproval_required' : 'review_recommended') : 'unchanged',
     reapprovalRequired,
@@ -1294,6 +1300,320 @@ export function evaluateEnterpriseAdoptionBaselineDrift(
         href: registry?.id ? `/v1/enterprise/registry/${encodeURIComponent(String(registry.id))}/passport` : null,
       },
     ],
+  }
+}
+
+
+export type EnterpriseRegistryReapprovalStatus = 'missing_baseline' | 'reapproval_required' | 'review_recommended' | 'unchanged'
+export type EnterpriseRegistryReapprovalAction = 'refresh_baseline' | 'accept_risk' | 'mark_reviewed'
+
+const ENTERPRISE_REAPPROVAL_STATUSES = new Set<EnterpriseRegistryReapprovalStatus>([
+  'missing_baseline',
+  'reapproval_required',
+  'review_recommended',
+  'unchanged',
+])
+
+function normalizeRegistryReapprovalStatus(value?: unknown): EnterpriseRegistryReapprovalStatus | 'all' | undefined {
+  const status = String(value || '').trim()
+  if (!status) return undefined
+  if (status === 'all') return 'all'
+  return ENTERPRISE_REAPPROVAL_STATUSES.has(status as EnterpriseRegistryReapprovalStatus)
+    ? status as EnterpriseRegistryReapprovalStatus
+    : undefined
+}
+
+function appendReviewNote(existing: unknown, note?: string, prefix = '批量重审') {
+  const clean = typeof note === 'string' ? note.trim().slice(0, 1000) : ''
+  if (!clean) return existing
+  const current = typeof existing === 'string' ? existing.trim() : ''
+  const line = `[${new Date().toISOString()}] ${prefix}：${clean}`
+  return current ? `${current}\n${line}` : line
+}
+
+async function resolveEnterpriseRegistryReviewContext(payload: Payload, registry: any) {
+  const skillId = relationId(registry?.skill)
+  const skill = registry?.skill && typeof registry.skill === 'object' && registry.skill.id
+    ? registry.skill
+    : skillId
+      ? await payload.findByID({ collection: 'skills' as any, id: skillId, depth: 0, overrideAccess: true }).catch(() => null)
+      : null
+  const skillVersionId = relationId(registry?.skillVersion)
+  const version = skillVersionId
+    ? await payload.findByID({ collection: 'skill-versions' as any, id: skillVersionId, depth: 0, overrideAccess: true }).catch(() => null)
+    : skill
+      ? await resolveCurrentSkillVersionForPublicEvidence(payload, skill).catch(() => null)
+      : null
+  const passportId = relationId(registry?.passport)
+  let passport = passportId
+    ? await payload.findByID({ collection: 'skill-passports' as any, id: passportId, depth: 0, overrideAccess: true }).catch(() => null)
+    : null
+  const passportSkillId = relationId((passport as any)?.skill)
+  if (passport && skillId && passportSkillId && passportSkillId !== skillId) passport = null
+  if (!passport && skillId) {
+    passport = (
+      await payload.find({
+        collection: 'skill-passports' as any,
+        where: { and: [{ skill: { equals: skillId } }, { status: { equals: 'current' } }] },
+        sort: '-lastVerifiedAt',
+        limit: 1,
+        depth: 0,
+        overrideAccess: true,
+      }).catch(() => ({ docs: [] as any[] }))
+    ).docs[0] || null
+  }
+  const certificateSummary = skill && skillId
+    ? await getEnterpriseApprovalCertificateSummary(payload, {
+        skill,
+        skillId,
+        skillVersionId,
+        passportId: passportId || undefined,
+      }).catch((e) => ({
+        status: 'provisional',
+        statusReasons: ['certificate_check_failed'],
+        signed: false,
+        error: (e as Error).message,
+      }))
+    : { status: 'failed', statusReasons: ['skill_missing'], signed: false }
+
+  return { skill, skillId, skillVersionId, version, passport, passportId, certificateSummary }
+}
+
+async function enterpriseRegistryReapprovalItem(payload: Payload, registry: any) {
+  const context = await resolveEnterpriseRegistryReviewContext(payload, registry)
+  const drift = evaluateEnterpriseAdoptionBaselineDrift(registry, {
+    version: context.version,
+    passport: context.passport,
+    certificateSummary: context.certificateSummary,
+  })
+  const status = drift.status as EnterpriseRegistryReapprovalStatus
+  const decision = status === 'reapproval_required'
+    ? 'reapprove'
+    : status === 'review_recommended'
+      ? 'review'
+      : status === 'missing_baseline'
+        ? 'refresh_baseline'
+        : 'keep'
+
+  return publicSanitize({
+    registry: publicEnterpriseRegistry(registry),
+    review: {
+      status,
+      decision,
+      reapprovalRequired: drift.reapprovalRequired,
+      reasons: drift.reasons || [],
+      baselineCapturedAt: drift.baselineCapturedAt || null,
+      current: drift.current || null,
+      nextActions: [
+        ...(drift.nextActions || []),
+        {
+          label: '批量处理',
+          description: '审核员可批量刷新采用基线、标记已复核，或在保留风险说明后接受漂移。',
+          href: '/v1/enterprise/registry/review-required',
+        },
+      ],
+    },
+    certificateSummary: context.certificateSummary,
+  })
+}
+
+function enterpriseReapprovalSummary(items: any[], scanned: number) {
+  const counts: Record<EnterpriseRegistryReapprovalStatus, number> = {
+    missing_baseline: 0,
+    reapproval_required: 0,
+    review_recommended: 0,
+    unchanged: 0,
+  }
+  for (const item of items) {
+    const status = item?.review?.status as EnterpriseRegistryReapprovalStatus
+    if (status && counts[status] !== undefined) counts[status] += 1
+  }
+  return {
+    scanned,
+    returned: items.length,
+    actionable: counts.missing_baseline + counts.reapproval_required + counts.review_recommended,
+    ...counts,
+  }
+}
+
+export async function listEnterpriseRegistriesForReapproval(
+  payload: Payload,
+  args: {
+    actorId: string
+    actorRole?: string
+    organizationId: string
+    status?: EnterpriseRegistryReapprovalStatus | 'all' | string
+    registryStatus?: string
+    includeUnchanged?: boolean
+    limit?: number
+  },
+): Promise<{ ok: true; organizationId: string; summary: any; items: any[]; customerValue: string; nextActions: any[] } | { ok: false; reason: string }> {
+  const access = await canManageOrganization(payload, {
+    userId: args.actorId,
+    userRole: args.actorRole,
+    organizationId: args.organizationId,
+    roles: ['platform_admin', 'owner', 'admin', 'approver'],
+  })
+  if (!access.ok) return access
+  const limit = Math.min(Math.max(Number(args.limit || 100), 1), 200)
+  const res = await payload.find({
+    collection: 'enterprise-registries' as any,
+    where: { organization: { equals: args.organizationId } },
+    sort: '-updatedAt',
+    limit,
+    depth: 1,
+    overrideAccess: true,
+  })
+  const registryStatus = String(args.registryStatus || '').trim()
+  const selectedReviewStatus = normalizeRegistryReapprovalStatus(args.status)
+  const includeUnchanged = args.includeUnchanged === true || selectedReviewStatus === 'all'
+  const defaultRegistryStatuses = new Set(['approved', 'restricted'])
+  const registries = (res.docs as any[]).filter((registry) => {
+    if (registryStatus && registryStatus !== 'all') return String(registry.approvalStatus || '') === registryStatus
+    return defaultRegistryStatuses.has(String(registry.approvalStatus || ''))
+  })
+  const items: any[] = []
+  for (const registry of registries) {
+    const item = await enterpriseRegistryReapprovalItem(payload, registry)
+    const status = item.review.status as EnterpriseRegistryReapprovalStatus
+    if (selectedReviewStatus && selectedReviewStatus !== 'all' && status !== selectedReviewStatus) continue
+    if (!includeUnchanged && status === 'unchanged') continue
+    items.push(item)
+  }
+
+  return {
+    ok: true,
+    organizationId: args.organizationId,
+    summary: enterpriseReapprovalSummary(items, registries.length),
+    items,
+    customerValue:
+      '企业准入批量重审把 Contract、Passport、证书和批准时采用基线放到同一张待办表里；管理员不用逐个打开 Skill，也能发现哪些准入需要重新审批或刷新基线。',
+    nextActions: [
+      {
+        label: '重新审批强漂移项',
+        description: 'Contract、版本或证书状态变差时，按企业准入流程重新审批，再刷新采用基线。',
+        href: '/v1/enterprise/registry/review-required?status=reapproval_required',
+      },
+      {
+        label: '复核证据变化',
+        description: 'Passport 或证据 hash 变化时，审核员可批量标记已复核或接受风险。',
+        href: '/v1/enterprise/registry/review-required?status=review_recommended',
+      },
+      {
+        label: '补齐采用基线',
+        description: '历史 Registry 缺少 adoptionBaseline 时，批量刷新当前 Contract/Passport/证书摘要作为后续漂移判断基线。',
+        href: '/v1/enterprise/registry/review-required?status=missing_baseline',
+      },
+    ],
+  }
+}
+
+export async function bulkReviewEnterpriseRegistryReapproval(
+  payload: Payload,
+  args: {
+    actorId: string
+    actorRole?: string
+    organizationId: string
+    registryIds: string[]
+    action: EnterpriseRegistryReapprovalAction | string
+    note?: string
+  },
+): Promise<{ ok: true; organizationId: string; action: EnterpriseRegistryReapprovalAction; summary: any; results: any[] } | { ok: false; reason: string }> {
+  const access = await canManageOrganization(payload, {
+    userId: args.actorId,
+    userRole: args.actorRole,
+    organizationId: args.organizationId,
+    roles: ['platform_admin', 'owner', 'admin', 'approver'],
+  })
+  if (!access.ok) return access
+  const action = String(args.action || '') as EnterpriseRegistryReapprovalAction
+  if (!['refresh_baseline', 'accept_risk', 'mark_reviewed'].includes(action)) return { ok: false, reason: '批量重审动作无效' }
+  const registryIds = [...new Set((args.registryIds || []).map((id) => String(id || '').trim()).filter(Boolean))].slice(0, 100)
+  if (!registryIds.length) return { ok: false, reason: '缺少 registryIds' }
+  const reviewedAt = new Date().toISOString()
+  const results: any[] = []
+
+  for (const id of registryIds) {
+    const registry = await payload
+      .findByID({ collection: 'enterprise-registries' as any, id, depth: 1, overrideAccess: true })
+      .catch(() => null) as any
+    if (!registry) {
+      results.push({ id, ok: false, error: '企业注册记录不存在' })
+      continue
+    }
+    const organizationId = relationId(registry.organization)
+    if (String(organizationId || '') !== String(args.organizationId)) {
+      results.push({ id, ok: false, error: '注册记录不属于该组织' })
+      continue
+    }
+
+    const before = await enterpriseRegistryReapprovalItem(payload, registry)
+    const context = await resolveEnterpriseRegistryReviewContext(payload, registry)
+    const auditPolicy = registry.auditPolicy && typeof registry.auditPolicy === 'object' && !Array.isArray(registry.auditPolicy)
+      ? { ...registry.auditPolicy }
+      : {}
+    const reviewRecord = publicSanitize({
+      action,
+      reviewedAt,
+      reviewedBy: args.actorId,
+      status: before.review.status,
+      reasons: before.review.reasons || [],
+      note: typeof args.note === 'string' ? args.note.trim().slice(0, 1000) : undefined,
+    })
+    let data: Record<string, unknown>
+    if (action === 'refresh_baseline') {
+      if (!context.skill || !context.skillId) {
+        results.push({ id, ok: false, error: 'Skill 不存在，不能刷新采用基线' })
+        continue
+      }
+      data = {
+        adoptionBaseline: await buildEnterpriseAdoptionBaseline(payload, {
+          skill: context.skill,
+          skillId: context.skillId,
+          skillVersionId: context.skillVersionId,
+          passportId: context.passportId || undefined,
+          certificateSummary: context.certificateSummary,
+        }),
+        approvedBy: args.actorId,
+        approvedAt: reviewedAt,
+        auditPolicy: { ...auditPolicy, adoptionReview: reviewRecord },
+        riskNotes: appendReviewNote(registry.riskNotes, args.note, '批量刷新采用基线'),
+      }
+    } else {
+      data = {
+        auditPolicy: { ...auditPolicy, adoptionReview: reviewRecord },
+        riskNotes: action === 'accept_risk'
+          ? appendReviewNote(registry.riskNotes, args.note, '批量接受准入漂移风险')
+          : appendReviewNote(registry.riskNotes, args.note, '批量标记准入已复核'),
+      }
+    }
+    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key])
+    const updated = await payload.update({
+      collection: 'enterprise-registries' as any,
+      id,
+      data,
+      depth: 0,
+      overrideAccess: true,
+    })
+    results.push({
+      id,
+      ok: true,
+      action,
+      previousReview: before.review,
+      registry: publicEnterpriseRegistry(updated),
+    })
+  }
+
+  return {
+    ok: true,
+    organizationId: args.organizationId,
+    action,
+    summary: {
+      requested: registryIds.length,
+      succeeded: results.filter((item) => item.ok).length,
+      failed: results.filter((item) => !item.ok).length,
+    },
+    results,
   }
 }
 

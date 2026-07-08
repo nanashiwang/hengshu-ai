@@ -23,6 +23,7 @@ import {
   enterprisePolicyFromTemplate,
   evaluateEnterprisePolicy,
   listEnterprisePolicyTemplates,
+  listEnterpriseRegistriesForReapproval,
   listEnterpriseScimMembers,
   mergeEnterprisePolicy,
   normalizeEnterpriseScimUserInput,
@@ -44,6 +45,7 @@ import {
   suspendOrganizationMember,
   updateEnterpriseIdentityPolicy,
   upsertEnterpriseRegistry,
+  bulkReviewEnterpriseRegistryReapproval,
   upsertOrganizationMember,
 } from '@/lib/enterprise'
 
@@ -836,6 +838,180 @@ describe('enterprise — 企业 Registry 授权', () => {
         certificateStatus: 'provisional',
       },
     })
+  })
+
+
+  it('企业准入批量重审会按基线漂移列出待处理项且不泄漏原文', async () => {
+    const versions: Record<string, any> = {
+      'ver-1': { id: 'ver-1', skill: 'skill-1', version: '1.0.0', contractHash: 'contract-v1', status: 'active' },
+      'ver-2': { id: 'ver-2', skill: 'skill-1', version: '2.0.0', contractHash: 'contract-v2', status: 'active' },
+    }
+    const passports: Record<string, any> = {
+      'passport-1': {
+        id: 'passport-1',
+        skill: 'skill-1',
+        status: 'current',
+        skillClass: 'verified',
+        signatureStatus: 'signed',
+        trustScore: 91,
+        evidenceHash: 'evidence-new',
+        rawReports: [{ input: 'secret input', output: 'secret output' }],
+      },
+    }
+    const registries = [
+      {
+        id: 'reg-hard',
+        organization: 'org-1',
+        skill: { id: 'skill-1', slug: 'demo', title: 'Demo', currentVersion: 'ver-2' },
+        skillVersion: 'ver-2',
+        passport: 'passport-1',
+        approvalStatus: 'approved',
+        adoptionBaseline: {
+          capturedAt: '2026-07-08T00:00:00.000Z',
+          contract: { versionId: 'ver-1', contractHash: 'contract-v1' },
+          passport: { id: 'passport-1', evidenceHash: 'evidence-new' },
+          certificate: { status: 'provisional' },
+        },
+      },
+      {
+        id: 'reg-soft',
+        organization: 'org-1',
+        skill: { id: 'skill-1', slug: 'demo', title: 'Demo', currentVersion: 'ver-1' },
+        skillVersion: 'ver-1',
+        passport: 'passport-1',
+        approvalStatus: 'approved',
+        adoptionBaseline: {
+          capturedAt: '2026-07-08T00:00:00.000Z',
+          contract: { versionId: 'ver-1', contractHash: 'contract-v1' },
+          passport: { id: 'passport-1', evidenceHash: 'evidence-old' },
+          certificate: { status: 'provisional' },
+        },
+      },
+      {
+        id: 'reg-missing',
+        organization: 'org-1',
+        skill: { id: 'skill-1', slug: 'demo', title: 'Demo', currentVersion: 'ver-1' },
+        skillVersion: 'ver-1',
+        passport: 'passport-1',
+        approvalStatus: 'restricted',
+      },
+      {
+        id: 'reg-unchanged',
+        organization: 'org-1',
+        skill: { id: 'skill-1', slug: 'demo', title: 'Demo', currentVersion: 'ver-1' },
+        skillVersion: 'ver-1',
+        passport: 'passport-1',
+        approvalStatus: 'approved',
+        adoptionBaseline: {
+          capturedAt: '2026-07-08T00:00:00.000Z',
+          contract: { versionId: 'ver-1', contractHash: 'contract-v1' },
+          passport: { id: 'passport-1', evidenceHash: 'evidence-new' },
+          certificate: { status: 'provisional' },
+        },
+      },
+      { id: 'reg-pending', organization: 'org-1', skill: 'skill-1', approvalStatus: 'pending' },
+    ]
+    const payload = {
+      findGlobal: async () => ({}),
+      findByID: async (args: any) => {
+        if (args.collection === 'organizations') return { id: 'org-1', owner: 'owner-1', status: 'active' }
+        if (args.collection === 'skills') return { id: 'skill-1', slug: 'demo', title: 'Demo', currentVersion: 'ver-1' }
+        if (args.collection === 'skill-versions') return versions[args.id] || null
+        if (args.collection === 'skill-passports') return passports[args.id] || null
+        return null
+      },
+      find: async (args: any) => {
+        if (args.collection === 'enterprise-registries') return { totalDocs: registries.length, docs: registries }
+        if (args.collection === 'skill-passports') return { totalDocs: 1, docs: [passports['passport-1']] }
+        if (args.collection === 'compat-reports') return { totalDocs: 0, docs: [] }
+        if (args.collection === 'evidence-snapshots') return { totalDocs: 0, docs: [] }
+        return { totalDocs: 0, docs: [] }
+      },
+      logger: { warn: () => {} },
+    }
+
+    const result = await listEnterpriseRegistriesForReapproval(payload as any, {
+      actorId: 'owner-1',
+      organizationId: 'org-1',
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      summary: {
+        scanned: 4,
+        returned: 3,
+        actionable: 3,
+        reapproval_required: 1,
+        review_recommended: 1,
+        missing_baseline: 1,
+      },
+    })
+    const items = (result as any).items
+    expect(items.map((item: any) => item.registry.id)).toEqual(['reg-hard', 'reg-soft', 'reg-missing'])
+    expect(items.find((item: any) => item.registry.id === 'reg-hard').review.reasons).toEqual(expect.arrayContaining(['contractHash_changed', 'version_changed']))
+    expect(items.find((item: any) => item.registry.id === 'reg-soft').review.reasons).toEqual(expect.arrayContaining(['passport_evidence_changed']))
+    expect(JSON.stringify(result)).not.toContain('secret input')
+    expect(JSON.stringify(result)).not.toContain('secret output')
+  })
+
+  it('企业准入批量重审可批量标记已复核并写入治理审计', async () => {
+    const registry = {
+      id: 'reg-soft',
+      organization: 'org-1',
+      skill: { id: 'skill-1', slug: 'demo', title: 'Demo', currentVersion: 'ver-1' },
+      skillVersion: 'ver-1',
+      passport: 'passport-1',
+      approvalStatus: 'approved',
+      auditPolicy: { retainDays: 90 },
+      adoptionBaseline: {
+        capturedAt: '2026-07-08T00:00:00.000Z',
+        contract: { versionId: 'ver-1', contractHash: 'contract-v1' },
+        passport: { id: 'passport-1', evidenceHash: 'evidence-old' },
+        certificate: { status: 'provisional' },
+      },
+    }
+    const updates: any[] = []
+    const payload = {
+      findGlobal: async () => ({}),
+      findByID: async (args: any) => {
+        if (args.collection === 'organizations') return { id: 'org-1', owner: 'owner-1', status: 'active' }
+        if (args.collection === 'enterprise-registries') return registry
+        if (args.collection === 'skill-versions') return { id: 'ver-1', skill: 'skill-1', version: '1.0.0', contractHash: 'contract-v1', status: 'active' }
+        if (args.collection === 'skill-passports') return { id: 'passport-1', skill: 'skill-1', status: 'current', skillClass: 'verified', signatureStatus: 'signed', trustScore: 91, evidenceHash: 'evidence-new' }
+        return null
+      },
+      find: async (args: any) => {
+        if (args.collection === 'compat-reports') return { totalDocs: 0, docs: [] }
+        if (args.collection === 'evidence-snapshots') return { totalDocs: 0, docs: [] }
+        return { totalDocs: 0, docs: [] }
+      },
+      update: async (args: any) => {
+        updates.push(args)
+        return { ...registry, ...args.data }
+      },
+      logger: { warn: () => {} },
+    }
+
+    const result = await bulkReviewEnterpriseRegistryReapproval(payload as any, {
+      actorId: 'owner-1',
+      organizationId: 'org-1',
+      registryIds: ['reg-soft', 'reg-soft'],
+      action: 'mark_reviewed',
+      note: '已确认只是 Passport 证据刷新',
+    })
+
+    expect(result).toMatchObject({ ok: true, summary: { requested: 1, succeeded: 1, failed: 0 } })
+    expect(updates).toHaveLength(1)
+    expect(updates[0].data.auditPolicy).toMatchObject({
+      retainDays: 90,
+      adoptionReview: {
+        action: 'mark_reviewed',
+        reviewedBy: 'owner-1',
+        status: 'review_recommended',
+        reasons: expect.arrayContaining(['passport_evidence_changed']),
+      },
+    })
+    expect(updates[0].data.riskNotes).toContain('已确认只是 Passport 证据刷新')
   })
 
   it('企业批准前会要求确认未达标证书风险', async () => {
