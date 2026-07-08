@@ -243,6 +243,81 @@ export function enterpriseIdentityPlaybook(rawPolicy: unknown) {
   }
 }
 
+export function buildEnterpriseSsoAuthorizeUrl(
+  rawPolicy: unknown,
+  args: { organizationId: string; baseUrl: string; redirectPath?: string; state?: string; nonce?: string },
+): { ok: true; authorize: any } | { ok: false; reason: string; issues?: EnterpriseIdentityPolicyIssue[] } {
+  const policy = normalizeEnterpriseIdentityPolicy(rawPolicy)
+  const issues = validateEnterpriseIdentityPolicy(policy)
+  const blockers = issues.filter((issue) => issue.level === 'blocker')
+  if (blockers.length) return { ok: false, reason: '身份策略存在阻断项，不能发起 SSO', issues }
+  const sso = policy?.sso
+  if (!sso?.enabled) return { ok: false, reason: '组织未启用 SSO' }
+  const provider = String(sso.provider || '').toLowerCase()
+  if (!['oidc', 'okta', 'azuread', 'google'].includes(provider)) {
+    return { ok: false, reason: '当前只支持 OIDC 类 SSO 发起包；SAML/自定义 provider 后续接入', issues }
+  }
+  if (!sso.clientId) return { ok: false, reason: 'SSO 缺少 clientId', issues }
+  const authorizationEndpoint = sso.authorizationEndpoint || (sso.issuer ? `${sso.issuer.replace(/\/$/, '')}/authorize` : '')
+  if (!authorizationEndpoint || !isHttpsUrl(authorizationEndpoint)) {
+    return { ok: false, reason: 'SSO 缺少 HTTPS authorizationEndpoint', issues }
+  }
+  const origin = (() => {
+    try {
+      const url = new URL(args.baseUrl)
+      return url.origin
+    } catch {
+      return ''
+    }
+  })()
+  if (!origin) return { ok: false, reason: '站点地址无效，不能生成 callbackUrl', issues }
+  const callbackUrl = `${origin}/v1/enterprise/identity/callback`
+  const redirectPath = String(args.redirectPath || '/console/enterprise').startsWith('/')
+    ? String(args.redirectPath || '/console/enterprise').slice(0, 300)
+    : '/console/enterprise'
+  const state = args.state || randomBytes(18).toString('base64url')
+  const nonce = args.nonce || randomBytes(18).toString('base64url')
+  const url = new URL(authorizationEndpoint)
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('client_id', sso.clientId)
+  url.searchParams.set('redirect_uri', callbackUrl)
+  url.searchParams.set('scope', 'openid email profile')
+  url.searchParams.set('state', state)
+  url.searchParams.set('nonce', nonce)
+
+  return {
+    ok: true,
+    authorize: publicSanitize({
+      provider: sso.provider || provider,
+      organizationId: args.organizationId,
+      authorizeUrl: url.toString(),
+      callbackUrl,
+      state,
+      nonce,
+      redirectPath,
+      customerValue:
+        '这是企业 SSO 登录连接器的发起包：前端跳转到 IdP，回调后再完成 code 换 token、邮箱域校验和组织成员绑定。',
+      nextActions: [
+        {
+          label: '跳转 IdP',
+          description: '使用 authorizeUrl 发起 OIDC 登录，scope 固定为 openid email profile。',
+          href: url.toString(),
+        },
+        {
+          label: '配置回调地址',
+          description: '在 IdP 后台把 callbackUrl 加入允许回调列表；生产必须使用 HTTPS 站点地址。',
+          href: callbackUrl,
+        },
+        {
+          label: '回调后校验组织身份',
+          description: '后续 callback 会校验 state/nonce、code 换 token、邮箱域白名单和组织成员关系。',
+          href: '/v1/enterprise/identity/callback',
+        },
+      ],
+    }),
+  }
+}
+
 export function publicEnterpriseOrganization(org: any) {
   if (!org) return null
   return {

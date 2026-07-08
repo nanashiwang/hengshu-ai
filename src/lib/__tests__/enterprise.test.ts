@@ -10,6 +10,7 @@ import {
   enterpriseScimTokenDigest,
   enterpriseScimUserResource,
   enterpriseIdentityPlaybook,
+  buildEnterpriseSsoAuthorizeUrl,
   deprovisionEnterpriseScimMember,
   evaluateEnterpriseIdentityPolicy,
   enterprisePolicyFromTemplate,
@@ -114,6 +115,50 @@ describe('enterprise — 企业 Registry 授权', () => {
 
     expect(enterpriseIdentityPlaybook({ requireSso: true }).decision).toBe('fix_config')
     expect(enterpriseIdentityPlaybook({ sso: { enabled: true, provider: 'oidc', issuer: 'https://idp.example.com', clientId: 'c' } }).decision).toBe('provision_scim')
+  })
+
+  it('企业 SSO 发起包生成 OIDC 授权 URL 和回调地址', () => {
+    const result = buildEnterpriseSsoAuthorizeUrl({
+      sso: {
+        enabled: true,
+        provider: 'oidc',
+        issuer: 'https://idp.example.com',
+        clientId: 'client-1',
+        authorizationEndpoint: 'https://idp.example.com/oauth2/v1/authorize',
+      },
+    }, {
+      organizationId: 'org-1',
+      baseUrl: 'https://hengshu.example.com/v1/enterprise/identity/authorize?organizationId=org-1',
+      redirectPath: '/console/enterprise',
+      state: 'state-1',
+      nonce: 'nonce-1',
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.authorize).toMatchObject({
+        provider: 'oidc',
+        organizationId: 'org-1',
+        callbackUrl: 'https://hengshu.example.com/v1/enterprise/identity/callback',
+        state: 'state-1',
+        nonce: 'nonce-1',
+        redirectPath: '/console/enterprise',
+        customerValue: expect.stringContaining('SSO 登录连接器'),
+      })
+      const url = new URL(result.authorize.authorizeUrl)
+      expect(url.origin + url.pathname).toBe('https://idp.example.com/oauth2/v1/authorize')
+      expect(url.searchParams.get('response_type')).toBe('code')
+      expect(url.searchParams.get('client_id')).toBe('client-1')
+      expect(url.searchParams.get('redirect_uri')).toBe('https://hengshu.example.com/v1/enterprise/identity/callback')
+      expect(url.searchParams.get('scope')).toBe('openid email profile')
+      expect(url.searchParams.get('state')).toBe('state-1')
+      expect(url.searchParams.get('nonce')).toBe('nonce-1')
+    }
+
+    expect(buildEnterpriseSsoAuthorizeUrl({ sso: { enabled: true, provider: 'saml' } }, {
+      organizationId: 'org-1',
+      baseUrl: 'https://hengshu.example.com',
+    })).toMatchObject({ ok: false, reason: expect.stringContaining('OIDC') })
   })
 
   it('SCIM token 使用 sha256 digest 校验', () => {
