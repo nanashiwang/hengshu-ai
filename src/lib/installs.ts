@@ -1,5 +1,18 @@
 import type { Payload } from 'payload'
 
+function relationId(value: unknown): string | null {
+  if (!value) return null
+  if (typeof value === 'object' && 'id' in value) return String((value as { id?: unknown }).id || '') || null
+  return String(value)
+}
+
+export function isInstallablePublishedSkillVersion(skill: any, version: any) {
+  if (!skill || skill.status !== 'published' || skill.visibility !== 'public') return false
+  if (!version || version.status === 'deprecated') return false
+  const versionSkillId = relationId(version.skill)
+  return Boolean(versionSkillId && versionSkillId === String(skill.id))
+}
+
 // 解析一个已发布公开 Skill 及其当前版本
 export async function resolvePublishedSkill(payload: Payload, slug: string) {
   const skills = await payload.find({
@@ -14,24 +27,29 @@ export async function resolvePublishedSkill(payload: Payload, slug: string) {
 
   let version: any = skill.currentVersion
   if (!version || typeof version === 'string') {
-    version = (
-      await payload.find({
-        collection: 'skill-versions',
-        where: { skill: { equals: skill.id } },
-        sort: '-createdAt',
-        limit: 1,
-        overrideAccess: true,
-      })
-    ).docs[0]
+    if (version) {
+      version = await payload
+        .findByID({ collection: 'skill-versions', id: String(version), depth: 0, overrideAccess: true })
+        .catch(() => null)
+    }
+    if (!version) {
+      version = (
+        await payload.find({
+          collection: 'skill-versions',
+          where: { and: [{ skill: { equals: skill.id } }, { status: { equals: 'active' } }] },
+          sort: '-createdAt',
+          limit: 1,
+          overrideAccess: true,
+        })
+      ).docs[0]
+    }
   }
-  if (!version) return null
+  if (!isInstallablePublishedSkillVersion(skill, version)) return null
   return { skill, version }
 }
 
 function refId(v: unknown): string | null {
-  if (!v) return null
-  if (typeof v === 'object' && 'id' in v) return String((v as { id?: unknown }).id || '') || null
-  return String(v)
+  return relationId(v)
 }
 
 export function installedRecordNeedsRunner(data: Record<string, unknown> = {}, originalDoc?: Record<string, unknown> | null): boolean {
@@ -121,4 +139,44 @@ export async function findInstall(
   if (runnerId) where.and.push({ runner: { equals: runnerId } })
   const res = await payload.find({ collection: 'skill-installs', where, limit: 1, overrideAccess: true })
   return res.docs[0] as any
+}
+
+export async function findActiveInstall(
+  payload: Payload,
+  userId: string,
+  skillId: string,
+  runnerId: string,
+) {
+  if (!runnerId) return null
+  const res = await payload.find({
+    collection: 'skill-installs',
+    where: {
+      and: [
+        { user: { equals: userId } },
+        { skill: { equals: skillId } },
+        { runner: { equals: runnerId } },
+        { status: { equals: 'installed' } },
+      ],
+    },
+    limit: 1,
+    overrideAccess: true,
+  })
+  return (res.docs[0] as any) || null
+}
+
+export function activeInstallMatchesCurrentVersion(
+  install: any,
+  version: any,
+  reportChecksum?: unknown,
+) {
+  if (!install || install.status !== 'installed' || !version?.id) return false
+  const installedVersionId = relationId(install.skillVersion)
+  if (installedVersionId && installedVersionId !== String(version.id)) return false
+
+  const installedVersion = String(install.installedVersion || '').trim()
+  if (!installedVersionId && installedVersion && version.version && installedVersion !== String(version.version)) return false
+
+  const installedChecksum = String(install.installedChecksum || '').trim()
+  if (!installedChecksum) return false
+  return String(reportChecksum || '').trim() === installedChecksum
 }

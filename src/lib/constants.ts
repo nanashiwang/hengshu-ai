@@ -68,7 +68,7 @@ export function approvedPlatformFallback(preferred?: string, env: Env = process.
 // credit（算力燃料币）台账交易类型。1 credit = ¥0.01 零售。credit 永不反向变现金。
 export const CREDIT_TX_TYPES = [
   'recharge', // CNY 充值（New API 兑换码）→ credit [+]
-  'exchange', // 术值兑换 → credit [+]
+  'exchange', // 贡献值兑换 → credit [+]
   'consume', // 跑模型消耗 [-]
   'refund', // 退款 [+]
   'adjust', // 管理员调整 [+/-]

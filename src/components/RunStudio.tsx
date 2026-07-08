@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { modelPaymentMeta } from '@/lib/platformModelUi'
+import { failureKnowledgeUrl, modelProfileUrl, runLedgerUrl } from '@/lib/runResultLinks'
 
 interface FieldDef {
   type?: string
@@ -15,7 +16,7 @@ interface FieldDef {
 
 const ROUTE_MODES = [
   { value: 'balanced', label: '均衡' },
-  { value: 'cheap', label: '省钱' },
+  { value: 'cheap', label: '成本优先' },
   { value: 'quality', label: '高质量' },
   { value: 'fast', label: '快速' },
 ]
@@ -25,8 +26,34 @@ const optionValue = (o: string | { label?: string; value?: string }) =>
 const optionLabel = (o: string | { label?: string; value?: string }) =>
   typeof o === 'string' ? o : (o.label ?? o.value ?? '')
 
+const DEMO_INPUT_BY_KEY: Record<string, string> = {
+  audience: '25-30 岁职场女性',
+  draft: '王总，资料我晚点给你，你先看下之前那个版本。',
+  error: '401 unauthorized',
+  goal: '让用户收藏',
+  notes: '小张说登录页要改；下周一上线；老王负责后端。',
+  plan: '完善企业 Registry 审批；补充失败库 Adapter 复验。',
+  product: '无线耳机',
+  question: '普通人如何提高长期执行力？',
+  request: '帮我把这段材料整理成结构化摘要。',
+  review: '用了三天右耳就没声音了，客服还一直让我重启。',
+  role: '产品经理 / 衡术控制台',
+  stance: '反对只靠鸡血',
+  style: '专业',
+  topic: '秋季护肤',
+}
+
+function demoValueFor(key: string, def: FieldDef) {
+  if (def.type === 'select' && def.options?.length) return optionValue(def.options[0])
+  if (DEMO_INPUT_BY_KEY[key]) return DEMO_INPUT_BY_KEY[key]
+  if (def.placeholder) return def.placeholder.replace(/^如[:：]\s*/, '')
+  return def.type === 'text' ? '这里是一段用于试跑的示例文本。' : '示例内容'
+}
+
 export function RunStudio({
   slug,
+  skillId,
+  organizationId,
   inputSchema,
   loggedIn,
   models,
@@ -34,6 +61,8 @@ export function RunStudio({
   hasByok,
 }: {
   slug: string
+  skillId: string
+  organizationId?: string
   inputSchema: Record<string, FieldDef>
   loggedIn: boolean
   models: string[]
@@ -55,6 +84,10 @@ export function RunStudio({
   const [error, setError] = useState<string | null>(null)
 
   const set = (k: string, v: string) => setValues((s) => ({ ...s, [k]: v }))
+  const fillDemoInput = () => {
+    const demo = Object.fromEntries(fields.map(([key, def]) => [key, demoValueFor(key, def)]))
+    setValues((current) => ({ ...demo, ...Object.fromEntries(Object.entries(current).filter(([, v]) => v)) }))
+  }
   const toggleModel = (m: string) => {
     const meta = modelPaymentMeta(m, platformModels, hasByok)
     if (meta.disabled) return
@@ -77,7 +110,7 @@ export function RunStudio({
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ input: values, routeMode }),
+          body: JSON.stringify({ input: values, routeMode, organizationId }),
         })
         const data = await res.json().catch(() => ({}))
         if (res.status === 401) return setError('请先登录后再运行。')
@@ -90,7 +123,7 @@ export function RunStudio({
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ input: values, models: selected }),
+          body: JSON.stringify({ input: values, models: selected, organizationId }),
         })
         const data = await res.json().catch(() => ({}))
         if (res.status === 401) return setError('请先登录后再运行。')
@@ -110,6 +143,20 @@ export function RunStudio({
       <form onSubmit={onSubmit} className="card h-fit space-y-4 p-5">
         {fields.length === 0 && (
           <p className="text-sm text-[var(--muted)]">该 Skill 无需输入，直接运行即可。</p>
+        )}
+        {fields.length > 0 && (
+          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3 text-xs text-[var(--muted)]">
+            <div className="flex items-center justify-between gap-3">
+              <span>第一次试跑可以先用演示输入，快速看到输出、成本、延迟和台账记录。</span>
+              <button
+                type="button"
+                onClick={fillDemoInput}
+                className="shrink-0 rounded-full border border-emerald-500/40 px-3 py-1 text-emerald-200 hover:border-emerald-300"
+              >
+                填入演示输入
+              </button>
+            </div>
+          </div>
         )}
         {fields.map(([key, def]) => (
           <div key={key}>
@@ -259,14 +306,14 @@ export function RunStudio({
           </div>
         )}
 
-        {single && <ResultCard r={single} />}
+        {single && <ResultCard r={single} skillId={skillId} />}
 
         {compare && compare.length > 0 && (
           <>
             <CompareTable results={compare} />
             <div className="grid gap-4 xl:grid-cols-2">
               {compare.map((r, i) => (
-                <ResultCard key={i} r={r} title={r.model} />
+                <ResultCard key={i} r={r} skillId={skillId} title={r.model} />
               ))}
             </div>
           </>
@@ -297,15 +344,15 @@ function ResultBadges({ r }: { r: any }) {
       </span>
       {r.savedAmount > 0 && (
         <span className="rounded border border-[var(--accent-2)] px-1.5 py-0.5 text-[var(--accent-2)]">
-          省¥{r.savedAmount}
+          降本¥{r.savedAmount}
         </span>
       )}
       {r.cheaperViaByok && (
         <span
           className="rounded border border-[var(--warn)] px-1.5 py-0.5 text-[var(--warn)]"
-          title="本次走平台代付(含加价)；在设置里绑定自己的模型 Key(BYOK)直连供应商可更省"
+          title="本次走平台代付(含加价)；在设置里绑定自己的模型 Key(BYOK)可直连供应商"
         >
-          BYOK更省
+          BYOK 成本更低
         </span>
       )}
     </div>
@@ -320,7 +367,14 @@ function Badge({ children }: { children: React.ReactNode }) {
   )
 }
 
-function ResultCard({ r, title }: { r: any; title?: string }) {
+function ResultCard({ r, skillId, title }: { r: any; skillId: string; title?: string }) {
+  const model = r.model ? String(r.model) : ''
+  const modelVersion = r.modelVersion ? String(r.modelVersion) : undefined
+  const ledgerHref = r.runLedgerUrl || runLedgerUrl(skillId, model, r.ok, modelVersion)
+  const modelHref = r.modelProfileUrl || modelProfileUrl(model, modelVersion) || '/models'
+  const failureHref =
+    r.failureKnowledgeUrl ||
+    failureKnowledgeUrl({ skillId, model, modelVersion, errorCode: r.errorCode, success: r.ok })
   return (
     <div className="card space-y-3 p-4">
       {title && <div className="font-mono text-xs text-[var(--accent)]">{title}</div>}
@@ -328,6 +382,34 @@ function ResultCard({ r, title }: { r: any; title?: string }) {
       <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--panel-2)] p-3 text-sm">
         {r.output || (r.errors && r.errors.join('；')) || '（无输出）'}
       </pre>
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3 text-xs">
+        <div className="font-medium text-[var(--text)]">下一步：把这次运行变成你的私人资产</div>
+        <p className="mt-1 text-[var(--muted)]">
+          这次结果已进入私人台账；你可以回台账换模型重跑、看该模型画像，失败时直接查失败库。
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Link
+            href={ledgerHref}
+            className="rounded border border-[var(--border)] px-2 py-1 text-[var(--accent)] hover:border-[var(--accent)]"
+          >
+            去私人台账 / 重跑
+          </Link>
+          <Link
+            href={modelHref}
+            className="rounded border border-[var(--border)] px-2 py-1 text-[var(--accent)] hover:border-[var(--accent)]"
+          >
+            看模型画像
+          </Link>
+          {!r.ok && (
+            <Link
+              href={failureHref}
+              className="rounded border border-[var(--border)] px-2 py-1 text-[var(--accent)] hover:border-[var(--accent)]"
+            >
+              查失败库
+            </Link>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

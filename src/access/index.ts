@@ -1,4 +1,5 @@
 import type { Access, FieldAccess, Where } from 'payload'
+import { bountyReadWhere } from '@/lib/bountyAccess'
 
 // 角色等级排序（用于 “创作者及以上” 之类判断）
 export const RANK: Record<string, number> = {
@@ -69,6 +70,19 @@ export const readableSkillVersion: Access = ({ req: { user } }) => {
   return publicPublished
 }
 
+/** Reviews 读取：公开只看 visible；本人和审核/管理可看自己的待审/隐藏记录。 */
+export const readableReview: Access = ({ req: { user } }) => {
+  if (isActiveAccount(user) && (user?.role === 'admin' || user?.role === 'reviewer')) return true
+  const publicVisible: Where = { status: { equals: 'visible' } }
+  if (isActiveAccount(user)) return { or: [publicVisible, { user: { equals: user.id } }] } as Where
+  return publicVisible
+}
+
+/** Bounties 读取：公开只看 isPublic；本人/接单人和审核/管理可看关联的私有悬赏。 */
+export const readableBounty: Access = ({ req: { user } }) => {
+  return bountyReadWhere(user) as boolean | Where
+}
+
 /** SkillVersions 写入：管理/审核放行；其余登录用户仅限"所属 Skill 是自己作品"的版本（按 skill.author 过滤）。
  *  修复越权：此前 update 用 isCreatorOrAbove 返回布尔 true，任何 creator 可改他人版本的 prompt 劫持在线运行。 */
 export const ownSkillVersionOrStaff: Access = ({ req: { user } }) => {
@@ -86,4 +100,18 @@ export const fieldAdminOrSelf: FieldAccess = ({ req: { user }, id }) => {
   if (!isActiveAccount(user)) return false
   if (user.role === 'admin') return true
   return user.id === id
+}
+
+function relationId(value: unknown): string | undefined {
+  if (!value) return undefined
+  return typeof value === 'object' ? String((value as any).id || '') || undefined : String(value)
+}
+
+/** SkillVersion 敏感字段：公开列表可见 schema/hash，但 prompt/examples/changelog 原文只给作者或审核人员。 */
+export const sensitiveSkillVersionField: FieldAccess = ({ req: { user }, siblingData, doc }) => {
+  if (!isActiveAccount(user)) return false
+  if (user.role === 'admin' || user.role === 'reviewer') return true
+  const skill = (siblingData as any)?.skill || (doc as any)?.skill
+  const authorId = typeof skill === 'object' ? relationId((skill as any).author) : undefined
+  return Boolean(authorId && authorId === String(user.id))
 }

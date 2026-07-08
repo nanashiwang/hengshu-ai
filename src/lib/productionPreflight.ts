@@ -1,6 +1,7 @@
 import { createPrivateKey } from 'crypto'
 import { approvedPlatformModelList } from './constants'
 import { resolveReconcileModelMarginRates } from './newapiReconcile'
+import { parseTrustedAnchorPublishers } from './anchorVerify'
 
 export type PreflightLevel = 'blocker' | 'warning'
 export interface PreflightIssue {
@@ -21,6 +22,16 @@ function num(env: Env, key: string): number {
 
 function add(issues: PreflightIssue[], level: PreflightLevel, code: string, message: string) {
   issues.push({ level, code, message })
+}
+
+function parseUrl(value: string | undefined): URL | null {
+  const raw = value?.trim()
+  if (!raw) return null
+  try {
+    return new URL(raw)
+  } catch {
+    return null
+  }
 }
 
 function parseHttpsUrl(value: string | undefined): URL | null {
@@ -54,6 +65,92 @@ function parseBackupDrillDate(value?: string): Date | null {
   if (!raw) return null
   const d = new Date(raw)
   return Number.isFinite(d.getTime()) ? d : null
+}
+
+function validateTrustedAnchorPublishers(raw: string | undefined): string[] {
+  const value = raw?.trim()
+  if (!value) return []
+  const errors: string[] = []
+  const items = value.split(',').map((x) => x.trim()).filter(Boolean)
+  const parsed = parseTrustedAnchorPublishers(value)
+  if (parsed.length !== items.length) errors.push('解析结果为空或条目数量不一致')
+  for (const item of parsed) {
+    if (!item.target && !item.urlPrefix) {
+      errors.push('存在空发布目标')
+      continue
+    }
+    if (item.target && !/^[a-zA-Z0-9_.:-]+$/.test(item.target)) {
+      errors.push(`target 含非法字符：${item.target}`)
+    }
+    if (item.urlPrefix) {
+      try {
+        const url = new URL(item.urlPrefix)
+        if (url.protocol !== 'https:') errors.push(`urlPrefix 必须使用 https：${item.urlPrefix}`)
+      } catch {
+        errors.push(`urlPrefix 不是合法 URL：${item.urlPrefix}`)
+      }
+    }
+  }
+  return errors
+}
+
+
+function isPrivateOrLocalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  if (host === 'localhost' || host.endsWith('.local')) return true
+  if (/^(127|10)\./.test(host)) return true
+  if (/^192\.168\./.test(host)) return true
+  const m = host.match(/^172\.(\d+)\./)
+  if (m) {
+    const n = Number(m[1])
+    if (n >= 16 && n <= 31) return true
+  }
+  return host === '::1' || host === '[::1]'
+}
+
+export function checkPrivateDeployEnv(env: Env = process.env): PreflightIssue[] {
+  const issues: PreflightIssue[] = []
+  const secret = env.PAYLOAD_SECRET || ''
+  if (!secret || secret.length < 32 || /change_me|dev_secret|hengshu-dev-secret/i.test(secret)) {
+    add(issues, 'blocker', 'PAYLOAD_SECRET_WEAK', 'PAYLOAD_SECRET 必须是 32 字符以上强随机值')
+  }
+  const pgPassword = env.POSTGRES_PASSWORD || ''
+  if (!pgPassword || pgPassword.length < 12 || /change_me|payload|password/i.test(pgPassword)) {
+    add(issues, 'blocker', 'POSTGRES_PASSWORD_WEAK', 'POSTGRES_PASSWORD 必须改成 12 字符以上强密码')
+  }
+  const serverUrl = parseUrl(env.SERVER_URL)
+  const publicUrl = parseUrl(env.NEXT_PUBLIC_SERVER_URL)
+  if (!serverUrl) add(issues, 'blocker', 'SERVER_URL_INVALID', 'SERVER_URL 必须是合法 URL；NAS 内网可用 http://NAS_IP:8787')
+  if (!publicUrl) add(issues, 'blocker', 'NEXT_PUBLIC_SERVER_URL_INVALID', 'NEXT_PUBLIC_SERVER_URL 必须是合法 URL；NAS 内网可用 http://NAS_IP:8787')
+  if (serverUrl && publicUrl && serverUrl.origin !== publicUrl.origin) {
+    add(issues, 'blocker', 'SITE_URL_ORIGIN_MISMATCH', 'SERVER_URL 与 NEXT_PUBLIC_SERVER_URL 必须同源，避免 Cookie/CORS 行为异常')
+  }
+  for (const [key, url] of [['SERVER_URL', serverUrl], ['NEXT_PUBLIC_SERVER_URL', publicUrl]] as const) {
+    if (!url || url.protocol === 'https:') continue
+    if (url.protocol !== 'http:') {
+      add(issues, 'blocker', `${key}_SCHEME_INVALID`, `${key} 只支持 http 或 https`)
+      continue
+    }
+    if (!isPrivateOrLocalHost(url.hostname)) {
+      add(issues, 'warning', `${key}_PUBLIC_HTTP`, `${key} 使用公网 HTTP；仅建议 NAS 内网试跑，公网请改 HTTPS`)
+    }
+  }
+  if (present(env, 'APP_PORT')) {
+    const port = Number(env.APP_PORT)
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+      add(issues, 'blocker', 'APP_PORT_INVALID', 'APP_PORT 必须是 1-65535 的端口号')
+    }
+  }
+  if (!present(env, 'SERVER_URL') || !present(env, 'NEXT_PUBLIC_SERVER_URL')) {
+    add(issues, 'blocker', 'SITE_URL_MISSING', 'NAS 部署必须显式配置 SERVER_URL 和 NEXT_PUBLIC_SERVER_URL')
+  }
+  if (env.BACKUP_ENCRYPTION_CONFIRMED !== '1' || env.BACKUP_OFFSITE_CONFIRMED !== '1') {
+    add(issues, 'warning', 'BACKUP_NOT_CONFIRMED', '私有部署可先启动，但正式存放业务数据前应确认备份加密和离机保存')
+  }
+  if (!present(env, 'MEDIA_DIR')) {
+    add(issues, 'warning', 'MEDIA_DIR_DEFAULT', '未显式配置 MEDIA_DIR；Compose 默认挂载 /app/media，裸机部署需确认媒体目录持久化')
+  }
+  return issues
 }
 
 
@@ -259,6 +356,19 @@ export function checkProductionEnv(env: Env = process.env): PreflightIssue[] {
 
   if (!signingKeyValid(env.HENGSHU_SIGNING_KEY)) {
     add(issues, 'blocker', 'HENGSHU_SIGNING_KEY_INVALID', 'HENGSHU_SIGNING_KEY 缺失或不是有效 ed25519 PKCS8 base64 私钥')
+  }
+  if (!present(env, 'ANCHOR_TRUSTED_PUBLISHERS')) {
+    add(issues, 'warning', 'ANCHOR_TRUSTED_PUBLISHERS_MISSING', '未配置外锚可信发布目标；/v1/anchors/verify 只能验签，无法判断 publishedTo 是否命中可信网络')
+  } else {
+    const anchorErrors = validateTrustedAnchorPublishers(env.ANCHOR_TRUSTED_PUBLISHERS)
+    if (anchorErrors.length > 0) {
+      add(
+        issues,
+        'blocker',
+        'ANCHOR_TRUSTED_PUBLISHERS_INVALID',
+        `ANCHOR_TRUSTED_PUBLISHERS 格式无效：${anchorErrors.join('；')}`,
+      )
+    }
   }
   if (env.ALLOW_LEGACY_RUNNER_TOKEN_AUTH === '1') {
     add(issues, 'blocker', 'ALLOW_LEGACY_RUNNER_TOKEN_AUTH_ON', '生产不得开启 ALLOW_LEGACY_RUNNER_TOKEN_AUTH=1')

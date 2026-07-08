@@ -4,7 +4,9 @@ import { validateInput, checkOutputFormat } from './schemaValidate'
 import { rankPersonalizedRoute, selectModel } from './route'
 import { chatCompletion, estimateTokens, redactGatewayErrorText, type NewApiResult } from './newapi'
 import { estimateCost } from './cost'
-import { anonHash, bucketSize } from './compat'
+import { anonHash, bucketSize, recomputeLocalScore } from './compat'
+import { ensureModelProfile } from './modelProfile'
+import { runResultLinks } from './runResultLinks'
 import { generateRunId } from './slug'
 import { skillRankFromAggregates } from './skillrank'
 import { awardContribution } from './contribution'
@@ -15,6 +17,12 @@ import { prepareNewApiSubTokenForRun, syncNewApiQuotaToBalance } from './newapiQ
 import { approvedPlatformFallback, approvedPlatformModels, type RouteMode } from './constants'
 import { consumeRunRateLimit } from './rateLimit'
 import { resolveRuntimeEnv } from './deploymentSettings'
+import { applyAdapterToVersion, findActiveAdapter, refreshAdapterLift } from './adapterProfile'
+import { canUseEnterpriseSkill, recordEnterpriseRunAudit } from './enterprise'
+import { refreshSkillPassport } from './passportRefresh'
+import { refreshFailureCasesForSkill } from './failureRefresh'
+import { evaluateBenchmarkCaseResult, type BenchmarkCaseScore } from './benchmarkScoring'
+import { trustedCompatibleRunWhere } from './trustedRuns'
 
 export interface RunSkillArgs {
   payload: Payload
@@ -24,9 +32,15 @@ export interface RunSkillArgs {
   user?: { id: string } | null
   routeMode?: RouteMode
   userApiKey?: string
+  modelProvider?: string
+  modelVersion?: string
   forceModel?: string // 固定模型、不路由、不 fallback（多模型对比用）
   skipAggregate?: boolean // 跳过 Skill 指标更新与贡献值发放（对比模式避免污染聚合）
   benchmark?: boolean // 系统评测(#8)：不限频/不预检/不扣费/不排除自跑，compat 报告 source=benchmark
+  benchmarkCase?: { id?: string; title?: string; expectedOutputShape?: unknown; requiredOutputPaths?: unknown; expectedTextIncludes?: unknown; minScore?: number }
+  organizationId?: string // 企业 Registry 运行上下文；传入后强制校验组织批准和模型白名单
+  rerunOf?: string // 私人台账：从哪条历史运行换模型重跑
+  rerunFromModel?: string
 }
 
 export interface RunSkillResult {
@@ -37,16 +51,21 @@ export interface RunSkillResult {
   output?: string
   outputJson?: any
   model?: string
+  modelVersion?: string
   routeMode?: RouteMode
   cost?: number
   chargedCredits?: number // 平台代付路径实际扣减的 credit（BYOK/mock 为 0）
-  savedAmount?: number // 省钱回执：相比默认premium模型省下的估算元
-  cheaperViaByok?: boolean // 四面墙·履约隔离：本次走平台代付，自带 Key 直连供应商更省(不得隐藏)
+  savedAmount?: number // 成本优化回执：相比默认premium模型降低的估算元
+  cheaperViaByok?: boolean // 四面墙·履约隔离：本次走平台代付，自带 Key 可直连供应商(不得隐藏)
   latencyMs?: number
   tokens?: { prompt: number; completion: number; total: number }
   mocked?: boolean
   formatValid?: boolean
   skillRunId?: string
+  benchmarkScore?: BenchmarkCaseScore
+  runLedgerUrl?: string
+  modelProfileUrl?: string | null
+  failureKnowledgeUrl?: string | null
 }
 
 // 每用户真实调用频控（60 秒窗口；Redis 原子计数优先，BYOK 可降级 DB 计数）
@@ -93,10 +112,6 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
   const v = validateInput(version?.inputSchema, input)
   if (!v.valid) return { ok: false, runId, errors: v.errors }
 
-  // 2. 渲染 Prompt（Spec v1：system + user 双段）
-  const userContent = renderTemplate(version?.promptTemplate || '', input)
-  const systemContent = renderTemplate(version?.systemPrompt || '', input)
-
   // 3. 选模型（forceModel 时固定模型、不路由、不 fallback —— 用于多模型对比）
   // 默认模型为已备案国产模型（合规架构切割 6l）：平台不代理未备案境外模型
   const fallbackDefault = runtimeEnv.MODEL_GATEWAY_DEFAULT_MODEL || 'deepseek-chat'
@@ -120,6 +135,51 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
       { personalized },
     ))
   }
+
+  let enterpriseRegistryId: string | undefined
+  if (args.organizationId && user?.id && skill?.id) {
+    const ent = await canUseEnterpriseSkill(payload, {
+      userId: user.id,
+      organizationId: args.organizationId,
+      skillId: String(skill.id),
+      modelName: model,
+      input,
+      routeMode: mode,
+      byok: !!userApiKey,
+    })
+    if (!ent.ok) {
+      await recordEnterpriseRunAudit(payload, {
+        organizationId: args.organizationId,
+        actorId: user.id,
+        skillId: String(skill.id),
+        skillVersionId: version?.id ? String(version.id) : undefined,
+        runId,
+        modelName: model,
+        modelVersion: args.modelVersion,
+        deniedReason: ent.reason,
+        errorCode: 'ENTERPRISE_POLICY_DENIED',
+        input,
+      }).catch((e) => payload.logger?.error(`写入企业审计失败: ${(e as Error).message}`))
+      return { ok: false, runId, errorCode: 'ENTERPRISE_POLICY_DENIED', errors: [ent.reason] }
+    }
+    enterpriseRegistryId = ent.registryId
+  }
+
+  const selectedModelProfile = await ensureModelProfile(payload, model, args.modelProvider, args.modelVersion).catch(() => undefined)
+
+  // 3a. 适配补丁：按 Skill × Model 应用 prompt/schema/decoding patch，让兼容层能修复而不只展示问题。
+  const adapter = await findActiveAdapter(payload, {
+    skillId: skill?.id ? String(skill.id) : undefined,
+    versionId: version?.id ? String(version.id) : undefined,
+    modelName: model,
+    modelProfile: selectedModelProfile,
+  })
+  const adapted = applyAdapterToVersion(version, adapter)
+  const runVersion = adapted.version
+
+  // 2. 渲染 Prompt（Spec v1：system + user 双段；可能已叠加 Adapter prompt patch）
+  const userContent = renderTemplate(runVersion?.promptTemplate || '', input)
+  const systemContent = renderTemplate(runVersion?.systemPrompt || '', input)
 
   // 3b. 护栏（总纲 6a+6l）：mock 全免；BYOK 仅频控；平台代付=白名单+频控+credit 预检
   //     benchmark(系统评测 #8)：跳过频控/预检/扣费，但仍受白名单约束(合规)；不排除自跑、不计履约指标。
@@ -231,7 +291,7 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
           runId,
           errorCode: 'INSUFFICIENT_CREDIT',
           errors: [
-            `credit 余额不足：本次预估最高需 ${ceilingCredits} credit，当前余额 ${preCheckedUserBalance}。可自带 Key（BYOK）免扣费运行，或通过术值兑换获取 credit`,
+            `credit 余额不足：本次预估最高需 ${ceilingCredits} credit，当前余额 ${preCheckedUserBalance}。可自带 Key（BYOK）免扣费运行，或通过贡献值兑换获取 credit`,
           ],
         }
       }
@@ -289,7 +349,8 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
         model: m,
         messages,
         apiKey: platformCallApiKey,
-        maxTokens: platformMaxTokens, // 平台代付：硬约束输出上限=预检假设，杜绝超额透支；BYOK/mock 为 undefined 不限制
+        temperature: runVersion?.adapterRuntime?.temperature,
+        maxTokens: platformMaxTokens || runVersion?.adapterRuntime?.maxTokens, // 平台代付：硬约束输出上限优先，BYOK 可用 Adapter 上限
         gateway: { baseUrl: gatewayBaseUrl, apiKey: gatewayKey },
         metadata: {
           runId,
@@ -311,16 +372,16 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
   let formatValid = false
   let outputJson: any = null
   if (result) {
-    const chk = checkOutputFormat(version?.outputSchema, result.text)
+    const chk = checkOutputFormat(runVersion?.outputSchema, result.text)
     formatValid = chk.formatValid
     outputJson = chk.outputJson
   }
   const cost = result ? estimateCost(usedModel, result.promptTokens, result.completionTokens) : 0
 
-  // 省钱回执(#15后半/#16)：相比作者默认premium模型，本次省钱路由省下多少（估算元，≥0）。
-  // 参照=作者首选云模型/balanced首选，若与实际同模型或更便宜则省 0。这是不随30天半衰期归零的累计留存资产。
+  // 成本优化回执(#15后半/#16)：相比作者默认premium模型，本次成本优化路由降低多少成本（估算元，≥0）。
+  // 参照=作者首选云模型/balanced首选，若与实际同模型或更便宜则降本 0。这是不随30天半衰期归零的累计留存资产。
   const refModel =
-    version?.recommendedModels?.cloud?.[0] || version?.routePolicy?.strategies?.balanced?.[0] || fallbackDefault
+    runVersion?.recommendedModels?.cloud?.[0] || runVersion?.routePolicy?.strategies?.balanced?.[0] || fallbackDefault
   let savedAmount = 0
   if (result && refModel && refModel !== usedModel) {
     const refCost = estimateCost(refModel, result.promptTokens, result.completionTokens)
@@ -328,7 +389,7 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
   }
 
   // 结构化错误分类（6m 负知识原料）：调用失败原因 / 成功但格式漂移，仅存标签不存原文
-  const outputSchemaPresent = !!version?.outputSchema && Object.keys(version.outputSchema).length > 0
+  const outputSchemaPresent = !!runVersion?.outputSchema && Object.keys(runVersion.outputSchema).length > 0
   const errorType = classifyError({
     hasResult: !!result,
     lastError,
@@ -336,6 +397,11 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
     outputSchemaPresent,
     text: result?.text,
   })
+  const runModelVersion = usedModel === model ? args.modelVersion : undefined
+  const runModelProvider = usedModel === model ? args.modelProvider : undefined
+  const runModelProfile = usedModel === model
+    ? selectedModelProfile
+    : await ensureModelProfile(payload, usedModel, runModelProvider, runModelVersion).catch(() => undefined)
 
   // 5b. credit 消费出口（总纲 6a，三币漏斗"跑模型→蒸发"段）：仅平台代付且真实调用时扣。
   //     幂等键=runId 防重试双扣；预检已兜底，实扣允许轻微透支保台账真实（账实一致优先于余额非负）。
@@ -375,6 +441,11 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
         user: user?.id,
         skill: skill.id,
         skillVersion: version?.id,
+        rerunOf: args.rerunOf,
+        rerunFromModel: args.rerunFromModel,
+        adapterProfile: adapted.applied?.adapterId,
+        modelProfile: runModelProfile,
+        modelVersion: runModelVersion,
         model: usedModel,
         routeMode: mode,
         inputJson: input,
@@ -393,12 +464,45 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
         formatValid,
         // 对比/探测(skipAggregate)不计入 headline 指标；持久化该意图供台账对账过滤，避免重算时把探测运行错误计入
         countedInMetrics: !args.skipAggregate,
-      },
+      } as any,
     })
     skillRunId = run.id as string
   } catch (e) {
     payload.logger?.error(`写入 SkillRun 失败: ${(e as Error).message}`)
   }
+
+  if (args.organizationId && skill?.id) {
+    await recordEnterpriseRunAudit(payload, {
+      organizationId: args.organizationId,
+      registryId: enterpriseRegistryId,
+      actorId: user?.id,
+      skillId: String(skill.id),
+      skillVersionId: version?.id ? String(version.id) : undefined,
+      skillRunId,
+      runId,
+      modelName: usedModel,
+      modelVersion: runModelVersion,
+      modelProfile: runModelProfile,
+      success,
+      errorCode: errorType || (success ? undefined : 'NEWAPI_ERROR'),
+      input,
+      outputText: result?.text,
+      latencyMs: result?.latencyMs || 0,
+      estimatedCost: cost,
+      chargedCredits,
+      metadata: { routeMode: mode, fallbackUsed: usedModel !== model, skipAggregate: !!args.skipAggregate },
+    }).catch((e) => payload.logger?.error(`写入企业审计失败: ${(e as Error).message}`))
+  }
+
+  const benchmarkScore = args.benchmark
+    ? evaluateBenchmarkCaseResult({
+        ok: success,
+        formatValid,
+        output: result?.text,
+        outputJson,
+        testCase: args.benchmarkCase,
+      })
+    : undefined
 
   // 6b. 在线回流兼容报告（护城河水龙头 + 负知识水龙头 6m）：真实调用(含失败)喂逐模型评测数据（不含原文）。
   //     排除 mock 与作者自跑（防自刷）；失败也回流（带 errorType），是负知识库的原料来源。
@@ -437,6 +541,12 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
               skillVersion: version?.id,
               anonymousUserHash: uHash,
               modelName: usedModel,
+              modelProfile: runModelProfile,
+              modelVersion: runModelVersion,
+              adapterProfile: adapted.applied?.adapterId,
+              benchmarkCase: args.benchmarkCase?.id,
+              benchmarkScore: benchmarkScore?.score,
+              benchmarkPassed: benchmarkScore?.passed,
               success,
               formatValid,
               latencyMs: result?.latencyMs || 0,
@@ -446,16 +556,28 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
               source: reportSource,
             },
           })
+          if (!args.skipAggregate && !args.benchmark) {
+            await recomputeLocalScore(payload, String(skill.id))
+            await refreshSkillPassport(payload, String(skill.id))
+          }
+          if (adapted.applied?.adapterId) {
+            await refreshAdapterLift(payload, { id: adapted.applied.adapterId, skill: skill.id, modelName: usedModel, modelVersion: runModelVersion }).catch((e) =>
+              payload.logger?.error(`刷新 Adapter lift 失败: ${(e as Error).message}`),
+            )
+          }
+          if (errorType) {
+            await refreshFailureCasesForSkill(payload, String(skill.id))
+          }
         }
       } catch (e) {
-        payload.logger?.error(`写入在线兼容报告失败: ${(e as Error).message}`)
+        payload.logger?.error(`写入在线兼容报告/刷新兼容聚合失败: ${(e as Error).message}`)
       }
     }
   }
 
   // 7. 更新 Skill 指标 + 发贡献值（对比模式 skipAggregate 跳过，避免污染聚合）
   if (!args.skipAggregate) {
-    await updateSkillMetrics(payload, skill, {
+    await updateSkillMetrics(payload, skill, version, {
       success,
       cost,
       latencyMs: result?.latencyMs || 0,
@@ -492,11 +614,12 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
     output: result?.text,
     outputJson,
     model: usedModel,
+    modelVersion: runModelVersion,
     routeMode: mode,
     cost,
     chargedCredits,
     savedAmount,
-    // 四面墙·履约隔离：平台代付含加价，自带 Key 直连供应商更省——强制回传，不得隐藏(网关抄不起的诚实)
+    // 四面墙·履约隔离：平台代付含加价，自带 Key 可直连供应商——强制回传，不得隐藏(网关抄不起的诚实)
     cheaperViaByok: platformKeyPath && !args.benchmark && !!result && !result.mocked,
     latencyMs: result?.latencyMs,
     tokens: result
@@ -505,12 +628,21 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
     mocked: result?.mocked,
     formatValid,
     skillRunId,
+    benchmarkScore,
+    ...runResultLinks({
+      skillId: skill.id,
+      model: usedModel,
+      modelVersion: runModelVersion,
+      errorCode: success ? undefined : errorType,
+      success,
+    }),
   }
 }
 
 async function updateSkillMetrics(
   payload: Payload,
   skill: any,
+  version: any,
   r: { success: boolean; cost: number; latencyMs: number; formatValid: boolean },
 ) {
   try {
@@ -522,12 +654,21 @@ async function updateSkillMetrics(
     const avgCost = avg(skill.avgCost || 0, r.cost || 0)
     const avgLatencyMs = Math.round(((skill.avgLatencyMs || 0) * n + (r.latencyMs || 0)) / newCount)
     const formatSuccessRate = avg(skill.formatSuccessRate || 0, r.formatValid ? 1 : 0)
+    const trustedCompatibleRuns = await payload.count({
+      collection: 'skill-runs' as any,
+      where: trustedCompatibleRunWhere(undefined, {
+        skillId: String(skill.id),
+        versionId: version?.id ? String(version.id) : undefined,
+      }),
+      overrideAccess: true,
+    }).catch(() => ({ totalDocs: undefined }))
     const skillRank = skillRankFromAggregates({
       successRate,
       avgCost,
       avgLatencyMs,
       formatSuccessRate,
       avgRating: skill.avgRating,
+      trustedCompatibleRunCount: trustedCompatibleRuns.totalDocs,
       lastUpdatedAt: skill.lastUpdatedAt,
     })
     await payload.update({

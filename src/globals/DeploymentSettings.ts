@@ -125,6 +125,19 @@ export const DeploymentSettings: GlobalConfig = {
             { name: 'backupNotes', type: 'textarea', label: '备份备注' },
           ],
         },
+        {
+          label: '可信网络',
+          fields: [
+            {
+              name: 'anchorTrustedPublishers',
+              type: 'textarea',
+              label: '外锚可信发布目标',
+              admin: {
+                description: '逗号分隔；格式 target|urlPrefix 或 urlPrefix。用于 /v1/anchors/verify 判断 publishedTo 是否命中可信网络。',
+              },
+            },
+          ],
+        },
       ],
     },
   ],

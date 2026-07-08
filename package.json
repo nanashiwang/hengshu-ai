@@ -1,7 +1,7 @@
 {
   "name": "hengshu-ai",
   "version": "0.1.0",
-  "description": "衡术 Hengshu — 经过评测的 AI Skill 市场",
+  "description": "衡术 Hengshu — AI Skill 的可信与兼容控制平面",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
@@ -18,6 +18,10 @@
     "seed:rules": "cross-env NODE_OPTIONS=--no-deprecation tsx src/seed/contribution-rules.ts",
     "keygen": "cross-env NODE_OPTIONS=--no-deprecation tsx src/seed/keygen.ts",
     "worker:skillrank": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/recompute-skillrank.ts",
+    "worker:backfill-passports": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/backfill-passports.ts",
+    "worker:refresh-model-profiles": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/refresh-model-profiles.ts",
+    "worker:backfill-compat-model-profiles": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/backfill-compat-model-profiles.ts",
+    "worker:cluster-failures": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/cluster-failures.ts",
     "worker:reconcile": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/reconcile-ledger.ts",
     "worker:benchmark": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/benchmark.ts",
     "test": "vitest run",
@@ -35,7 +39,12 @@
     "worker:preflight-production": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/preflight-production.ts",
     "worker:export-score-anchors": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/export-score-anchors.ts",
     "worker:verify-score-anchors": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/verify-score-anchors.ts",
-    "worker:benchmark-queue": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/benchmark-queue.ts"
+    "worker:export-evidence-anchors": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/export-evidence-anchors.ts",
+    "worker:verify-evidence-anchors": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/verify-evidence-anchors.ts",
+    "worker:benchmark-queue": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/benchmark-queue.ts",
+    "worker:import-skill-sources": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/import-skill-sources.ts",
+    "worker:preflight-private": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/preflight-private-deploy.ts",
+    "worker:sync-skill-sources": "cross-env IMPORT_SYNC=1 NODE_OPTIONS=--no-deprecation tsx src/worker/import-skill-sources.ts"
   },
   "dependencies": {
     "@payloadcms/db-postgres": "3.85.1",

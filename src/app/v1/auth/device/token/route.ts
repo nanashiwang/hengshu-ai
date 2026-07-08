@@ -1,18 +1,16 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { clearPendingAccessToken, pendingAccessTokenFromMeta } from '@/lib/deviceAuth'
+import { isDeviceAuthError, MAX_DEVICE_AUTH_REQUEST_BYTES, normalizeDeviceCode } from '@/lib/deviceAuthRequest'
+import { readJsonBodyWithLimit } from '@/lib/requestBody'
 
 // POST /v1/auth/device/token —— Runner 轮询换取访问令牌
 export async function POST(request: Request) {
   const payload = await getPayload({ config })
-  let body: any = {}
-  try {
-    body = await request.json()
-  } catch {
-    /* noop */
-  }
-  const deviceCode = String(body.device_code || '').trim()
-  if (!deviceCode) return Response.json({ error: 'invalid_request' }, { status: 400 })
+  const parsed = await readJsonBodyWithLimit(request, MAX_DEVICE_AUTH_REQUEST_BYTES, '设备授权请求体过大', { emptyValue: {} })
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: parsed.status })
+  const deviceCode = normalizeDeviceCode(parsed.value?.device_code)
+  if (isDeviceAuthError(deviceCode)) return Response.json({ error: deviceCode.error }, { status: deviceCode.status })
 
   const codes = await payload.find({
     collection: 'device-codes',

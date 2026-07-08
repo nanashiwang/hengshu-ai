@@ -76,7 +76,7 @@ async function main() {
       })
       processed++
       payload.logger.info(
-        `队列评测 ${loaded.skill.slug}: attempts=${r.attempted}/${maxAttempts} models=[${r.models.join(',')}] real=${r.reported} mock=${r.mocked} LocalScore=${r.localScore}`,
+        `队列评测 ${loaded.skill.slug}: attempts=${r.attempted}/${maxAttempts} models=[${r.models.join(',')}] real=${r.reported} mock=${r.mocked} 兼容分=${r.localScore}`,
       )
     } catch (e) {
       failed++

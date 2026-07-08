@@ -195,7 +195,7 @@ export const Users: CollectionConfig = {
         // 删用户级联（在删除事务内、透传 req → 原子；任一步失败整体回滚，绝不产生脏数据）
         const p = req.payload
         const opts = { overrideAccess: true, req }
-        // 阻断危险场景：仍有作品(会悬空作者) / 进行中或争议悬赏(冻结术值会卡死)
+        // 阻断危险场景：仍有作品(会悬空作者) / 进行中或争议悬赏(冻结贡献值会卡死)
         const skills = await p.count({ collection: 'skills', where: { author: { equals: id } }, ...opts })
         if (skills.totalDocs > 0) throw new Error('该用户仍有 Skill 作品，请先转移或删除其作品后再删账号')
         const activeBounties = await p.count({
@@ -217,7 +217,7 @@ export const Users: CollectionConfig = {
         const creditLogs = await p.count({ collection: 'credit-logs', where: { user: { equals: id } }, ...opts })
         if (creditLogs.totalDocs > 0) throw new Error('该用户存在 credit 流水，按资金台账留痕要求禁止删号；请封禁或匿名化')
         const contributionLogs = await p.count({ collection: 'contribution-logs', where: { user: { equals: id } }, ...opts })
-        if (contributionLogs.totalDocs > 0) throw new Error('该用户存在术值流水，按台账留痕要求禁止删号；请封禁或匿名化')
+        if (contributionLogs.totalDocs > 0) throw new Error('该用户存在贡献值流水，按台账留痕要求禁止删号；请封禁或匿名化')
         // 删除用户私有从属记录（favorites/reviews 触发各自 afterDelete 修正 Skill 计数）
         for (const collection of [
           'favorites',

@@ -1,6 +1,8 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
+import { isBountyRequestError, MAX_BOUNTY_REQUEST_BYTES, normalizeBountyCreate } from '@/lib/bountyRequest'
+import { readJsonBodyWithLimit } from '@/lib/requestBody'
 
 // POST /v1/bounties —— 发布悬赏（幂等）
 // 同一 idempotencyKey 只会创建一次：超时/断网后用户重试也不会重复发布/重复扣款。
@@ -11,11 +13,11 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: '请先登录' }, { status: 401 })
   if ((user as any).accountStatus === 'banned') return Response.json({ error: '账号已被封禁' }, { status: 403 })
 
-  const body = await request.json().catch(() => ({}))
-  const { title, description, rewardPoints, dueAt, idempotencyKey } = body || {}
-  if (!title || typeof title !== 'string') {
-    return Response.json({ error: '请填写悬赏标题' }, { status: 400 })
-  }
+  const parsed = await readJsonBodyWithLimit(request, MAX_BOUNTY_REQUEST_BYTES, '悬赏请求体过大')
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: parsed.status })
+  const bounty = normalizeBountyCreate(parsed.value)
+  if (isBountyRequestError(bounty)) return Response.json({ error: bounty.error }, { status: bounty.status })
+  const { title, description, rewardPoints, dueAt, idempotencyKey } = bounty
 
   // 幂等：该用户已用同一 key 发过 → 直接返回既有悬赏，不重复创建/扣款
   const findByKey = async () => {
@@ -59,8 +61,8 @@ export async function POST(request: Request) {
       if (again) return Response.json({ ok: true, id: again.id, duplicate: true })
     }
     // 余额不足由 beforeChange 抛出
-    if (msg.includes('术值不足')) {
-      return Response.json({ error: '术值不足，无法冻结赏金' }, { status: 400 })
+    if (msg.includes('贡献值不足')) {
+      return Response.json({ error: '贡献值不足，无法冻结赏金' }, { status: 400 })
     }
     payload.logger?.error(`发布悬赏失败: ${msg}`)
     return Response.json({ error: '发布失败，请重试' }, { status: 400 })

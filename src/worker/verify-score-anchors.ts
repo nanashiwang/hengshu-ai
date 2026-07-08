@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { readFile } from 'fs/promises'
 import path from 'path'
 import { verifyScoreAnchorManifest, type ScoreAnchorManifest } from '@/lib/scoreAnchor'
+import { getPublicKeyInfo } from '@/lib/signing'
 
 const IN = process.env.SCORE_ANCHOR_FILE || 'docs/anchors/score-snapshots.jsonl'
 const MANIFEST_IN = process.env.SCORE_ANCHOR_MANIFEST_FILE || 'docs/anchors/score-snapshots.manifest.json'
@@ -14,7 +15,7 @@ async function main() {
     .map((line) => line.trim())
     .filter(Boolean)
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as ScoreAnchorManifest
-  const result = verifyScoreAnchorManifest(lines, manifest)
+  const result = verifyScoreAnchorManifest(lines, manifest, getPublicKeyInfo())
   if (!result.ok) {
     console.error(`分数快照外锚校验失败：${result.reason}`)
     process.exit(2)

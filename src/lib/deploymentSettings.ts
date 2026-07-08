@@ -81,6 +81,7 @@ export function deploymentSettingsToEnv(doc: any, base: RuntimeEnv = process.env
   putBoolFlag(out, 'BACKUP_ENCRYPTION_CONFIRMED', doc.backupEncryptionConfirmed)
   putBoolFlag(out, 'BACKUP_OFFSITE_CONFIRMED', doc.backupOffsiteConfirmed)
   put(out, 'BACKUP_RESTORE_DRILL_AT', doc.backupRestoreDrillAt)
+  put(out, 'ANCHOR_TRUSTED_PUBLISHERS', doc.anchorTrustedPublishers)
 
   return out
 }

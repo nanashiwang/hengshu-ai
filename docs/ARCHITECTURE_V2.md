@@ -1,0 +1,105 @@
+# 衡术 v2 架构映射
+
+> 目的：把当前代码基座映射到「AI Skill 的可信与兼容控制平面」对象，避免继续按旧的“省钱路由 + 中转履约”叙事开发。
+> 更新时间：2026-07-08
+
+## 已落地
+
+| v2 对象/能力 | 当前实现 | 说明 |
+|---|---|---|
+| Skill | `src/collections/Skills.ts` | Skill 市场、状态、可见性、作者、指标；新增 `isEssential` 支撑必备 Skill onboarding。 |
+| SkillVersion / Skill Contract | `src/collections/SkillVersions.ts`、`src/lib/skillContract.ts` | 已有 prompt、input/output schema、permissions、examples、recommended models、routePolicy；自动生成 `contractHash`，并标记初始/兼容/破坏性变更；公开 Contract 只输出 hash/schema/权限摘要，prompt/examples/changelog 原文按字段权限隐藏。 |
+| Manifest 快照 | `src/collections/SkillArtifacts.ts` | 发布时冻结 manifest/checksum/signature；原始集合仅后台可读，公开下载走 `/v1/skills/[slug]/manifest`；无 manifest 走人工审核。 |
+| Runner | `runner/hengshu.mjs` | 支持安装、本地运行、验签和兼容报告回流。 |
+| SkillRuns 私人台账 | `src/collections/SkillRuns.ts`、`src/app/v1/runs/route.ts`、`src/app/v1/runs/[id]/rerun/route.ts` | 输入/输出加密；记录模型、成本、延迟、错误；支持多维筛选导出、换模型一键重跑、重跑血缘，并为失败运行输出模型画像/失败库排障入口。 |
+| CompatReports 活体数据 | `src/collections/CompatReports.ts`、`src/lib/compat.ts` | 脱敏兼容报告；时间衰减 + 来源权重聚合；优先按 `modelProfile`/版本分组；前台展示有效样本与来源权重摘要。 |
+| SkillPassport | `src/collections/SkillPassports.ts`、`src/lib/passport.ts`、`src/lib/passportRefresh.ts` | 随 Runner/online/benchmark 回流自动刷新；写入 evidenceHash 和证据快照；原始集合仅后台可读，公开读取走脱敏 Passport API。 |
+| ModelProfile | `src/collections/ModelProfiles.ts`、`src/lib/modelProfile.ts` | 支持 modelName + modelVersion；刷新 worker；记录 `driftHistory` 漂移曲线；回归/漂移告警；保留有效样本与来源权重；原始集合仅后台可读，公开读取走脱敏模型画像 API。 |
+| CompatTestCase | `src/collections/CompatTestCases.ts`、`src/lib/benchmark.ts`、`src/lib/benchmarkScoring.ts` | benchmark 优先读取测试用例，再回退 examples/schema；支持按黄金样例 requiredOutputPaths / expectedTextIncludes 逐条打分，并把 case 分数写回兼容报告；测试输入原文仅作者/审核/管理可读。 |
+| FailureCase | `src/collections/FailureCases.ts`、`src/lib/failureKnowledge.ts`、`src/lib/failureRefresh.ts` | 按 Skill × 输入档 × errorType 聚合任务失败画像；随失败回流自动刷新并写证据快照；原始集合仅后台可读，公开读取走脱敏失败库 API。 |
+| AdapterProfile | `src/collections/AdapterProfiles.ts`、`src/lib/adapterProfile.ts`、`src/app/v1/failures/[id]/adapter/route.ts` | Skill × Model/Profile 的 prompt/schema/decoding/retry 补丁；运行时应用；自动 evidenceHash/快照；刷新 before/after lift；支持从 FailureCase 生成待审核草稿；原始补丁正文仅作者/审核/管理可读。 |
+| EvidenceSnapshots | `src/collections/EvidenceSnapshots.ts`、`src/lib/evidenceSnapshot.ts`、`src/lib/evidenceSnapshotVerify.ts`、`src/lib/evidenceAnchor.ts` | Passport / FailureCase / Adapter 的 append-only 证据快照；原始集合仅后台可读；公开验签必须带已知 targetType/targetId，不允许匿名枚举；支持 JSONL 外锚导出、manifest 自签/校验，以及第三方发布/时间戳声明。 |
+| 公开验签 | `src/app/(frontend)/verify/page.tsx`、`src/components/verify/CertificateVerifyForm.tsx`、`src/components/verify/EvidenceVerifyForm.tsx`、`src/components/verify/AnchorVerifyForm.tsx`、`src/app/v1/evidence/verify/route.ts`、`src/app/v1/anchors/verify/route.ts`、`src/app/v1/certificates/verify/route.ts`、`src/app/v1/skills/[slug]/passport/route.ts`、`src/lib/scoreAnchor.ts`、`src/lib/skillCertificateVerify.ts` | 分数快照、证据快照、Skill Passport 和达标证书均可公开复核；达标证书可通过 `/verify?certificateUrl=...` 直达自动加载并验签；证据快照表单可输入或通过 `/verify?targetType=...&targetId=...` 直达展示脱敏 targetSummary、payloadHash 和签名状态；Passport API 也返回带 evidenceHash 的黄金样例基准摘要；分数/证据外锚 manifest 支持 ed25519 自签/校验、可信发布目标/外部时间戳可信等级、页面粘贴校验和公开 API 校验。 |
+| Enterprise Registry | `src/collections/Organizations.ts`、`OrganizationMembers.ts`、`EnterpriseRegistries.ts`、`src/app/v1/enterprise/registry/route.ts`、`members/route.ts`、`identity/route.ts`、`/console/enterprise` | 组织、成员、批准 Skill、模型白名单与治理边界；支持审批准入、成员增删改、组织内 Passport 读取、基础策略包执行、策略模板编辑和身份策略配置；添加成员时执行邮箱域/SSO 策略。 |
+| 企业运行授权 | `src/lib/enterprise.ts`、`src/app/v1/skills/[slug]/run/route.ts`、`compare/route.ts` | 企业 Skill 或传 organizationId 时必须组织成员 + approved registry。 |
+| 企业运行审计 / 失败知识 | `src/collections/EnterpriseAuditLogs.ts`、`src/app/v1/enterprise/audit/export/route.ts`、`src/app/v1/enterprise/failures/route.ts` | 成功/失败/策略拒绝均可审计；CSV 导出；可按组织聚合脱敏失败知识和模型版本分布；不含输入输出原文。 |
+| 上传审核 | `src/lib/skillComplianceReview.ts`、`src/app/v1/skills/route.ts` | 规则 + AI 审核 + 人工兜底；低风险 Prompt Skill 才能自动上架。 |
+| Import Adapters | `src/lib/skillPackage.ts`、`src/lib/skillSourceImport.ts`、`src/worker/import-skill-sources.ts` | 无 Hengshu manifest 的 GitHub README / Claude Skill `SKILL.md` / GPTs 配置可转成 Imported Skill 的初始 Prompt Contract，默认仍走人工审核；支持来源清单批量导入、内容 hash、手动同步和变更差分。 |
+
+## 当前关键数据闭环
+
+```text
+真实运行 / Runner 回流 / benchmark
+→ CompatReports
+→ 兼容分（localScore）+ dataDriven routePolicy
+→ SkillPassport + EvidenceSnapshot
+→ ModelProfile freshness / regressionAlerts
+→ FailureCase 任务失败画像 + EvidenceSnapshot
+→ 前台详情页 / 模型榜 / 失败库 / 公开验签 API
+```
+
+## 已接入的前台触点
+
+| 页面/API | 当前能力 |
+|---|---|
+| 首页 + `/skills` | 首页“先跑必备 Skill”新手入口；首页 SkillCard 展示 Passport 可信分；首页引导从已有运行证据的 Skill fork 成新版本；`/skills?essential=1` 必备筛选；市场顶部 Starter Pack；必备页展示“看 Passport → 默认输入试跑 → 回控制台看台账/重跑”的新手路径；列表展示 Passport 可信分和证据入口，并可直达试跑页和该 Skill 私人台账；分类、搜索、排序。 |
+| `/v1/skills` | 公开 Skill 摘要列表 API，支持 `essential=1` 输出必备 Skill starter pack，并返回 Passport 可信摘要、证据入口、证书入口、试跑入口和台账入口。 |
+| `/skills/[slug]` | Passport 区块、证据快照摘要、黄金样例基准分、公开 Contract/Passport API、达标证书可视化验签入口、证据验签入口、兼容矩阵；兼容矩阵可跳转模型画像、该 Skill×模型失败库与 Adapter API。 |
+| `/skills/[slug]/run` | 在线试跑页；运行前展示 Passport 可信分，并提供 Passport、Contract、达标证书和证据验签入口；运行请求可携带 modelProvider/modelVersion，结果进入私人台账并按模型版本回流兼容证据。 |
+| `/models` | 中立模型榜；显示 ModelProfile 稳定/回归告警、来源权重、有效样本和画像筛选表单；每行可跳转模型画像 API、该模型失败库与 Adapter API，不污染排序。 |
+| `/v1/model-profiles` | 公开读取模型画像、版本漂移、回归告警、有效样本和来源权重；支持 modelName/modelVersion/provider/status 过滤；返回失败库和 Adapter 排障入口，不暴露平台收益字段。 |
+| `/failures` | 优先读取 FailureCases；展示“发现失败模式 → 生成 Adapter 草稿 → 复验 lift”的闭环；展示 profileKey、主输入档、模型分布、Adapter 建议、模型画像入口、Adapter API、失败/Adapter 证据验签入口和多维筛选表单；只有 Skill 作者、审核员或管理员可从失败案例生成 Adapter 草稿并直达后台草稿审核。 |
+| `/v1/failures` | 公开读取脱敏 FailureCase 列表、修复/复验建议、模型/来源分布、模型画像/Adapter 排障入口和 API/页面证据验签入口；支持 errorType/modelName/modelVersion/status/skillId/profileKey/inputBucket/source 过滤。 |
+| `/rank` | 可信发现榜；把可信分（skillRank）、成功率、可信兼容运行数和 Passport 可信分放在一起，并提供公开 Passport 证据入口，避免把下载量/普通调用量当成可信度。 |
+| `/bounties` | 求术悬赏；引导用户把需求写成可验收标准，创作者交付可版本化、可签名、可进入 Passport 闭环的 Skill，而不是一次性答案。 |
+| `/console` | 个人控制台概览；展示已安装 Skill、Runner、私人台账、兼容贡献，并突出私人运行台账的总运行、成功、格式有效、可信兼容和换模型重跑。 |
+| `/console/skills/new` | 创作者发布页；按“上传包 → 生成 Contract → 刷新 Passport → 适配维护”解释发布闭环，并提示 manifest、schema、示例、权限和推荐模型会影响 Passport/证书质量；待审阶段证据入口按作者预览口径展示。 |
+| `/console/skills` | 我的作品；每个 Skill 展示发布状态、可信兼容运行数、Contract 状态、Passport 可信分，并直达 Contract、Passport、证书/预览、失败库/Adapter。 |
+| `/console/runs` | 私人运行台账；页面按 Skill/模型/路由/成功/格式/可信兼容/重跑来源筛选；查看输入/输出；导出账本指标或本人输入/输出并沿用筛选；推荐模型或自定义 OpenAI 兼容模型名重跑；重跑血缘；展示重跑前后成本/延迟/成功结果对比；失败运行可直达模型画像和失败库。 |
+| `/v1/runs` | 当前用户私人运行台账导出 API；支持 skillId/model/modelVersion/routeMode/success/formatValid/trustedCompatible/rerunOf 过滤；默认只导出账本指标，同时返回 `modelProfileUrl`、`trustedCompatible` 与失败运行的 `failureKnowledgeUrl`；`includeIO=1` 时仅本人导出输入/输出；导出动作写入审计日志。 |
+| `/docs` | 面向用户的模块化功能说明；首页按“找 Skill / 本地 Runner / 发布 / 私人台账 / 公开验签 / 企业 Registry”六条路径直达关键入口。 |
+| `/verify` | 解释分数快照、达标证书、证据快照、外锚包四类证据链；分数快照验签列表 + 达标证书在线验签表单（支持 certificateUrl 自动加载并展示绑定 Contract）+ 证据快照在线验签表单（支持 query 参数直达并展示 targetSummary）+ 外锚包在线校验表单；可粘贴证书、score/evidence JSONL、manifest、可信发布目标和时间戳 receipt，并展示外锚可信等级。 |
+| `/v1/evidence/verify` | 公开验证已知 Passport/FailureCase/Adapter 证据快照；必须带 `targetType` 和 `targetId`，返回公开脱敏 `targetSummary`、payloadHash 和签名状态，不允许匿名枚举全部证据快照。 |
+| `/v1/anchors/verify` | 公开校验 score/evidence 外锚 JSONL + manifest，返回链头、行数、文件哈希、签名校验结果、可信发布目标命中状态、外部时间戳 receiptHash 校验结果和 `assurance.level`（chain_only/self_signed/trusted_published/external_timestamped）；可信发布目标可在部署设置配置。 |
+| `/v1/certificates/verify` | 公开校验绑定 Contract 摘要的 Skill 达标证书 certificateHash 与 ed25519 签名；支持完整证书响应或裸 certificate 对象，返回 valid/unsigned/hash_mismatch/key_unavailable/signature_invalid，并带证书绑定的 Contract/Passport/基准摘要和 `statusReasons` 供页面展示。 |
+| `worker:preflight-private` | NAS/私有部署 readiness：允许内网 HTTP，但阻断默认密钥/弱数据库密码/URL 不同源/非法端口，并提示备份与媒体持久化。 |
+| `worker:preflight-production` | 生产上线前检查可信发布目标格式；缺失只警告，非法 URL / 空目标阻断。 |
+| `/v1/skills/[slug]/contract` | 公开读取 Skill 能力契约摘要、contractHash 和 prompt hash，不暴露 prompt 正文。 |
+| `/v1/skills/[slug]/passport` | 公开读取清洗后的 Skill Passport + 黄金样例摘要 + 可信兼容运行计数 + API/页面证据验签入口 + 最新证据验签摘要。 |
+| `/v1/skills/[slug]/certificate` | 公开读取 Skill 达标证书：合并 Contract 摘要、Passport、可信兼容运行计数、黄金样例逐条摘要、证据快照验签状态，输出 certificateHash、ed25519 签名、Passport 证据验签页面入口和未达正式达标原因。 |
+| `/v1/enterprise/audit/export` | 企业审计 CSV 导出，含模型版本治理元数据，不含输入输出原文。 |
+| `/v1/enterprise/failures` | 组织内失败知识库，只从企业审计元数据聚合，含模型版本分布，不暴露输入输出。 |
+| `/v1/enterprise/registry` + `/console/enterprise` | GET 返回内置策略模板；POST 更新准入/白名单/策略包；控制台展示“批准 Skill → 绑定策略 → 留审计 → 查失败库”治理闭环，可编辑 Registry 策略模板并直达组织内 Passport/证书状态、审计导出（含模型版本）和企业失败知识库。 |
+| `/v1/enterprise/identity` + `/console/enterprise` | 更新组织身份策略：邮箱域白名单、requireSso、OIDC provider/issuer/clientId/discoveryUrl、SCIM baseUrl/tokenDigest；保存时阻断非 HTTPS URL、缺失 OIDC 必填项和非法 tokenDigest。 |
+| `/v1/enterprise/scim/users` | SCIM provision 入口：用 Bearer token digest 校验后，兼容 `userName`/`emails`/`roles` payload、`userName/email/emails.value eq` filter 和 PATCH Operations；支持按 email 查询、无 email 返回 ListResponse、创建/绑定或停用组织成员。 |
+| `/v1/enterprise/members` | 添加/更新/移除组织成员；添加 active 成员时执行组织身份策略，移除时保留 suspended 记录。 |
+| `/v1/enterprise/registry/[id]/passport` | 组织内读取已批准/可审 Registry 的 Skill Passport、治理状态、证据验签摘要、证书状态摘要和绑定 Contract 的达标证书，便于企业采购/审计复核。 |
+| `worker:export-evidence-anchors` / `worker:verify-evidence-anchors` | 导出证据快照 JSONL 哈希链，并用 manifest 校验行数、链头、文件哈希、manifest ed25519 自签名和第三方发布/时间戳声明格式。 |
+| `/v1/adapters` | 公开读取 active Adapter 的 lift 效果摘要和 API/页面证据验签入口；支持 skillId/modelName/modelVersion/failureType/failureId/modelProfile 过滤，不暴露 prompt/schema/decoding 补丁正文、草稿或停用补丁。 |
+| `/v1/failures/[id]/adapter` | 从失败案例生成 Adapter 草稿，由作者/审核员确认后启用。 |
+| `/v1/skills` 包上传 | 支持 Hengshu Skill 包；也可导入 GitHub README、Claude Skill `SKILL.md`、GPTs 配置为待审 Imported Skill。 |
+| `worker:import-skill-sources` / `worker:sync-skill-sources` | 从 JSON 来源清单批量导入 GitHub README / Claude Skill / GPTs / Skill 包；用稳定来源键幂等创建，另存内容 hash；`--sync`/同步 worker 命中内容变化时生成新版本并记录差分，可直接挂 cron。 |
+
+## 半落地 / 下一步
+
+| 能力 | 现状 | 下一步 |
+|---|---|---|
+| SSO / SCIM | 配置校验 + 最小 SCIM provision | `Organizations.identityPolicy` + `/v1/enterprise/identity` + `/v1/enterprise/scim/users` + 控制台身份策略面板已承接 domainAllowlist、requireSso、OIDC、SCIM 配置；保存时校验 HTTPS URL、OIDC 必填项与 tokenDigest；SCIM 已支持查询、ListResponse 列表、`userName/email/emails.value eq` filter、PATCH Operations、创建/绑定、停用成员，后续接完整 OIDC/SAML 登录和更复杂的 SCIM filter 兼容。 |
+
+## 当前开发原则
+
+- 前台主叙事：可信、兼容、可治理。
+- 可信榜/模型榜只展示中立事实，不把平台收益纳入排序。
+- 成本优化路由、New API、credit：保留为后台履约/优化能力，不作为主叙事。
+- 无 manifest 的 Skill：可收录、可预览、可人工审核，但不得自动 Verified 上架。
+- 公开聚合不得暴露 prompt 正文、examples 原文、原始输入输出、平台收益或内部日志；企业审计只记录治理元数据、模型版本和规模档。
+- Payload 原始集合默认不作为公开接口；Passport / FailureCase / ModelProfile / Adapter / EvidenceSnapshot / SkillArtifact 等公开能力必须走 `/v1` 脱敏 API 或专门下载/验签端点。
+- 评论与悬赏原始集合也按状态过滤：匿名只读 visible 评论和 public 悬赏；待审/隐藏评论、私有悬赏只给本人、接单人或审核/管理查看。
+- 失败库公开 API 只暴露 observed / confirmed / fixed；ignored 仅留作后台内部降噪状态，不能被 query 参数枚举出来。
+- 公开已发布 Skill 的 Passport / 证书端点只读取 current Passport；draft/stale 仅用于作者、审核员或管理员预览，避免把待审证据当成正式可信结论。
+- Skill 详情页和 SEO metadata 也复用同一公开判断：匿名只看 published + public；private / unlisted / enterprise 即使已发布也只给作者、审核员、管理员或企业管理员预览。
+- 企业运行/对比端点不再用 Payload 公开读权限做预检；服务端读取后由 `runSkill` 按最终模型、输入规模、routeMode、BYOK 和 Registry 策略统一校验并写审计，避免模型白名单在路由前因缺少最终模型而误拦截。
+- 企业控制台 Registry 卡片提供“组织上下文试跑”，跳转时携带 `organizationId`，保证网页试跑也进入企业策略、审计和失败知识库闭环。
+- 悬赏认领即使服务端用 id 读取，也必须校验 `isPublic` 和 `open` 状态；私有悬赏不能被知道 id 的陌生用户抢单。
+- 悬赏交付物必须是接单人本人公开已发布的 Skill，避免用不可见草稿、私有 Skill 或他人热门 Skill 冒充可复用交付。
+- 私有悬赏详情页服务端读取后再执行统一可见性判断：只给发布人、接单人、审核员或管理员查看，匿名和无关用户不可通过 id 访问。

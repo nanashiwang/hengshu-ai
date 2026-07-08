@@ -3,6 +3,16 @@ import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
 import { runSkill } from '@/lib/skillRunner'
 import { decryptSecret } from '@/lib/secrets'
+import { canRerunPrivateLedgerSkill } from '@/lib/skillEvidenceAccess'
+import { isUsableSkillVersionForPublicEvidence, resolveCurrentSkillVersionForPublicEvidence } from '@/lib/skillVersionPublic'
+import { readJsonBodyWithLimit } from '@/lib/requestBody'
+import {
+  isValidationError,
+  MAX_SKILL_RUN_REQUEST_BYTES,
+  normalizeOptionalModelProvider,
+  normalizeOptionalModelVersion,
+  normalizeRerunModel,
+} from '@/lib/skillRunRequest'
 
 // POST /v1/runs/{id}/rerun  { model } —— 用同一历史输入换模型重跑（私人台账切换成本核心钩子）。
 // 只能重跑自己的运行；走与普通运行相同的护栏(credit/BYOK/频控)。
@@ -13,14 +23,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!user) return Response.json({ error: '请先登录' }, { status: 401 })
   if ((user as any).accountStatus === 'banned') return Response.json({ error: '账号已被封禁' }, { status: 403 })
 
-  let body: any = {}
-  try {
-    body = await request.json()
-  } catch {
-    /* 容忍空 body */
-  }
-  const model = typeof body.model === 'string' ? body.model.trim() : ''
-  if (!model) return Response.json({ error: '请选择要重跑的模型' }, { status: 400 })
+  const parsed = await readJsonBodyWithLimit(request, MAX_SKILL_RUN_REQUEST_BYTES, '重跑请求体过大', { emptyValue: {} })
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: parsed.status })
+  const body = parsed.value
+  const model = normalizeRerunModel(body.model)
+  if (isValidationError(model)) return Response.json({ error: model.error }, { status: model.status })
+  const modelProvider = normalizeOptionalModelProvider(body.modelProvider)
+  if (isValidationError(modelProvider)) return Response.json({ error: modelProvider.error }, { status: modelProvider.status })
+  const modelVersion = normalizeOptionalModelVersion(body.modelVersion)
+  if (isValidationError(modelVersion)) return Response.json({ error: modelVersion.error }, { status: modelVersion.status })
 
   // 取原运行并校验归属
   const run = await payload.findByID({ collection: 'skill-runs', id, depth: 0, overrideAccess: true }).catch(() => null)
@@ -34,14 +45,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const skillId = typeof (run as any).skill === 'object' ? (run as any).skill?.id : (run as any).skill
   const skill = await payload.findByID({ collection: 'skills', id: skillId, depth: 1, overrideAccess: true }).catch(() => null)
   if (!skill) return Response.json({ error: 'Skill 不存在' }, { status: 404 })
+  if (!canRerunPrivateLedgerSkill(skill, user)) {
+    return Response.json({ error: '该 Skill 当前不可重跑' }, { status: 403 })
+  }
 
   let version: any = (run as any).skillVersion
   if (!version || typeof version === 'string') {
-    version = await payload
-      .findByID({ collection: 'skill-versions', id: version || (skill as any).currentVersion, overrideAccess: true })
-      .catch(() => null)
+    version = version
+      ? await payload
+          .findByID({ collection: 'skill-versions', id: version, overrideAccess: true })
+          .catch(() => null)
+      : await resolveCurrentSkillVersionForPublicEvidence(payload, skill)
   }
   if (!version) return Response.json({ error: '版本不存在' }, { status: 400 })
+  if (!isUsableSkillVersionForPublicEvidence(skill, version)) {
+    return Response.json({ error: '版本已不可重跑' }, { status: 400 })
+  }
 
   const fullUser = await payload
     .findByID({ collection: 'users', id: user.id, overrideAccess: true, depth: 0 })
@@ -56,6 +75,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     user: { id: user.id as string },
     userApiKey,
     forceModel: model, // 换指定模型
+    modelProvider,
+    modelVersion,
+    rerunOf: String((run as any).id),
+    rerunFromModel: (run as any).model ? String((run as any).model) : undefined,
   })
 
   const status = result.ok

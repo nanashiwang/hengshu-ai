@@ -490,6 +490,7 @@ async function cmdRun(args) {
       latencyMs: latency,
       formatValid: success ? checkFormat(manifest.output_schema, text) : false,
       errorType,
+      checksum: manifest.integrity?.checksum,
       inputSizeBucket: bkt(inputChars),
       outputSizeBucket: bkt(text.length),
       anon: !!args.anon,

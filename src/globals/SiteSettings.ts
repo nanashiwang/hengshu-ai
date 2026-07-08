@@ -14,7 +14,7 @@ export const SiteSettings: GlobalConfig = {
     {
       name: 'slogan',
       type: 'text',
-      defaultValue: 'Verified AI Skills, Powered by Contribution.',
+      defaultValue: 'AI Skill 的可信与兼容控制平面。',
       label: '标语',
     },
     {

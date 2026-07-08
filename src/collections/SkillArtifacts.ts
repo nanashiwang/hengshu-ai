@@ -13,7 +13,7 @@ export const SkillArtifacts: CollectionConfig = {
     description: '发布时冻结的不可变 manifest 快照（系统生成，请勿手改）',
   },
   access: {
-    read: () => true, // 与下载内容同级公开
+    read: isAdmin, // 原始 manifest 可能含 prompt；公开下载必须走 /v1/skills/[slug]/manifest 鉴权端点。
     create: isAdmin, // 仅服务端 overrideAccess 生成
     update: isAdmin,
     delete: isAdmin,

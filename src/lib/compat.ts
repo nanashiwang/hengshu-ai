@@ -26,7 +26,7 @@ export function anonHash(runnerId: string): string {
 const HALF_LIFE_DAYS = 30 // 半衰期：30 天前的报告权重减半
 export const COMPAT_LOOKBACK_DAYS = 180 // 聚合只读近 180 天，防旧数据腐坏/全量同步重算拖垮热路径
 const MIN_MODEL_SAMPLE = 5 // 单模型报告数 < 此值 → lowSample（前端显示"战绩积累中"而非百分比）
-const CONF_FULL_N = 10 // LocalScore 置信满额所需的有效(衰减)样本量；不足则按置信度衰减分数
+const CONF_FULL_N = 10 // 兼容分置信满额所需的有效(衰减)样本量；不足则按置信度衰减分数
 
 export function compatLookbackStartISO(now = new Date()): string {
   const d = new Date(now)
@@ -43,14 +43,37 @@ function decayWeight(createdAt: unknown, nowMs: number): number {
 }
 
 // 来源分级权重：verified/benchmark(系统评测) 最可信、community 次之、online(在线试用) 最低——削弱在线通道刷分/投毒杠杆
-const SOURCE_WEIGHT: Record<string, number> = { verified: 1, benchmark: 1, community: 0.5, online: 0.3 }
+export const COMPAT_SOURCE_WEIGHT: Record<string, number> = { verified: 1, benchmark: 1, community: 0.5, online: 0.3 }
 function sourceWeight(source: unknown): number {
-  return SOURCE_WEIGHT[String(source)] ?? 0.5
+  return COMPAT_SOURCE_WEIGHT[String(source)] ?? 0.5
 }
 
-async function fetchRecentCompatReports(payload: Payload, skillId?: string): Promise<any[]> {
+export type CompatSourceSummary = { source: string; count: number; weight: number }
+
+function summarizeSources(reports: any[]): CompatSourceSummary[] {
+  const bySource = new Map<string, { count: number; weight: number }>()
+  for (const r of reports) {
+    const source = String(r.source || 'community')
+    const current = bySource.get(source) || { count: 0, weight: sourceWeight(source) }
+    current.count++
+    bySource.set(source, current)
+  }
+  return Array.from(bySource.entries())
+    .map(([source, row]) => ({ source, count: row.count, weight: row.weight }))
+    .sort((a, b) => b.weight - a.weight || b.count - a.count || a.source.localeCompare(b.source))
+}
+
+async function fetchRecentCompatReports(
+  payload: Payload,
+  skillId?: string,
+  options: { publicSkillOnly?: boolean } = {},
+): Promise<any[]> {
   const and: any[] = [{ createdAt: { greater_than_equal: compatLookbackStartISO() } }]
   if (skillId) and.unshift({ skill: { equals: skillId } })
+  if (options.publicSkillOnly) {
+    and.push({ 'skill.status': { equals: 'published' } })
+    and.push({ 'skill.visibility': { equals: 'public' } })
+  }
   const docs: any[] = []
   let page = 1
   for (;;) {
@@ -70,7 +93,7 @@ async function fetchRecentCompatReports(payload: Payload, skillId?: string): Pro
   return docs
 }
 
-// 由兼容报告聚合重算 Skill 的 LocalScore（0-100）并写回（衰减加权 × 来源权重 + 置信度衰减）
+// 由兼容报告聚合重算 Skill 的兼容分（0-100）并写回（衰减加权 × 来源权重 + 置信度衰减）
 export async function recomputeLocalScore(payload: Payload, skillId: string) {
   const prevSkill = (await payload
     .findByID({ collection: 'skills', id: skillId, depth: 0, overrideAccess: true })
@@ -115,7 +138,7 @@ export async function recomputeLocalScore(payload: Payload, skillId: string) {
   } catch (e) {
     payload.logger?.error(`writeScoreSnapshot 失败: ${(e as Error).message}`)
   }
-  // 护城河第1层(#15)：由真实回流回写省钱路由，让"数据改变产品动作"而非只改展示。失败不影响 localScore。
+  // 护城河第1层(#15)：由真实回流回写成本优化路由，让"数据改变产品动作"而非只改展示。失败不影响 localScore。
   try {
     await recomputeRoutePolicy(payload, skillId)
   } catch (e) {
@@ -194,24 +217,51 @@ export async function recomputeRoutePolicy(payload: Payload, skillId: string): P
 // 按模型聚合（详情页展示用）
 export interface ModelCompat {
   modelName: string
+  modelProfile?: string
+  modelVersion?: string
   reports: number
   verified: number
   successRate: number
   formatRate: number
   avgLatencyMs: number
   lowSample: boolean // 样本不足：前端应显示"战绩积累中"而非百分比
+  effectiveSamples?: number // 衰减×来源权重后的有效样本量，用于解释数据可信度
+  sourceSummary?: CompatSourceSummary[]
 }
+
+function relationshipId(value: unknown): string | undefined {
+  if (!value) return undefined
+  if (typeof value === 'object') {
+    const id = (value as any).id
+    return id ? String(id) : undefined
+  }
+  return String(value)
+}
+
+function reportModelIdentity(report: any): { key: string; modelName: string; modelProfile?: string; modelVersion?: string } {
+  const modelProfile = relationshipId(report.modelProfile)
+  const profile = report.modelProfile && typeof report.modelProfile === 'object' ? report.modelProfile : null
+  const modelName = String(profile?.modelName || report.modelName || 'unknown')
+  const modelVersion = profile?.modelVersion || report.modelVersion ? String(profile?.modelVersion || report.modelVersion) : undefined
+  return {
+    key: modelProfile ? `profile:${modelProfile}` : `name:${modelName}::version:${modelVersion || ''}`,
+    modelName,
+    modelProfile,
+    modelVersion,
+  }
+}
+
 export async function aggregateByModel(payload: Payload, skillId: string): Promise<ModelCompat[]> {
   const reports = await fetchRecentCompatReports(payload, skillId)
   const now = Date.now()
-  const byModel = new Map<string, any[]>()
+  const byModel = new Map<string, { identity: ReturnType<typeof reportModelIdentity>; reports: any[] }>()
   for (const r of reports) {
-    const m = r.modelName || 'unknown'
-    if (!byModel.has(m)) byModel.set(m, [])
-    byModel.get(m)!.push(r)
+    const identity = reportModelIdentity(r)
+    if (!byModel.has(identity.key)) byModel.set(identity.key, { identity, reports: [] })
+    byModel.get(identity.key)!.reports.push(r)
   }
   const out: ModelCompat[] = []
-  for (const [modelName, rs] of byModel) {
+  for (const { identity, reports: rs } of byModel.values()) {
     let wSum = 0
     let wSuccess = 0
     let wFormat = 0
@@ -228,13 +278,17 @@ export async function aggregateByModel(payload: Payload, skillId: string): Promi
       }
     }
     out.push({
-      modelName,
+      modelName: identity.modelName,
+      modelProfile: identity.modelProfile,
+      modelVersion: identity.modelVersion,
       reports: rs.length,
       verified: rs.filter((r) => r.source === 'verified').length,
       successRate: wSum > 0 ? wSuccess / wSum : 0,
       formatRate: wSum > 0 ? wFormat / wSum : 0,
       avgLatencyMs: wLatencySum > 0 ? Math.round(wLatency / wLatencySum) : 0,
       lowSample: rs.length < MIN_MODEL_SAMPLE,
+      effectiveSamples: Math.round(wSum * 10) / 10,
+      sourceSummary: summarizeSources(rs),
     })
   }
   return out.sort((a, b) => b.reports - a.reports)
@@ -243,21 +297,46 @@ export async function aggregateByModel(payload: Payload, skillId: string): Promi
 // 跨全站按模型聚合（中立模型榜用）：衰减×来源权重加权，返回逐模型全局实测事实。
 export interface GlobalModelStat {
   model: string
+  modelProfile?: string
+  modelVersion?: string
   successRate: number
   formatRate: number
   avgLatencyMs: number
   samples: number
+  effectiveSamples?: number
+  sourceSummary?: CompatSourceSummary[]
 }
-export async function aggregateModelsGlobal(payload: Payload): Promise<GlobalModelStat[]> {
+export async function aggregateModelsGlobal(
+  payload: Payload,
+  options: { publicSkillOnly?: boolean } = {},
+): Promise<GlobalModelStat[]> {
   const now = Date.now()
   const byModel = new Map<
     string,
-    { wSum: number; wSuccess: number; wFormat: number; wLat: number; wLatSum: number; n: number }
+    {
+      identity: ReturnType<typeof reportModelIdentity>
+      wSum: number
+      wSuccess: number
+      wFormat: number
+      wLat: number
+      wLatSum: number
+      n: number
+      reports: any[]
+    }
   >()
-  for (const r of await fetchRecentCompatReports(payload)) {
-    const m = r.modelName
-    if (!m) continue
-    const a = byModel.get(m) || { wSum: 0, wSuccess: 0, wFormat: 0, wLat: 0, wLatSum: 0, n: 0 }
+  for (const r of await fetchRecentCompatReports(payload, undefined, options)) {
+    const identity = reportModelIdentity(r)
+    if (!identity.modelName) continue
+    const a = byModel.get(identity.key) || {
+      identity,
+      wSum: 0,
+      wSuccess: 0,
+      wFormat: 0,
+      wLat: 0,
+      wLatSum: 0,
+      n: 0,
+      reports: [],
+    }
     const w = r.suppressed ? 0 : decayWeight(r.createdAt, now) * sourceWeight(r.source)
     a.wSum += w
     if (r.success) a.wSuccess += w
@@ -267,16 +346,21 @@ export async function aggregateModelsGlobal(payload: Payload): Promise<GlobalMod
       a.wLatSum += w
     }
     a.n++
-    byModel.set(m, a)
+    a.reports.push(r)
+    byModel.set(identity.key, a)
   }
   const out: GlobalModelStat[] = []
-  for (const [model, a] of byModel) {
+  for (const a of byModel.values()) {
     out.push({
-      model,
+      model: a.identity.modelName,
+      modelProfile: a.identity.modelProfile,
+      modelVersion: a.identity.modelVersion,
       successRate: a.wSum > 0 ? a.wSuccess / a.wSum : 0,
       formatRate: a.wSum > 0 ? a.wFormat / a.wSum : 0,
       avgLatencyMs: a.wLatSum > 0 ? Math.round(a.wLat / a.wLatSum) : 0,
       samples: a.n,
+      effectiveSamples: Math.round(a.wSum * 10) / 10,
+      sourceSummary: summarizeSources(a.reports),
     })
   }
   return out

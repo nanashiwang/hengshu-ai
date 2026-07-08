@@ -3,6 +3,8 @@ import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
 import { newRunnerId, randomToken, runnerTokenExpiresAt, runnerTokenHash } from '@/lib/runnerAuth'
 import { metaWithPendingAccessToken } from '@/lib/deviceAuth'
+import { isDeviceAuthError, MAX_DEVICE_AUTH_REQUEST_BYTES, normalizeUserCode } from '@/lib/deviceAuthRequest'
+import { readJsonBodyWithLimit } from '@/lib/requestBody'
 
 // POST /v1/auth/device/authorize —— 已登录用户在 /device 页授权某个设备码
 export async function POST(request: Request) {
@@ -11,14 +13,11 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: '请先登录' }, { status: 401 })
   if ((user as any).accountStatus === 'banned') return Response.json({ error: '账号已被封禁' }, { status: 403 })
 
-  let body: any = {}
-  try {
-    body = await request.json()
-  } catch {
-    return Response.json({ error: '请求体无效' }, { status: 400 })
-  }
-  const userCode = String(body.userCode || '').trim().toUpperCase()
-  if (!userCode) return Response.json({ error: '请输入设备码' }, { status: 400 })
+  const parsed = await readJsonBodyWithLimit(request, MAX_DEVICE_AUTH_REQUEST_BYTES, '设备授权请求体过大')
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: parsed.status })
+  const body = parsed.value
+  const userCode = normalizeUserCode(body.userCode)
+  if (isDeviceAuthError(userCode)) return Response.json({ error: userCode.error }, { status: userCode.status })
 
   const codes = await payload.find({
     collection: 'device-codes',

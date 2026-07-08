@@ -3,12 +3,13 @@ import { isAdmin } from '@/access'
 import { rowActionsField } from './fields/rowActions'
 
 // 本地模型兼容报告（原始）。只含可聚合指标，绝不含输入/输出原文。
-// 信任模型：raw 报告永不直接上榜，聚合后展示；社区报告仅展示不计术值（verified 通道留后续）。
+// 信任模型：raw 报告永不直接上榜，聚合后展示；社区报告仅展示不计贡献值（verified 通道留后续）。
 export const CompatReports: CollectionConfig = {
   slug: 'compat-reports',
   indexes: [
     { fields: ['skill', 'createdAt'] },
     { fields: ['modelName', 'createdAt'] },
+    { fields: ['modelProfile', 'createdAt'] },
   ],
   labels: { singular: '兼容报告', plural: '兼容报告' },
   admin: {
@@ -33,6 +34,11 @@ export const CompatReports: CollectionConfig = {
     { name: 'anonymousUserHash', type: 'text', index: true, label: '匿名哈希' },
     { name: 'modelProvider', type: 'text', label: '模型来源' },
     { name: 'modelName', type: 'text', index: true, label: '模型' },
+    { name: 'modelProfile', type: 'relationship', relationTo: 'model-profiles', label: '模型画像' },
+    { name: 'adapterProfile', type: 'relationship', relationTo: 'adapter-profiles', label: '应用适配补丁' },
+    { name: 'benchmarkCase', type: 'relationship', relationTo: 'compat-test-cases', label: '黄金样例' },
+    { name: 'benchmarkScore', type: 'number', label: '黄金样例得分(0-1)' },
+    { name: 'benchmarkPassed', type: 'checkbox', label: '黄金样例通过' },
     { name: 'modelVersion', type: 'text', label: '模型版本' },
     { name: 'success', type: 'checkbox', defaultValue: false, label: '成功' },
     { name: 'latencyMs', type: 'number', label: '耗时(ms)' },
@@ -47,7 +53,7 @@ export const CompatReports: CollectionConfig = {
       defaultValue: false,
       index: true,
       label: '已抑制（不计入聚合）',
-      admin: { description: '被封禁用户的历史报告追溯降权：权重归 0、不进 LocalScore/榜' },
+      admin: { description: '被封禁用户的历史报告追溯降权：权重归 0、不进兼容分/可信榜' },
     },
     {
       name: 'source',

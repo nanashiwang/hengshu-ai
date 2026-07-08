@@ -11,7 +11,7 @@ const NAV = [
   { href: '/models', label: '模型榜' },
   { href: '/failures', label: '失败库' },
   { href: '/verify', label: '验签' },
-  { href: '/rank', label: '排行榜' },
+  { href: '/rank', label: '可信榜' },
   { href: '/bounties', label: '悬赏区' },
   { href: '/docs', label: '文档' },
 ]

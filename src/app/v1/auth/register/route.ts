@@ -11,6 +11,7 @@ import { acquireInviteCodeLock } from '@/lib/dbLocks'
 import { getRegistrationEmailRequired, normalizeRegistrationEmail, resolveRegistrationEmail } from '@/lib/siteSettings'
 import { resolveRuntimeEnv } from '@/lib/deploymentSettings'
 import { registerCreateErrorMessage, validateRegisterInput } from '@/lib/registerValidation'
+import { normalizeRegisterBody, readAuthFormBody, readAuthJsonBody } from '@/lib/authRequest'
 
 function isFormRegisterRequest(request: Request): boolean {
   const contentType = request.headers.get('content-type') || ''
@@ -18,16 +19,11 @@ function isFormRegisterRequest(request: Request): boolean {
 }
 
 async function readRegisterBody(request: Request, formMode: boolean) {
-  if (formMode) {
-    const form = await request.formData()
-    return {
-      email: form.get('email'),
-      inviteCode: form.get('inviteCode'),
-      password: form.get('password'),
-      username: form.get('username'),
-    }
-  }
-  return request.json()
+  const parsed = formMode
+    ? await readAuthFormBody(request, ['email', 'inviteCode', 'password', 'username'])
+    : await readAuthJsonBody(request)
+  if (!parsed.ok) return parsed
+  return normalizeRegisterBody(parsed.body)
 }
 
 function appendForwardedCookies(headers: Headers, sourceHeaders: Headers) {
@@ -67,7 +63,9 @@ export async function POST(request: Request) {
 
   let body: any = {}
   try {
-    body = await readRegisterBody(request, formMode)
+    const parsed = await readRegisterBody(request, formMode)
+    if (!parsed.ok) return fail(parsed.error, parsed.status)
+    body = parsed.body
   } catch {
     return fail('请求体无效', 400)
   }
@@ -219,7 +217,7 @@ export async function POST(request: Request) {
     return fail(registerCreateErrorMessage(e), 400)
   }
 
-  // 给邀请人发术值（分值/每日上限由 contribution-rules 的 invite 规则决定）；
+  // 给邀请人发贡献值（分值/每日上限由 contribution-rules 的 invite 规则决定）；
   // 同 IP 自邀不发，根治用自己网络的小号刷邀请分（只扣奖励、不阻断注册，几乎无误伤）。
   if (inviterId) {
     let sameIp = false

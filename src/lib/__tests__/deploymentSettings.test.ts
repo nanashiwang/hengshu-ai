@@ -15,6 +15,7 @@ describe('deploymentSettings — 后台部署配置', () => {
       newapiAuthBearer: true,
       signingKeyEncrypted: 'signing-secret',
       backupEncryptionConfirmed: true,
+      anchorTrustedPublishers: 'github-release|https://github.com/acme/hengshu/releases/',
     }) as any
 
     expect(doc.modelGatewayKeyEncrypted).toMatch(/^enc:v1:/)
@@ -31,6 +32,7 @@ describe('deploymentSettings — 后台部署配置', () => {
     expect(env.NEWAPI_AUTH_BEARER).toBe('1')
     expect(env.HENGSHU_SIGNING_KEY).toBe('signing-secret')
     expect(env.BACKUP_ENCRYPTION_CONFIRMED).toBe('1')
+    expect(env.ANCHOR_TRUSTED_PUBLISHERS).toBe('github-release|https://github.com/acme/hengshu/releases/')
   })
 
   it('空后台配置保留 env 兜底，避免迁移后旧部署立刻失效', () => {

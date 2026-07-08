@@ -7,6 +7,23 @@ describe('seed skills — 冷启动供给与平台代付合规', () => {
     expect(SEED_SKILLS.length).toBeGreaterThanOrEqual(20)
   })
 
+  it('必备 Skill 至少 5 个且都有示例输入，保证新用户能快速试跑', () => {
+    const essentials = SEED_SKILLS.filter((skill) => skill.essential)
+    expect(essentials.length).toBeGreaterThanOrEqual(5)
+    expect(essentials.map((skill) => skill.slug)).toEqual(
+      expect.arrayContaining([
+        'xhs-title-generator',
+        'meeting-minutes',
+        'email-polish',
+        'weekly-report',
+        'bad-review-reply',
+      ]),
+    )
+    for (const skill of essentials) {
+      expect(skill.examples?.[0]?.input).toBeTruthy()
+    }
+  })
+
   it('官方种子的云端推荐和 routePolicy 只使用平台代付白名单模型', () => {
     const approved = approvedPlatformModels()
     const used = new Set<string>()

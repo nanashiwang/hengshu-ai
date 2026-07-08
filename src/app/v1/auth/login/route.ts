@@ -1,5 +1,6 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { normalizeLoginBody, readAuthFormBody, readAuthJsonBody } from '@/lib/authRequest'
 import { loginIdentifierKind, normalizeLoginIdentifier } from '@/lib/loginIdentifier'
 import { loginErrorMessage } from '@/lib/loginErrors'
 
@@ -36,14 +37,11 @@ function formSuccess(sourceHeaders: Headers): Response {
 }
 
 async function readLoginBody(request: Request, formMode: boolean) {
-  if (formMode) {
-    const form = await request.formData()
-    return {
-      identifier: form.get('identifier') ?? form.get('email') ?? form.get('username'),
-      password: form.get('password'),
-    }
-  }
-  return request.json()
+  const parsed = formMode
+    ? await readAuthFormBody(request, ['identifier', 'email', 'username', 'password'])
+    : await readAuthJsonBody(request)
+  if (!parsed.ok) return parsed
+  return normalizeLoginBody(parsed.body)
 }
 
 // POST /v1/auth/login —— 邮箱/用户名均可登录；最终仍委托 Payload auth 生成会话 cookie。
@@ -54,7 +52,9 @@ export async function POST(request: Request) {
 
   let body: any = {}
   try {
-    body = await readLoginBody(request, formMode)
+    const parsed = await readLoginBody(request, formMode)
+    if (!parsed.ok) return fail(parsed.error, parsed.status)
+    body = parsed.body
   } catch {
     return fail('请求体无效', 400)
   }

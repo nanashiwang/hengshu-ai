@@ -7,11 +7,16 @@ import { STAFF_ROLES } from '@/lib/adminNav'
 
 export const dynamic = 'force-dynamic'
 
-export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
+export default async function ConsoleLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
   const u = user as any
   const isStaff = STAFF_ROLES.includes(u.role)
+  const canManageEnterprise = ['admin', 'enterprise_admin'].includes(u.role)
 
   return (
     <div className="grid gap-6 lg:grid-cols-[210px_1fr]">
@@ -23,14 +28,21 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
           </div>
           <div className="mt-2 text-sm font-bold text-[var(--accent)]">
             ⚡ {formatNumber(u.contributionScore)}{' '}
-            <span className="text-xs font-normal text-[var(--muted)]">术值</span>
+            <span className="text-xs font-normal text-[var(--muted)]">
+              贡献分
+            </span>
           </div>
           <div className="mt-1 text-sm font-bold text-[var(--accent-2)]">
             ◆ {formatNumber(u.creditBalance)}{' '}
-            <span className="text-xs font-normal text-[var(--muted)]">credit</span>
+            <span className="text-xs font-normal text-[var(--muted)]">
+              credit
+            </span>
           </div>
         </div>
-        <ConsoleSidebar isStaff={isStaff} />
+        <ConsoleSidebar
+          isStaff={isStaff}
+          canManageEnterprise={canManageEnterprise}
+        />
       </aside>
       <div className="min-w-0">{children}</div>
     </div>

@@ -1,5 +1,5 @@
 import type { CollectionConfig } from 'payload'
-import { isAdmin, isLoggedIn, ownerOrAdmin } from '@/access'
+import { isAdmin, isLoggedIn, ownerOrAdmin, readableBounty } from '@/access'
 import { awardContribution } from '@/lib/contribution'
 import { rowActionsField } from './fields/rowActions'
 
@@ -12,7 +12,7 @@ export const Bounties: CollectionConfig = {
     group: 'Skill 内容',
   },
   access: {
-    read: () => true,
+    read: readableBounty,
     create: isLoggedIn,
     update: ownerOrAdmin('creator'),
     delete: isAdmin,
@@ -59,7 +59,7 @@ export const Bounties: CollectionConfig = {
       name: 'frozenPoints',
       type: 'number',
       defaultValue: 0,
-      label: '冻结术值',
+      label: '冻结贡献值',
       admin: { readOnly: true, description: '发布时从发布人冻结，完成后发给接单人' },
     },
     {
@@ -84,13 +84,13 @@ export const Bounties: CollectionConfig = {
       async ({ data, req, operation }) => {
         if (operation === 'create') {
           if (req.user && !data.creator) data.creator = req.user.id
-          // 冻结术值赏金：校验发布人余额
+          // 冻结贡献值赏金：校验发布人余额
           if (data.rewardType === 'points' && (data.rewardPoints || 0) > 0) {
             const creator = await req.payload
               .findByID({ collection: 'users', id: data.creator, overrideAccess: true, depth: 0, req })
               .catch(() => null)
             if (!creator || (creator.contributionScore || 0) < data.rewardPoints) {
-              throw new Error('术值不足，无法冻结悬赏赏金')
+              throw new Error('贡献值不足，无法冻结悬赏赏金')
             }
             data.frozenPoints = data.rewardPoints
           }

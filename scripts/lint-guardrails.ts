@@ -235,7 +235,7 @@ function checkMoneyGuardrails() {
   )
   assertIncludes(
     'src/collections/Users.ts',
-    '存在术值流水',
+    '存在贡献值流水',
     'USER_DELETE_BLOCKS_CONTRIBUTION_LOGS',
     'user deletion must block when append-only contribution logs exist instead of deleting reputation history',
   )
@@ -664,6 +664,59 @@ function checkRuntimeGuardrails() {
   )
 }
 
+function checkV1RequestBoundaryGuardrails() {
+  const v1Dir = path.join(ROOT, 'src/app/v1')
+  if (!existsSync(v1Dir)) {
+    fail('V1_DIR_MISSING', 'src/app/v1 missing; public API request boundary cannot be checked')
+    return
+  }
+
+  for (const file of walk(v1Dir)) {
+    const relative = rel(file)
+    const source = readFileSync(file, 'utf8')
+    const stripped = stripCommentsAndStrings(source)
+
+    for (const match of stripped.matchAll(/\brequest\.json\s*\(/g)) {
+      fail(
+        'V1_RAW_REQUEST_JSON_FORBIDDEN',
+        `${relative}:${lineNumber(source, match.index || 0)} v1 routes must use a bounded request reader instead of request.json()`,
+      )
+    }
+
+    for (const match of stripped.matchAll(/\bNumber\s*\(\s*(?:url\.)?searchParams\.get\s*\(/g)) {
+      fail(
+        'V1_UNBOUNDED_NUMERIC_QUERY_FORBIDDEN',
+        `${relative}:${lineNumber(source, match.index || 0)} numeric query params must go through boundedIntParam()`,
+      )
+    }
+
+    if (/\brequest\.formData\s*\(/.test(stripped) && !source.includes('preflightSkillPackageFormRequest')) {
+      fail(
+        'V1_RAW_FORMDATA_PREFLIGHT_REQUIRED',
+        `${relative}: v1 multipart/form routes must preflight content-length before request.formData()`,
+      )
+    }
+
+    const rawResponsePattern =
+      /\b(member|registry|adapter|organization)\s*:\s*result\.(member|registry|adapter|organization)\b/g
+    for (const match of stripped.matchAll(rawResponsePattern)) {
+      fail(
+        'V1_RAW_DOMAIN_OBJECT_RESPONSE_FORBIDDEN',
+        `${relative}:${lineNumber(source, match.index || 0)} v1 routes must return an explicit public summary instead of raw result.${match[2]}`,
+      )
+    }
+
+    const rawErrorMessageResponsePattern =
+      /(?:error|errors)\s*:\s*(?:\[\s*)?(?:\(?\s*(?:e|err|error)\s+as\s+Error\s*\)?|(?:e|err|error))\.message\b/g
+    for (const match of stripped.matchAll(rawErrorMessageResponsePattern)) {
+      fail(
+        'V1_RAW_ERROR_MESSAGE_RESPONSE_FORBIDDEN',
+        `${relative}:${lineNumber(source, match.index || 0)} v1 routes must not return raw exception messages to clients`,
+      )
+    }
+  }
+}
+
 function checkCiWiresLint() {
   const pkg = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
   if (!pkg.scripts?.lint) fail('LINT_SCRIPT_MISSING', 'package.json must expose npm run lint')
@@ -674,6 +727,7 @@ checkNoCommittedModelKeys()
 checkNeutralModelRank()
 checkMoneyGuardrails()
 checkRuntimeGuardrails()
+checkV1RequestBoundaryGuardrails()
 checkCiWiresLint()
 
 if (failures.length > 0) {

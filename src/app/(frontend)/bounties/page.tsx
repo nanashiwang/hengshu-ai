@@ -38,11 +38,38 @@ export default async function BountiesPage({
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">悬赏区</h1>
-          <p className="text-sm text-[var(--muted)]">把你的需求变成正向悬赏，创作者接单交付。</p>
+          <h1 className="text-xl font-semibold">求术悬赏</h1>
+          <p className="text-sm text-[var(--muted)]">
+            把需求沉淀成可复用 Skill，而不是一次性交付答案。
+          </p>
         </div>
         <BountyForm loggedIn={!!user} />
       </div>
+
+      <section className="grid gap-3 text-sm md:grid-cols-3">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4">
+          <div className="font-medium text-[var(--text)]">1. 写清验收标准</div>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            描述输入、输出格式和失败边界，方便创作者做成 Skill Contract。
+          </p>
+        </div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4">
+          <div className="font-medium text-[var(--text)]">
+            2. 交付可复用 Skill
+          </div>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            优先验收可上架、可版本化、可签名的 Skill，而不是一次性答案。
+          </p>
+        </div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4">
+          <div className="font-medium text-[var(--text)]">
+            3. 进入 Passport 闭环
+          </div>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            发布后继续沉淀兼容证据、失败记录和达标证书。
+          </p>
+        </div>
+      </section>
 
       {res.docs.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[var(--border)] p-10 text-center text-[var(--muted)]">
@@ -65,13 +92,17 @@ export default async function BountiesPage({
                     </span>
                     <h3 className="truncate font-medium">{b.title}</h3>
                   </div>
-                  <p className="mt-1 line-clamp-1 text-xs text-[var(--muted)]">{b.description}</p>
+                  <p className="mt-1 line-clamp-1 text-xs text-[var(--muted)]">
+                    {b.description}
+                  </p>
                   <p className="mt-1 text-xs text-[var(--muted)]">
                     {creator?.username || '匿名'} · {timeAgo(b.createdAt)}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="font-semibold text-[var(--accent-2)]">⚡ {formatNumber(b.rewardPoints)}</div>
+                  <div className="font-semibold text-[var(--accent-2)]">
+                    ⚡ {formatNumber(b.rewardPoints)}
+                  </div>
                   <div className="text-xs text-[var(--muted)]">贡献值赏金</div>
                 </div>
               </Link>
@@ -80,7 +111,12 @@ export default async function BountiesPage({
         </div>
       )}
 
-      <Pagination page={res.page || page} totalPages={res.totalPages || 1} basePath="/bounties" params={sp} />
+      <Pagination
+        page={res.page || page}
+        totalPages={res.totalPages || 1}
+        basePath="/bounties"
+        params={sp}
+      />
     </div>
   )
 }

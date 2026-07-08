@@ -1,10 +1,14 @@
+import { generateKeyPairSync } from 'crypto'
 import { describe, expect, it } from 'vitest'
 import { canonicalString } from '@/lib/canonical'
+import { getPublicKeyInfo } from '@/lib/signing'
 import {
   buildScoreAnchorEntry,
   buildScoreAnchorManifest,
+  signScoreAnchorManifest,
   verifyScoreAnchorLines,
   verifyScoreAnchorManifest,
+  verifyScoreAnchorManifestSignature,
   type ScoreAnchorBase,
 } from '@/lib/scoreAnchor'
 
@@ -43,6 +47,14 @@ describe('scoreAnchor — 分数快照外锚哈希链', () => {
     })
   })
 
+  it('拒绝把未通过原始分数快照验签的行作为可信外锚', () => {
+    const entry = buildScoreAnchorEntry(base({ verifyStatus: 'tampered' }), null)
+    expect(verifyScoreAnchorLines([canonicalString(entry)])).toMatchObject({
+      ok: false,
+      reason: '第 1 行分数快照验签状态不是 valid',
+    })
+  })
+
   it('删除中间行会破坏链连续性', () => {
     const first = buildScoreAnchorEntry(base({ snapshotId: 'snap-1' }), null)
     const second = buildScoreAnchorEntry(base({ snapshotId: 'snap-2' }), first.chainHash)
@@ -70,6 +82,25 @@ describe('scoreAnchor — 分数快照外锚哈希链', () => {
     expect(verifyScoreAnchorManifest([line], manifest)).toMatchObject({
       ok: false,
       reason: 'manifest fileHash 与 JSONL 文件哈希不一致',
+    })
+  })
+
+  it('manifest 可用站点 ed25519 私钥自签并验签', () => {
+    const { privateKey } = generateKeyPairSync('ed25519')
+    const env = {
+      HENGSHU_SIGNING_KEY: (privateKey.export({ format: 'der', type: 'pkcs8' }) as Buffer).toString('base64'),
+    }
+    const first = buildScoreAnchorEntry(base(), null)
+    const line = canonicalString(first)
+    const manifest = signScoreAnchorManifest(buildScoreAnchorManifest([line], '2026-07-03T00:00:00.000Z'), env)
+    const publicKey = getPublicKeyInfo(env)
+
+    expect(manifest.manifestSignature).toMatchObject({ algorithm: 'ed25519', keyId: publicKey?.keyId })
+    expect(verifyScoreAnchorManifestSignature(manifest, publicKey)).toEqual({ ok: true })
+    expect(verifyScoreAnchorManifest([line], manifest, publicKey)).toMatchObject({ ok: true })
+    expect(verifyScoreAnchorManifest([line], { ...manifest, fileHash: 'b'.repeat(64) }, publicKey)).toMatchObject({
+      ok: false,
+      reason: 'manifest 签名校验失败',
     })
   })
 })

@@ -58,6 +58,18 @@ async function seed() {
       })
     ).docs[0]
     if (exists) {
+      const patch: Record<string, boolean> = {}
+      if (Boolean((exists as any).isEssential) !== Boolean(s.essential)) patch.isEssential = Boolean(s.essential)
+      if (Boolean((exists as any).isFeatured) !== Boolean(s.featured)) patch.isFeatured = Boolean(s.featured)
+      if (Object.keys(patch).length > 0) {
+        await payload.update({
+          collection: 'skills',
+          id: exists.id,
+          data: patch,
+          overrideAccess: true,
+        })
+        payload.logger.info(`· 更新已存在 Skill 标记：${s.slug}`)
+      }
       payload.logger.info(`· 跳过已存在 Skill：${s.slug}`)
       continue
     }
@@ -73,6 +85,7 @@ async function seed() {
         visibility: 'public',
         status: 'published',
         isOfficial: true,
+        isEssential: !!s.essential,
         isFeatured: !!s.featured,
       },
     })

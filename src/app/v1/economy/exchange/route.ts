@@ -15,6 +15,8 @@ import {
 } from '@/lib/economy'
 import { recordAuditEvent } from '@/lib/audit'
 import { normalizeExternalIdempotencyKey, scopedIdempotencyKey } from '@/lib/idempotency'
+import { isAccountRequestError, MAX_ACCOUNT_REQUEST_BYTES, normalizeExchangeCredit } from '@/lib/accountRequest'
+import { readJsonBodyWithLimit } from '@/lib/requestBody'
 
 // GET /v1/economy/exchange —— 兑换状态（前台 UI 用，隐藏原始毛利）
 export async function GET() {
@@ -44,7 +46,7 @@ export async function GET() {
   })
 }
 
-// POST /v1/economy/exchange —— 术值 → credit 兑换
+// POST /v1/economy/exchange —— 贡献值 → credit 兑换
 // 保命红线：兑换池 = α × 当月已实现毛利，先赚到才有得兑，永不亏 margin。
 export async function POST(request: Request) {
   const payload = await getPayload({ config })
@@ -54,24 +56,19 @@ export async function POST(request: Request) {
   const uid = user.id as string
 
   const cfg = await getEconomyConfig(payload)
-  if (!cfg.exchangeEnabled) return Response.json({ error: '术值兑换暂未开放' }, { status: 403 })
+  if (!cfg.exchangeEnabled) return Response.json({ error: '贡献值兑换暂未开放' }, { status: 403 })
 
-  let body: any = {}
-  try {
-    body = await request.json()
-  } catch {
-    /* 容忍空 body */
-  }
-  const credit = Math.floor(Number(body.credit))
+  const parsed = await readJsonBodyWithLimit(request, MAX_ACCOUNT_REQUEST_BYTES, '兑换请求体过大', { emptyValue: {} })
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: parsed.status })
+  const body = parsed.value
+  const credit = normalizeExchangeCredit(body.credit)
+  if (isAccountRequestError(credit)) return Response.json({ error: credit.error }, { status: credit.status })
   const externalIdempotencyKey = normalizeExternalIdempotencyKey(body.idempotencyKey)
   const idempotencyKey = scopedIdempotencyKey('exchange', uid, externalIdempotencyKey)
 
   // 碰钱写操作强制幂等键：缺失则拒（防网络重试/双击产生两笔真实兑换，绕过全部去重）
   if (!idempotencyKey) {
     return Response.json({ error: '缺少或无效的幂等键 idempotencyKey' }, { status: 400 })
-  }
-  if (!Number.isFinite(credit) || credit <= 0) {
-    return Response.json({ error: '请填写有效的兑换 credit 数' }, { status: 400 })
   }
   if (credit < cfg.minCreditPerTx) {
     return Response.json({ error: `单次至少兑换 ${cfg.minCreditPerTx} credit` }, { status: 400 })
@@ -80,7 +77,7 @@ export async function POST(request: Request) {
     return Response.json({ error: `单次最多兑换 ${cfg.perTxMaxCredit} credit` }, { status: 400 })
   }
 
-  // 幂等：整笔兑换以 idempotencyKey 去重（避免重试同时扣术值 + 发 credit 各出问题）
+  // 幂等：整笔兑换以 idempotencyKey 去重（避免重试同时扣贡献值 + 发 credit 各出问题）
   {
     const dup = await payload.count({
       collection: 'credit-logs',
@@ -99,20 +96,20 @@ export async function POST(request: Request) {
     .findByID({ collection: 'users', id: uid, overrideAccess: true, depth: 0 })
     .catch(() => null)) as any
   if (!pre || (pre.contributionScore || 0) < pointsCost) {
-    return Response.json({ error: `术值不足，需 ${pointsCost}` }, { status: 400 })
+    return Response.json({ error: `贡献值不足，需 ${pointsCost}` }, { status: 400 })
   }
 
-  // ── 原子结算：全局咨询锁串行化 → 事务内复核池/额度/术值 → 扣术值 + 发 credit ──
+  // ── 原子结算：全局咨询锁串行化 → 事务内复核池/额度/贡献值 → 扣贡献值 + 发 credit ──
   const transactionID = await payload.db.beginTransaction()
   if (!transactionID) {
     return Response.json({ error: '事务不可用，兑换暂不可用' }, { status: 503 })
   }
   const txReq: Partial<PayloadRequest> = { transactionID }
   try {
-    // 关键：先取全局兑换锁，之后所有复核读(READ COMMITTED)才能看见此前已提交的兑换，杜绝池超支/术值透支
+    // 关键：先取全局兑换锁，之后所有复核读(READ COMMITTED)才能看见此前已提交的兑换，杜绝池超支/贡献值透支
     await acquireExchangeLock(payload, transactionID)
 
-    // 复核术值余额
+    // 复核贡献值余额
     const u2 = (await payload.findByID({
       collection: 'users',
       id: uid,
@@ -120,7 +117,7 @@ export async function POST(request: Request) {
       depth: 0,
       req: txReq,
     })) as any
-    if ((u2.contributionScore || 0) < pointsCost) throw new Error('术值不足')
+    if ((u2.contributionScore || 0) < pointsCost) throw new Error('贡献值不足')
 
     // 复核每日/每月/池上限（均在锁内，看到全部已提交兑换）
     const dailyUsed = await userExchangedInWindow(payload, uid, dayStartISO(), txReq)
@@ -143,12 +140,12 @@ export async function POST(request: Request) {
       userId: uid,
       type: 'exchange',
       amount: credit,
-      description: `术值兑换（-${pointsCost} 术值）`,
+      description: `贡献值兑换（-${pointsCost} 贡献值）`,
       idempotencyKey,
       req: txReq,
       throwOnError: true,
     })
-    // 若 applyCredit 因幂等命中而跳过，则术值已扣但 credit 未发 → 必须回滚
+    // 若 applyCredit 因幂等命中而跳过，则贡献值已扣但 credit 未发 → 必须回滚
     if (!grant.ok || grant.skipped) {
       throw new Error(grant.skipped ? '兑换重复（幂等）' : grant.error || '发放 credit 失败')
     }
@@ -165,7 +162,7 @@ export async function POST(request: Request) {
       targetUserId: uid,
       targetType: 'credit-log',
       targetId: idempotencyKey,
-      summary: `术值兑换 ${credit} credit`,
+      summary: `贡献值兑换 ${credit} credit`,
       metadata: { creditGranted: credit, pointsSpent: pointsCost },
       request,
     })
@@ -178,6 +175,6 @@ export async function POST(request: Request) {
     })
   } catch (e) {
     await payload.db.rollbackTransaction(transactionID)
-    return Response.json({ error: (e as Error).message || '兑换失败' }, { status: 400 })
+    return Response.json({ error: '兑换失败，请重试' }, { status: 400 })
   }
 }

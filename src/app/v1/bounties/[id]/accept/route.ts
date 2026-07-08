@@ -2,6 +2,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
 import { notify } from '@/lib/notify'
+import { canAcceptBounty } from '@/lib/bountyAccess'
 
 // POST /v1/bounties/{id}/accept —— 创作者认领悬赏
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -15,7 +16,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (!b) return Response.json({ error: '悬赏不存在' }, { status: 404 })
   const creatorId = typeof b.creator === 'object' ? (b.creator as any)?.id : b.creator
   if (creatorId === user.id) return Response.json({ error: '不能认领自己的悬赏' }, { status: 400 })
-  if (b.status !== 'open') return Response.json({ error: '悬赏当前不可认领' }, { status: 400 })
+  if (!canAcceptBounty(b, user)) return Response.json({ error: '悬赏当前不可认领' }, { status: 400 })
 
   await payload.update({
     collection: 'bounties',

@@ -1,0 +1,85 @@
+import { describe, expect, it } from 'vitest'
+import { buildModelProfileWhere, isPublicModelProfile, publicModelProfile } from '@/lib/modelProfilePublic'
+
+describe('modelProfilePublic — 公开模型画像输出', () => {
+  it('构造公开模型画像筛选条件', () => {
+    const params = new URLSearchParams({
+      modelName: 'gpt-4.1-mini',
+      modelVersion: '2026-07-01',
+      provider: 'openai',
+      status: 'verified',
+    })
+    expect(buildModelProfileWhere(params)).toEqual({
+      and: [
+        { profileStatus: { equals: 'verified' } },
+        {
+          or: [
+            { 'capabilities.observedSamples': { greater_than: 0 } },
+            { 'capabilities.effectiveSamples': { greater_than: 0 } },
+          ],
+        },
+        { modelName: { equals: 'gpt-4.1-mini' } },
+        { modelVersion: { equals: '2026-07-01' } },
+        { provider: { equals: 'openai' } },
+      ],
+    })
+  })
+
+  it('默认不公开 deprecated 或零样本模型画像', () => {
+    expect(buildModelProfileWhere(new URLSearchParams({ status: 'deprecated' }))).toEqual({
+      and: [
+        { profileStatus: { in: ['observed', 'verified', 'stale'] } },
+        {
+          or: [
+            { 'capabilities.observedSamples': { greater_than: 0 } },
+            { 'capabilities.effectiveSamples': { greater_than: 0 } },
+          ],
+        },
+      ],
+    })
+    expect(isPublicModelProfile({ profileStatus: 'verified', capabilities: { observedSamples: 1 } })).toBe(true)
+    expect(isPublicModelProfile({ profileStatus: 'deprecated', capabilities: { observedSamples: 10 } })).toBe(false)
+    expect(isPublicModelProfile({ profileStatus: 'observed', capabilities: { observedSamples: 0, effectiveSamples: 0 } })).toBe(false)
+  })
+
+  it('截断公开模型画像筛选中的超长字符串', () => {
+    const where = buildModelProfileWhere(new URLSearchParams({
+      modelName: 'x'.repeat(200),
+      modelVersion: 'v'.repeat(200),
+      provider: 'p'.repeat(120),
+    })) as any
+    expect(where.and).toContainEqual({ modelName: { equals: 'x'.repeat(160) } })
+    expect(where.and).toContainEqual({ modelVersion: { equals: 'v'.repeat(160) } })
+    expect(where.and).toContainEqual({ provider: { equals: 'p'.repeat(80) } })
+  })
+
+  it('输出漂移、有效样本和来源权重，不暴露平台收益字段', () => {
+    const row = publicModelProfile({
+      id: 'profile-1',
+      provider: 'openai',
+      modelName: 'gpt-4.1-mini',
+      modelVersion: '2026-07-01',
+      profileStatus: 'verified',
+      inputPrice: 1,
+      outputPrice: 2,
+      platformPayAllowed: true,
+      capabilities: { observedSamples: 10, effectiveSamples: 7.5, sourceSummary: [{ source: 'benchmark', count: 3, weight: 1 }], platformRevenue: 99 },
+      driftHistory: [{ successRate: 0.9, rawInput: 'secret' }],
+      regressionAlerts: [{ reason: 'ok', outputText: 'secret' }],
+    }) as any
+    expect(row).toMatchObject({
+      provider: 'openai',
+      modelName: 'gpt-4.1-mini',
+      modelVersion: '2026-07-01',
+      capabilities: { observedSamples: 10, effectiveSamples: 7.5 },
+      driftHistory: [{ successRate: 0.9 }],
+      failuresUrl: '/failures?modelName=gpt-4.1-mini&modelVersion=2026-07-01',
+      adaptersUrl: '/v1/adapters?modelName=gpt-4.1-mini&modelVersion=2026-07-01',
+    })
+    expect(row.inputPrice).toBeUndefined()
+    expect(row.outputPrice).toBeUndefined()
+    expect(row.platformPayAllowed).toBeUndefined()
+    expect(row.capabilities.platformRevenue).toBeUndefined()
+    expect(row.regressionAlerts).toEqual([{ reason: 'ok' }])
+  })
+})

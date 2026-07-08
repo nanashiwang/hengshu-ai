@@ -11,15 +11,21 @@ const PERSONAL = [
   { href: '/console/skills/new', label: '发布 Skill' },
   { href: '/console/installs', label: '已安装 Skill' },
   { href: '/console/runners', label: 'Runner 实例' },
-  { href: '/console/runs', label: '运行记录' },
-  { href: '/console/contributions', label: '术值流水' },
-  { href: '/console/exchange', label: '术值兑换' },
+  { href: '/console/runs', label: '私人台账' },
+  { href: '/console/contributions', label: '贡献流水' },
+  { href: '/console/exchange', label: 'Credit 兑换' },
   { href: '/console/favorites', label: '收藏' },
   { href: '/console/invites', label: '邀请码' },
   { href: '/console/settings', label: '设置' },
 ]
 
-export function ConsoleSidebar({ isStaff }: { isStaff: boolean }) {
+export function ConsoleSidebar({
+  isStaff,
+  canManageEnterprise = false,
+}: {
+  isStaff: boolean
+  canManageEnterprise?: boolean
+}) {
   const pathname = usePathname()
 
   const itemCls = (active: boolean) =>
@@ -31,9 +37,13 @@ export function ConsoleSidebar({ isStaff }: { isStaff: boolean }) {
 
   return (
     <nav className="space-y-1">
-      <div className="px-3 pb-1 text-[11px] uppercase tracking-wide text-[var(--faint)]">个人</div>
+      <div className="px-3 pb-1 text-[11px] uppercase tracking-wide text-[var(--faint)]">
+        个人
+      </div>
       {PERSONAL.map((i) => {
-        const active = i.exact ? pathname === i.href : pathname.startsWith(i.href)
+        const active = i.exact
+          ? pathname === i.href
+          : pathname.startsWith(i.href)
         return (
           <Link key={i.href} href={i.href} className={itemCls(active)}>
             {i.label}
@@ -46,6 +56,14 @@ export function ConsoleSidebar({ isStaff }: { isStaff: boolean }) {
           <div className="px-3 pb-1 pt-3 text-[11px] uppercase tracking-wide text-[var(--faint)]">
             管理
           </div>
+          {canManageEnterprise && (
+            <Link
+              href="/console/enterprise"
+              className={itemCls(pathname === '/console/enterprise')}
+            >
+              企业策略
+            </Link>
+          )}
           <Link
             href="/console/moderation"
             className={itemCls(pathname === '/console/moderation')}
@@ -55,7 +73,9 @@ export function ConsoleSidebar({ isStaff }: { isStaff: boolean }) {
           {/* 分组为二级标题；组内集合在内容区以横向子标题 Tab 切换 */}
           {ADMIN_GROUPS.map((g) => {
             const href = `/console/admin/${g.items[0].slug}`
-            const active = g.items.some((i) => pathname === `/console/admin/${i.slug}`)
+            const active = g.items.some(
+              (i) => pathname === `/console/admin/${i.slug}`,
+            )
             return (
               <Link key={g.key} href={href} className={itemCls(active)}>
                 {g.label}

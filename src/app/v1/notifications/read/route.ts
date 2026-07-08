@@ -1,6 +1,8 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
+import { isAccountRequestError, MAX_ACCOUNT_REQUEST_BYTES, normalizeNotificationId } from '@/lib/accountRequest'
+import { readJsonBodyWithLimit } from '@/lib/requestBody'
 
 // POST /v1/notifications/read —— 标记通知已读。body {id} 标一条，无 id 则标本用户全部未读。
 export async function POST(request: Request) {
@@ -9,13 +11,10 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: '请先登录' }, { status: 401 })
   if ((user as any).accountStatus === 'banned') return Response.json({ error: '账号已被封禁' }, { status: 403 })
 
-  let body: any = {}
-  try {
-    body = await request.json()
-  } catch {
-    /* 容忍空 body */
-  }
-  const id = typeof body.id === 'string' ? body.id : undefined
+  const parsed = await readJsonBodyWithLimit(request, MAX_ACCOUNT_REQUEST_BYTES, '通知请求体过大', { emptyValue: {} })
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: parsed.status })
+  const id = normalizeNotificationId(parsed.value?.id)
+  if (isAccountRequestError(id)) return Response.json({ error: id.error }, { status: id.status })
 
   try {
     if (id) {

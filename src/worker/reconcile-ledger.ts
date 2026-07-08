@@ -4,7 +4,7 @@ import type { Payload } from 'payload'
 import config from '../payload.config'
 
 // 台账对账 worker：从真值源重算，修复增量写入(read-modify-write)在并发下的丢更新漂移。
-//   ① 术值：contributionScore == SUM(contribution-logs.points)
+//   ① 贡献值：contributionScore == SUM(contribution-logs.points)
 //   ② Skill 指标：runCount/successRate/avgCost/avgLatencyMs/formatSuccessRate 由 skill-runs 重算
 //   ③ credit：creditBalance == SUM(credit-logs.amount)（资金不变量）
 //   ④ 计数：favoriteCount=COUNT(favorites)，reviewCount/avgRating 由 visible reviews 重算
@@ -33,7 +33,7 @@ async function forEachDoc(payload: Payload, collection: any, cb: (doc: any) => v
   }
 }
 
-// ① 术值台账对账
+// ① 贡献值台账对账
 async function reconcileLedger(payload: Payload) {
   const sums = new Map<string, number>()
   await forEachDoc(payload, 'contribution-logs', (d) => {
@@ -54,7 +54,7 @@ async function reconcileLedger(payload: Payload) {
     drifted++
     totalAbsDrift += Math.abs(expected - actual)
     payload.logger.warn(
-      `术值漂移 user=${u.id}(${u.username || '—'}): 账面 ${actual} → 应为 ${expected} (Δ${round4(expected - actual)})`,
+      `贡献值漂移 user=${u.id}(${u.username || '—'}): 账面 ${actual} → 应为 ${expected} (Δ${round4(expected - actual)})`,
     )
     if (APPLY) {
       await payload.update({
@@ -66,7 +66,7 @@ async function reconcileLedger(payload: Payload) {
     }
   }
   payload.logger.info(
-    `术值对账：用户 ${users.length}，漂移 ${drifted}，累计绝对漂移 ${round4(totalAbsDrift)}${APPLY ? '（已修复）' : '（dry-run，未写回）'}`,
+    `贡献值对账：用户 ${users.length}，漂移 ${drifted}，累计绝对漂移 ${round4(totalAbsDrift)}${APPLY ? '（已修复）' : '（dry-run，未写回）'}`,
   )
 }
 

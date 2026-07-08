@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aggregateByModel, compatLookbackStartISO, COMPAT_LOOKBACK_DAYS } from '@/lib/compat'
+import { aggregateByModel, aggregateModelsGlobal, compatLookbackStartISO, COMPAT_LOOKBACK_DAYS } from '@/lib/compat'
 
 describe('compat — 活体数据窗口', () => {
   it('lookback 固定为近 180 天', () => {
@@ -37,5 +37,85 @@ describe('compat — 活体数据窗口', () => {
         and: [{ skill: { equals: 'skill-1' } }, { createdAt: { greater_than_equal: expect.any(String) } }],
       },
     })
+  })
+
+  it('公开模型榜可只聚合 published + public Skill 的兼容报告', async () => {
+    const calls: any[] = []
+    const payload = {
+      find: async (args: any) => {
+        calls.push(args)
+        return { docs: [], hasNextPage: false }
+      },
+    }
+
+    await aggregateModelsGlobal(payload as any, { publicSkillOnly: true })
+    expect(calls[0].where.and).toEqual([
+      { createdAt: { greater_than_equal: expect.any(String) } },
+      { 'skill.status': { equals: 'published' } },
+      { 'skill.visibility': { equals: 'public' } },
+    ])
+  })
+
+  it('优先按 modelProfile 聚合，避免同名不同版本混成一组', async () => {
+    const payload = {
+      find: async () => ({
+        docs: [
+          {
+            modelName: 'qwen-plus',
+            modelVersion: '2026-06',
+            modelProfile: 'profile-a',
+            success: true,
+            formatValid: true,
+            latencyMs: 100,
+            source: 'benchmark',
+            createdAt: new Date().toISOString(),
+          },
+          {
+            modelName: 'qwen-plus',
+            modelVersion: '2026-07',
+            modelProfile: 'profile-b',
+            success: false,
+            formatValid: false,
+            latencyMs: 200,
+            source: 'benchmark',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        hasNextPage: false,
+      }),
+    }
+
+    const rows = await aggregateByModel(payload as any, 'skill-1')
+
+    expect(rows).toHaveLength(2)
+    expect(rows.map((r) => r.modelProfile).sort()).toEqual(['profile-a', 'profile-b'])
+    expect(rows.map((r) => r.modelVersion).sort()).toEqual(['2026-06', '2026-07'])
+  })
+
+  it('输出来源分级权重和有效样本，解释兼容数据可信度', async () => {
+    const now = new Date().toISOString()
+    const payload = {
+      find: async () => ({
+        docs: [
+          { modelName: 'qwen-plus', success: true, formatValid: true, latencyMs: 100, source: 'verified', createdAt: now },
+          { modelName: 'qwen-plus', success: true, formatValid: true, latencyMs: 100, source: 'community', createdAt: now },
+          { modelName: 'qwen-plus', success: false, formatValid: false, latencyMs: 300, source: 'online', createdAt: now },
+        ],
+        hasNextPage: false,
+      }),
+    }
+
+    const [row] = await aggregateByModel(payload as any, 'skill-1')
+
+    expect(row.reports).toBe(3)
+    expect(row.effectiveSamples).toBeGreaterThan(1.7)
+    expect(row.effectiveSamples).toBeLessThanOrEqual(1.8)
+    expect(row.sourceSummary).toEqual([
+      { source: 'verified', count: 1, weight: 1 },
+      { source: 'community', count: 1, weight: 0.5 },
+      { source: 'online', count: 1, weight: 0.3 },
+    ])
+    expect(row.successRate).toBeGreaterThan(0.8)
+    expect(row.successRate).toBeLessThan(0.9)
   })
 })

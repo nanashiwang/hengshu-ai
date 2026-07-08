@@ -11,7 +11,10 @@ import { Skills } from './collections/Skills'
 import { SkillVersions } from './collections/SkillVersions'
 import { SkillArtifacts } from './collections/SkillArtifacts'
 import { CompatReports } from './collections/CompatReports'
+import { CompatTestCases } from './collections/CompatTestCases'
+import { AdapterProfiles } from './collections/AdapterProfiles'
 import { SkillRuns } from './collections/SkillRuns'
+import { FailureCases } from './collections/FailureCases'
 import { Reviews } from './collections/Reviews'
 import { Favorites } from './collections/Favorites'
 import { InviteCodes } from './collections/InviteCodes'
@@ -21,13 +24,20 @@ import { CreditLogs } from './collections/CreditLogs'
 import { RechargeCodes } from './collections/RechargeCodes'
 import { Notifications } from './collections/Notifications'
 import { ModelPriceSnapshots } from './collections/ModelPriceSnapshots'
+import { ModelProfiles } from './collections/ModelProfiles'
 import { ScoreSnapshots } from './collections/ScoreSnapshots'
+import { SkillPassports } from './collections/SkillPassports'
 import { RunnerClients } from './collections/RunnerClients'
 import { DeviceCodes } from './collections/DeviceCodes'
 import { SkillInstalls } from './collections/SkillInstalls'
 import { Bounties } from './collections/Bounties'
 import { Reports } from './collections/Reports'
 import { AuditLogs } from './collections/AuditLogs'
+import { EvidenceSnapshots } from './collections/EvidenceSnapshots'
+import { Organizations } from './collections/Organizations'
+import { OrganizationMembers } from './collections/OrganizationMembers'
+import { EnterpriseRegistries } from './collections/EnterpriseRegistries'
+import { EnterpriseAuditLogs } from './collections/EnterpriseAuditLogs'
 import { Media } from './collections/Media'
 import { SiteSettings } from './globals/SiteSettings'
 import { EconomySettings } from './globals/EconomySettings'
@@ -54,11 +64,14 @@ export default buildConfig({
     // ── Skill 内容 ──
     Skills,
     SkillVersions,
+    SkillPassports,
     SkillArtifacts,
     Categories,
     SkillRuns,
     Bounties,
     CompatReports,
+    CompatTestCases,
+    AdapterProfiles,
     // ── 成员管理 ──
     Users,
     InviteCodes,
@@ -74,9 +87,17 @@ export default buildConfig({
     // ── 审核治理 ──
     Reviews,
     Reports,
+    FailureCases,
+    EvidenceSnapshots,
     AuditLogs,
+    // ── 企业治理 ──
+    Organizations,
+    OrganizationMembers,
+    EnterpriseRegistries,
+    EnterpriseAuditLogs,
     // ── 系统设置 ──
     Media,
+    ModelProfiles,
     ModelPriceSnapshots,
     ScoreSnapshots,
   ],

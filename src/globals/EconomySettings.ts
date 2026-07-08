@@ -16,7 +16,7 @@ export const EconomySettings: GlobalConfig = {
       name: 'exchangeEnabled',
       type: 'checkbox',
       defaultValue: false,
-      label: '开放术值兑换',
+      label: '开放贡献值兑换',
     },
     {
       name: 'freeCreditOnRegister',
@@ -25,7 +25,7 @@ export const EconomySettings: GlobalConfig = {
       label: '注册赠送 credit（免费额度 F）',
       admin: {
         description:
-          '新用户注册即送的试用额度（营销成本，§7A 建议 30-50）。0=不送。赠送的 credit 只能消耗，不产术值',
+          '新用户注册即送的试用额度（营销成本，§7A 建议 30-50）。0=不送。赠送的 credit 只能消耗，不产生贡献值',
       },
     },
     {
@@ -67,7 +67,7 @@ export const EconomySettings: GlobalConfig = {
       name: 'pointsPerCredit',
       type: 'number',
       defaultValue: 10,
-      label: '兑换率（多少术值换 1 credit）',
+      label: '兑换率（多少贡献值换 1 credit）',
     },
     { name: 'minCreditPerTx', type: 'number', defaultValue: 10, label: '单次最少兑换 credit' },
     { name: 'perTxMaxCredit', type: 'number', defaultValue: 500, label: '单次上限 credit' },

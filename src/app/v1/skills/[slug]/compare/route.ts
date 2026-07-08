@@ -2,9 +2,17 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
 import { runSkill } from '@/lib/skillRunner'
+import { redactGatewayErrorText } from '@/lib/newapi'
 import { decryptSecret } from '@/lib/secrets'
-
-const MAX_MODELS = 4
+import { canUseSkillRunEndpoint } from '@/lib/skillEvidenceAccess'
+import { resolveCurrentSkillVersionForPublicEvidence } from '@/lib/skillVersionPublic'
+import { readJsonBodyWithLimit } from '@/lib/requestBody'
+import {
+  isValidationError,
+  MAX_SKILL_RUN_REQUEST_BYTES,
+  normalizeCompareModels,
+  normalizeRunInput,
+} from '@/lib/skillRunRequest'
 
 // POST /v1/skills/{slug}/compare —— 多模型对比：同一输入并行跑多个模型
 export async function POST(
@@ -18,51 +26,33 @@ export async function POST(
   if (!user) return Response.json({ error: '请先登录' }, { status: 401 })
   if ((user as any).accountStatus === 'banned') return Response.json({ error: '账号已被封禁' }, { status: 403 })
 
-  let body: any = {}
-  try {
-    body = await request.json()
-  } catch {
-    /* 容忍空 body */
-  }
-  const input: Record<string, unknown> = body.input || {}
-  let models: string[] = Array.isArray(body.models) ? body.models.filter(Boolean) : []
-  models = [...new Set(models)].slice(0, MAX_MODELS) // 去重 + 限制数量
+  const parsed = await readJsonBodyWithLimit(request, MAX_SKILL_RUN_REQUEST_BYTES, '运行请求体过大', { emptyValue: {} })
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: parsed.status })
+  const body = parsed.value
+  const input = normalizeRunInput(body)
+  if (isValidationError(input)) return Response.json({ error: input.error }, { status: input.status })
+  const organizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : undefined
+  const normalizedModels = normalizeCompareModels(body.models)
+  if (isValidationError(normalizedModels)) return Response.json({ error: normalizedModels.error }, { status: normalizedModels.status })
+  const models = normalizedModels
   if (models.length === 0) {
     return Response.json({ error: '请至少选择一个模型' }, { status: 400 })
   }
 
-  // 查 Skill（强制 access）
+  // 查 Skill 后手动执行公开/企业/作者预览边界；Payload read access 只覆盖公开与作者，不足以表达企业 Registry。
   const skills = await payload.find({
     collection: 'skills',
     where: { slug: { equals: slug } },
     limit: 1,
     depth: 1,
-    overrideAccess: false,
-    user,
+    overrideAccess: true,
   })
   const skill = skills.docs[0]
   if (!skill) return Response.json({ error: 'Skill 不存在或无权访问' }, { status: 404 })
-  if (skill.status !== 'published') {
-    return Response.json({ error: 'Skill 未发布' }, { status: 403 })
-  }
+  const access = canUseSkillRunEndpoint(skill, user, organizationId)
+  if (!access.ok) return Response.json({ error: access.error }, { status: access.status })
 
-  // 当前版本
-  let version: any = skill.currentVersion
-  if (typeof version === 'string') {
-    version = await payload
-      .findByID({ collection: 'skill-versions', id: version, overrideAccess: true })
-      .catch(() => null)
-  }
-  if (!version) {
-    const vs = await payload.find({
-      collection: 'skill-versions',
-      where: { skill: { equals: skill.id } },
-      sort: '-createdAt',
-      limit: 1,
-      overrideAccess: true,
-    })
-    version = vs.docs[0]
-  }
+  const version = await resolveCurrentSkillVersionForPublicEvidence(payload, skill)
   if (!version) return Response.json({ error: 'Skill 暂无可用版本' }, { status: 400 })
 
   const fullUser = await payload
@@ -85,10 +75,12 @@ export async function POST(
         userApiKey,
         forceModel: m,
         skipAggregate: true,
+        organizationId,
       })
       results.push({ model: m, ...r })
     } catch (e) {
-      results.push({ model: m, ok: false, runId: '', errors: [(e as Error).message] })
+      payload.logger?.error(`模型对比失败 skill=${skill.id} model=${m}: ${redactGatewayErrorText((e as Error).message)}`)
+      results.push({ model: m, ok: false, runId: '', errors: ['模型对比失败，请重试或更换模型'] })
     }
   }
 

@@ -230,7 +230,7 @@ describe('ledger atomicity — credit and contribution invariants', () => {
         idempotencyKey: 'exchange:u1:two:points',
         throwOnError: true,
       }),
-    ).rejects.toThrow('术值余额不足')
+    ).rejects.toThrow('贡献值余额不足')
 
     expect(state.users.u1.contributionScore).toBe(2)
     expect(state.contributionLogs).toHaveLength(0)

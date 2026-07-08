@@ -3,6 +3,7 @@ import type { ErrorType } from './errorTaxonomy'
 export interface FailureKnowledgeReport {
   errorType?: string | null
   modelName?: string | null
+  modelVersion?: string | null
   skill?: string | { id?: string; title?: string; slug?: string } | null
   inputSizeBucket?: string | null
   outputSizeBucket?: string | null
@@ -11,13 +12,19 @@ export interface FailureKnowledgeReport {
 }
 
 export interface FailureKnowledgeGroup {
+  profileKey: string
   errorType: ErrorType | string
   modelName: string
+  primaryInputBucket: string
+  primaryModelVersion: string | null
   count: number
   skillCount: number
   sampleSkills: { id: string; title: string; slug?: string }[]
   inputBuckets: string[]
   outputBuckets: string[]
+  modelBreakdown: Record<string, number>
+  modelVersions: string[]
+  modelVersionBreakdown: Record<string, number>
   sourceBreakdown: Record<string, number>
   meta: FailureMeta
 }
@@ -134,12 +141,18 @@ function skillInfo(skill: FailureKnowledgeReport['skill']): { id: string; title:
 }
 
 type FailureAggregate = {
+  profileKey: string
   errorType: string
   modelName: string
+  primaryInputBucket: string
+  primaryModelVersion: string | null
   count: number
   skills: Map<string, { id: string; title: string; slug?: string; count: number }>
   inputBuckets: Map<string, number>
   outputBuckets: Map<string, number>
+  modelBreakdown: Record<string, number>
+  modelVersions: Map<string, number>
+  modelVersionBreakdown: Record<string, number>
   sourceBreakdown: Record<string, number>
 }
 
@@ -154,20 +167,38 @@ export function aggregateFailureKnowledge(
     const errorType = (r.errorType || '').trim()
     if (!errorType) continue
     const modelName = (r.modelName || 'unknown').trim() || 'unknown'
-    const key = `${errorType}|${modelName}`
+    const modelVersion = (r.modelVersion || '').trim()
+    const s = skillInfo(r.skill)
+    const skillId = s?.id || 'unknown-skill'
+    const primaryInputBucket = (r.inputSizeBucket || 'unknown-input').trim() || 'unknown-input'
+    const key = `${skillId}|${primaryInputBucket}|${errorType}`
     const g: FailureAggregate =
       groups.get(key) ||
       {
+        profileKey: key,
         errorType,
         modelName,
+        primaryInputBucket,
+        primaryModelVersion: null,
         count: 0,
         skills: new Map(),
         inputBuckets: new Map(),
         outputBuckets: new Map(),
+        modelBreakdown: {},
+        modelVersions: new Map(),
+        modelVersionBreakdown: {},
         sourceBreakdown: {},
       }
     g.count++
-    const s = skillInfo(r.skill)
+    g.modelBreakdown[modelName] = (g.modelBreakdown[modelName] || 0) + 1
+    if ((g.modelBreakdown[modelName] || 0) > (g.modelBreakdown[g.modelName] || 0)) g.modelName = modelName
+    if (modelVersion) {
+      const next = (g.modelVersions.get(modelVersion) || 0) + 1
+      g.modelVersions.set(modelVersion, next)
+      g.modelVersionBreakdown[modelVersion] = next
+      const currentPrimaryCount = g.primaryModelVersion ? g.modelVersions.get(g.primaryModelVersion) || 0 : 0
+      if (!g.primaryModelVersion || next > currentPrimaryCount) g.primaryModelVersion = modelVersion
+    }
     if (s) {
       const prev = g.skills.get(s.id) || { ...s, count: 0 }
       prev.count++
@@ -181,16 +212,22 @@ export function aggregateFailureKnowledge(
   }
 
   return [...groups.values()]
-    .sort((a, b) => b.count - a.count || a.errorType.localeCompare(b.errorType) || a.modelName.localeCompare(b.modelName))
+    .sort((a, b) => b.count - a.count || a.errorType.localeCompare(b.errorType) || a.profileKey.localeCompare(b.profileKey))
     .slice(0, limit)
     .map((g) => ({
+      profileKey: g.profileKey,
       errorType: g.errorType,
       modelName: g.modelName,
+      primaryInputBucket: g.primaryInputBucket,
+      primaryModelVersion: g.primaryModelVersion,
       count: g.count,
       skillCount: g.skills.size,
       sampleSkills: [...g.skills.values()].sort((a, b) => b.count - a.count).slice(0, 3),
       inputBuckets: [...g.inputBuckets.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).slice(0, 3),
       outputBuckets: [...g.outputBuckets.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).slice(0, 3),
+      modelBreakdown: g.modelBreakdown,
+      modelVersions: [...g.modelVersions.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).slice(0, 5),
+      modelVersionBreakdown: g.modelVersionBreakdown,
       sourceBreakdown: g.sourceBreakdown,
       meta: FAILURE_META[g.errorType] || {
         label: g.errorType,

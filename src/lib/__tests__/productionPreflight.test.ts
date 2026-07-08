@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from 'crypto'
 import { describe, expect, it } from 'vitest'
-import { checkProductionEnv, checkStartupEnv, countBlockers } from '@/lib/productionPreflight'
+import { checkPrivateDeployEnv, checkProductionEnv, checkStartupEnv, countBlockers } from '@/lib/productionPreflight'
 
 function signingKey(): string {
   const { privateKey } = generateKeyPairSync('ed25519')
@@ -31,12 +31,59 @@ function validEnv(overrides: Record<string, string | undefined> = {}) {
     BACKUP_ENCRYPTION_CONFIRMED: '1',
     BACKUP_OFFSITE_CONFIRMED: '1',
     BACKUP_RESTORE_DRILL_AT: new Date().toISOString().slice(0, 10),
+    ANCHOR_TRUSTED_PUBLISHERS: 'github-release|https://github.com/acme/hengshu/releases/',
     ...overrides,
   }
 }
 
 describe('productionPreflight — 生产上线配置门禁', () => {
 
+
+
+  it('私有部署 readiness 允许 NAS 内网 HTTP，但阻断默认密钥和弱数据库密码', () => {
+    const issues = checkPrivateDeployEnv({
+      PAYLOAD_SECRET: 'CHANGE_ME_USE_OPENSSL_RAND_HEX_32',
+      POSTGRES_PASSWORD: 'payload',
+      APP_PORT: '8787',
+      SERVER_URL: 'http://192.168.1.20:8787',
+      NEXT_PUBLIC_SERVER_URL: 'http://192.168.1.20:8787',
+    })
+    const codes = issues.filter((i) => i.level === 'blocker').map((i) => i.code)
+    expect(codes).toContain('PAYLOAD_SECRET_WEAK')
+    expect(codes).toContain('POSTGRES_PASSWORD_WEAK')
+    expect(issues.map((i) => i.code)).not.toContain('SERVER_URL_PUBLIC_HTTP')
+  })
+
+  it('私有部署 readiness 检查同源、端口和公网 HTTP 风险', () => {
+    const issues = checkPrivateDeployEnv({
+      PAYLOAD_SECRET: 'prod-secret-32-bytes-minimum-value',
+      POSTGRES_PASSWORD: 'strong-db-secret',
+      APP_PORT: '99999',
+      SERVER_URL: 'http://nas.example.com:8787',
+      NEXT_PUBLIC_SERVER_URL: 'http://other.example.com:8787',
+      MEDIA_DIR: '/app/media',
+      BACKUP_ENCRYPTION_CONFIRMED: '1',
+      BACKUP_OFFSITE_CONFIRMED: '1',
+    })
+    const codes = issues.map((i) => i.code)
+    expect(codes).toContain('SITE_URL_ORIGIN_MISMATCH')
+    expect(codes).toContain('APP_PORT_INVALID')
+    expect(codes).toContain('SERVER_URL_PUBLIC_HTTP')
+  })
+
+  it('私有部署 readiness 强配置通过时只保留可接受提示', () => {
+    const issues = checkPrivateDeployEnv({
+      PAYLOAD_SECRET: 'prod-secret-32-bytes-minimum-value',
+      POSTGRES_PASSWORD: 'strong-db-secret',
+      APP_PORT: '8787',
+      SERVER_URL: 'http://nas.local:8787',
+      NEXT_PUBLIC_SERVER_URL: 'http://nas.local:8787',
+      MEDIA_DIR: '/app/media',
+      BACKUP_ENCRYPTION_CONFIRMED: '1',
+      BACKUP_OFFSITE_CONFIRMED: '1',
+    })
+    expect(countBlockers(issues)).toBe(0)
+  })
 
   it('启动预检只要求基础依赖，不阻断后台后置配置', () => {
     const issues = checkStartupEnv({
@@ -197,5 +244,15 @@ describe('productionPreflight — 生产上线配置门禁', () => {
     const issues = checkProductionEnv(validEnv({ BACKUP_RESTORE_DRILL_AT: old }))
     expect(issues.map((i) => i.code)).toContain('BACKUP_RESTORE_DRILL_STALE')
     expect(countBlockers(issues)).toBe(0)
+  })
+
+  it('可信发布目标缺失只警告，非法 URL 会阻断可信网络上线', () => {
+    const missing = checkProductionEnv(validEnv({ ANCHOR_TRUSTED_PUBLISHERS: '' }))
+    expect(missing.map((i) => i.code)).toContain('ANCHOR_TRUSTED_PUBLISHERS_MISSING')
+    expect(countBlockers(missing)).toBe(0)
+
+    const invalid = checkProductionEnv(validEnv({ ANCHOR_TRUSTED_PUBLISHERS: 'github|http://example.com/anchors/' }))
+    expect(invalid.map((i) => i.code)).toContain('ANCHOR_TRUSTED_PUBLISHERS_INVALID')
+    expect(countBlockers(invalid)).toBeGreaterThan(0)
   })
 })

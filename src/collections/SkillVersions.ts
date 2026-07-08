@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
-import { isCreatorOrAbove, ownSkillVersionOrStaff, readableSkillVersion, isAdmin } from '@/access'
+import { isCreatorOrAbove, ownSkillVersionOrStaff, readableSkillVersion, isAdmin, sensitiveSkillVersionField } from '@/access'
+import { skillContractHash, contractStatusFor } from '@/lib/skillContract'
 import { rowActionsField } from './fields/rowActions'
 
 export const SkillVersions: CollectionConfig = {
@@ -25,6 +26,7 @@ export const SkillVersions: CollectionConfig = {
       name: 'systemPrompt',
       type: 'textarea',
       label: 'System Prompt（角色/约束）',
+      access: { read: sensitiveSkillVersionField },
       admin: { description: 'Spec v1 的 prompt.system；可空' },
     },
     {
@@ -32,6 +34,7 @@ export const SkillVersions: CollectionConfig = {
       type: 'textarea',
       required: true,
       label: 'User 模板（user_template）',
+      access: { read: sensitiveSkillVersionField },
       admin: { description: 'Spec v1 的 prompt.user_template；支持 {{变量名}} 占位符' },
     },
     {
@@ -51,9 +54,23 @@ export const SkillVersions: CollectionConfig = {
       name: 'routePolicy',
       type: 'json',
       label: '路由策略',
+      access: { read: sensitiveSkillVersionField },
       admin: { description: '形如 {"default":"balanced","strategies":{"cheap":[...],"quality":[...],"fallback":[...]}}' },
     },
-    { name: 'changelog', type: 'textarea', label: '更新说明' },
+    { name: 'changelog', type: 'textarea', label: '更新说明', access: { read: sensitiveSkillVersionField } },
+    { name: 'contractHash', type: 'text', index: true, label: 'Contract Hash', admin: { readOnly: true } },
+    {
+      name: 'contractStatus',
+      type: 'select',
+      defaultValue: 'initial',
+      label: 'Contract 状态',
+      admin: { readOnly: true },
+      options: [
+        { label: '初始', value: 'initial' },
+        { label: '兼容变更', value: 'compatible_change' },
+        { label: '破坏性变更', value: 'breaking_change' },
+      ],
+    },
     // ── Hengshu Skill Spec v1 运行时声明 ──
     {
       name: 'license',
@@ -84,6 +101,7 @@ export const SkillVersions: CollectionConfig = {
       name: 'examples',
       type: 'json',
       label: '示例（输入/输出）',
+      access: { read: sensitiveSkillVersionField },
       admin: { description: '形如 [{"input":{...},"output":{...}}]' },
     },
     {
@@ -138,7 +156,10 @@ export const SkillVersions: CollectionConfig = {
       },
     ],
     beforeChange: [
-      ({ data, req, operation }) => {
+      ({ data, req, operation, originalDoc }) => {
+        const merged = { ...(originalDoc || {}), ...(data || {}) }
+        data.contractHash = skillContractHash(merged)
+        data.contractStatus = operation === 'create' ? 'initial' : contractStatusFor(originalDoc, merged)
         if (operation === 'create' && req.user && !data.createdBy) {
           data.createdBy = req.user.id
         }

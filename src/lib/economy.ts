@@ -5,7 +5,7 @@ import { resolveRuntimeEnv, type RuntimeEnv } from './deploymentSettings'
 // 变现经济：配置读取 + 兑换池/用户额度核算。credit 与「分」1:1（1 credit=¥0.01=1 分）。
 
 // 兑换全局咨询锁 key（pg_advisory_xact_lock）：串行化所有兑换关键区，随事务提交/回滚自动释放。
-// 兑换低频，全局串行可接受，换来池超支/术值透支的并发绝对安全。
+// 兑换低频，全局串行可接受，换来池超支/贡献值透支的并发绝对安全。
 export const EXCHANGE_LOCK_KEY = 4771001
 
 // 在指定事务内获取兑换咨询锁（阻塞至独占）。之后事务内的复核读(READ COMMITTED)即可见此前已提交的兑换。

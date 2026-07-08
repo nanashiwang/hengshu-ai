@@ -2,7 +2,7 @@ import 'dotenv/config'
 import { getPayload } from 'payload'
 import config from '../payload.config'
 
-// 术值规则（与现状行为对齐；收藏/调用加日上限与自操作排除）
+// 贡献值规则（与现状行为对齐；收藏/调用加日上限与自操作排除）
 const RULES = [
   { actionType: 'skill_published', basePoints: 50, dailyLimit: 0, selfActionExcluded: false, enabled: true, description: '发布通过审核' },
   { actionType: 'skill_favorited', basePoints: 1, dailyLimit: 50, selfActionExcluded: true, enabled: true, description: 'Skill 被收藏' },
@@ -28,7 +28,7 @@ async function run() {
       await payload.create({ collection: 'contribution-rules', overrideAccess: true, data: r as any })
     }
   }
-  payload.logger.info(`术值规则就绪：${RULES.length} 条`)
+  payload.logger.info(`贡献值规则就绪：${RULES.length} 条`)
   process.exit(0)
 }
 

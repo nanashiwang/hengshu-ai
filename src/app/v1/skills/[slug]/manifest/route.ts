@@ -1,6 +1,8 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
-import { ensureArtifact, type ArtifactFormat } from '@/lib/artifacts'
+import { ensureArtifact } from '@/lib/artifacts'
+import { resolvePublishedSkill } from '@/lib/installs'
+import { normalizeManifestFormat } from '@/lib/manifestRequest'
 
 // GET /v1/skills/{slug}/manifest?format=yaml|json
 // 下载发「发布时冻结的存量字节」（不可变快照），而非即时生成。
@@ -10,36 +12,13 @@ export async function GET(
 ) {
   const { slug } = await params
   const payload = await getPayload({ config })
-  const format: ArtifactFormat =
-    (new URL(request.url).searchParams.get('format') || 'yaml').toLowerCase() === 'json'
-      ? 'json'
-      : 'yaml'
+  const format = normalizeManifestFormat(new URL(request.url).searchParams.get('format'))
 
-  const skills = await payload.find({
-    collection: 'skills',
-    where: { slug: { equals: slug } },
-    depth: 2,
-    limit: 1,
-    overrideAccess: true,
-  })
-  const skill = skills.docs[0]
-  if (!skill || skill.status !== 'published' || skill.visibility !== 'public') {
+  const resolved = await resolvePublishedSkill(payload, slug)
+  if (!resolved) {
     return Response.json({ error: 'Skill 不存在或不可下载' }, { status: 404 })
   }
-
-  let version: any = skill.currentVersion
-  if (!version || typeof version === 'string') {
-    version = (
-      await payload.find({
-        collection: 'skill-versions',
-        where: { skill: { equals: skill.id } },
-        sort: '-createdAt',
-        limit: 1,
-        overrideAccess: true,
-      })
-    ).docs[0]
-  }
-  if (!version) return Response.json({ error: '无可用版本' }, { status: 400 })
+  const { skill, version } = resolved
 
   const artifact = await ensureArtifact(payload, skill, version, format)
   if (!artifact?.manifest) {

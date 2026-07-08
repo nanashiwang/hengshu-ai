@@ -6,6 +6,7 @@ export interface SeedSkill {
   title: string
   description: string
   category: string // 对应 SKILL_CATEGORIES 的 slug
+  essential?: boolean
   featured?: boolean
   systemPrompt: string // Spec prompt.system
   promptTemplate: string // Spec prompt.user_template（含 {{变量}}）
@@ -52,6 +53,7 @@ export const SEED_SKILLS: SeedSkill[] = [
     title: '小红书标题生成器',
     description: '根据主题、人群与风格，一键生成 10 个高点击小红书标题。',
     category: 'content-creation',
+    essential: true,
     featured: true,
     license: LICENSE,
     systemPrompt: '你是一名资深小红书内容编辑，擅长写有点击欲、不违规的标题。',
@@ -92,6 +94,7 @@ export const SEED_SKILLS: SeedSkill[] = [
     title: '会议纪要整理',
     description: '把零散的会议记录整理为结构化纪要：议题、结论、待办与负责人。',
     category: 'office',
+    essential: true,
     featured: true,
     license: LICENSE,
     systemPrompt: '你是一名专业的会议秘书，善于把零散记录整理成规范纪要。',
@@ -130,6 +133,7 @@ export const SEED_SKILLS: SeedSkill[] = [
     title: '邮件润色',
     description: '把口语化或粗糙的邮件草稿润色为得体、专业的中文商务邮件。',
     category: 'office',
+    essential: true,
     license: LICENSE,
     systemPrompt: '你是一名中文商务沟通专家，擅长把粗糙草稿润色为得体专业的邮件。',
     promptTemplate: [
@@ -141,7 +145,7 @@ export const SEED_SKILLS: SeedSkill[] = [
       '直接输出润色后的邮件正文（含称呼与结尾），不要解释。',
     ].join('\n'),
     inputSchema: {
-      draft: { type: 'text', label: '邮件草稿', required: true },
+      draft: { type: 'text', label: '邮件草稿', required: true, placeholder: '如：王总，资料我晚点给你，你先看下之前那个版本。' },
       tone: {
         type: 'select',
         label: '语气',
@@ -152,12 +156,19 @@ export const SEED_SKILLS: SeedSkill[] = [
     outputSchema: {},
     recommendedModels: CLOUD,
     routePolicy: route('balanced'),
+    examples: [
+      {
+        input: { draft: '王总，资料我晚点给你，你先看下之前那个版本。', tone: '正式' },
+        output: '王总您好，相关资料我会稍后整理后发送给您。您可以先参考此前版本，如有需要我再进一步补充说明。',
+      },
+    ],
   },
   {
     slug: 'weekly-report',
     title: '周报生成',
     description: '根据本周要点与下周计划，自动生成结构清晰的工作周报。',
     category: 'office',
+    essential: true,
     license: LICENSE,
     systemPrompt: '你是一名职场写作助手，擅长把零散要点整理成条理清晰的周报。',
     promptTemplate: [
@@ -169,9 +180,9 @@ export const SEED_SKILLS: SeedSkill[] = [
       '请只返回 JSON，形如 {"thisWeek":["..."],"nextWeek":["..."],"risks":["..."]}。',
     ].join('\n'),
     inputSchema: {
-      role: { type: 'string', label: '岗位/项目', required: false },
-      done: { type: 'text', label: '本周完成要点', required: true },
-      plan: { type: 'text', label: '下周计划要点', required: false },
+      role: { type: 'string', label: '岗位/项目', required: false, placeholder: '如：产品经理 / 衡术控制台' },
+      done: { type: 'text', label: '本周完成要点', required: true, placeholder: '如：完成 Skill 市场必备入口；补充 Passport 证据展示；修复台账筛选。' },
+      plan: { type: 'text', label: '下周计划要点', required: false, placeholder: '如：完善企业 Registry 审批；补充失败库 Adapter 复验。' },
     },
     outputSchema: {
       thisWeek: { type: 'array', item_type: 'string' },
@@ -180,12 +191,27 @@ export const SEED_SKILLS: SeedSkill[] = [
     },
     recommendedModels: CLOUD,
     routePolicy: route('cheap'),
+    examples: [
+      {
+        input: {
+          role: '产品经理 / 衡术控制台',
+          done: '完成 Skill 市场必备入口；补充 Passport 证据展示；修复台账筛选。',
+          plan: '完善企业 Registry 审批；补充失败库 Adapter 复验。',
+        },
+        output: {
+          thisWeek: ['完成 Skill 市场必备入口', '补充 Passport 证据展示', '修复台账筛选'],
+          nextWeek: ['完善企业 Registry 审批', '补充失败库 Adapter 复验'],
+          risks: [],
+        },
+      },
+    ],
   },
   {
     slug: 'bad-review-reply',
     title: '差评回复',
     description: '针对用户差评生成真诚、专业、可平息情绪的客服回复建议。',
     category: 'customer-service',
+    essential: true,
     featured: true,
     license: LICENSE,
     systemPrompt: '你是一名经验丰富的客服主管，回复真诚、不甩锅、给出具体方案。',

@@ -36,7 +36,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { slug: 'users', label: '用户', kind: 'collection' },
       { slug: 'invite-codes', label: '邀请码', kind: 'collection' },
       { slug: 'contribution-logs', label: '贡献值流水', kind: 'collection' },
-      { slug: 'contribution-rules', label: '术值规则', kind: 'collection' },
+      { slug: 'contribution-rules', label: '贡献值规则', kind: 'collection' },
       { slug: 'favorites', label: '收藏', kind: 'collection' },
       { slug: 'runner-clients', label: 'Runner 实例', kind: 'collection' },
       { slug: 'skill-installs', label: '安装记录', kind: 'collection' },
@@ -48,6 +48,20 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     items: [
       { slug: 'reviews', label: '评论', kind: 'collection' },
       { slug: 'reports', label: '举报', kind: 'collection' },
+    ],
+  },
+  {
+    key: 'enterprise',
+    label: '企业治理',
+    items: [
+      { slug: 'organizations', label: '组织', kind: 'collection' },
+      { slug: 'organization-members', label: '组织成员', kind: 'collection' },
+      { slug: 'enterprise-registries', label: '企业注册表', kind: 'collection' },
+      { slug: 'skill-passports', label: 'Skill Passport', kind: 'collection' },
+      { slug: 'model-profiles', label: '模型画像', kind: 'collection' },
+      { slug: 'adapter-profiles', label: '适配补丁', kind: 'collection' },
+      { slug: 'failure-cases', label: '失败案例', kind: 'collection' },
+      { slug: 'compat-test-cases', label: '兼容测试样例', kind: 'collection' },
     ],
   },
   {

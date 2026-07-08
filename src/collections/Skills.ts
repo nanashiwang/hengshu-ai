@@ -3,14 +3,19 @@ import { isActiveAccount, isAdmin, isCreatorOrAbove, publishedOrPrivileged } fro
 import { slugify } from '@/lib/slug'
 import { awardContribution } from '@/lib/contribution'
 import { enqueueBenchmarkJob } from '@/lib/benchmarkQueue'
+import { refreshSkillPassport } from '@/lib/passportRefresh'
 import { notifySkillSubscribers, shouldNotifySkillVersionUpdate } from '@/lib/skillSubscriberNotifications'
+import { normalizeSkillSubmissionVisibility } from '@/lib/skillVisibility'
 import { rowActionsField } from './fields/rowActions'
 
 export const Skills: CollectionConfig = {
   slug: 'skills',
   labels: { singular: 'Skill', plural: 'Skill' },
   // 市场/排行热路径：where status+visibility，sort -skillRank/-runCount/-successRate（各字段已单列索引）
-  indexes: [{ fields: ['status', 'visibility'] }],
+  indexes: [
+    { fields: ['status', 'visibility'] },
+    { fields: ['status', 'visibility', 'isEssential'] },
+  ],
   admin: {
     useAsTitle: 'title',
     defaultColumns: ['title', 'status', 'author', 'skillRank', 'runCount', 'successRate', 'rowActions'],
@@ -46,6 +51,18 @@ export const Skills: CollectionConfig = {
       admin: { hidden: true, readOnly: true },
     },
     { name: 'category', type: 'relationship', relationTo: 'categories', label: '分类' },
+    {
+      type: 'collapsible',
+      label: '来源导入',
+      admin: { initCollapsed: true, description: '用于 GitHub/Claude/GPTs 来源同步和变更差分。' },
+      fields: [
+        { name: 'importSourceFormat', type: 'text', label: '来源格式', admin: { readOnly: true } },
+        { name: 'importSourceLocator', type: 'text', label: '来源定位', admin: { readOnly: true } },
+        { name: 'importSourceHash', type: 'text', index: true, label: '来源内容 Hash', admin: { readOnly: true } },
+        { name: 'importSourceLastSyncedAt', type: 'date', label: '最近同步时间', admin: { readOnly: true } },
+        { name: 'importSourceLastDiff', type: 'json', label: '最近变更差分', admin: { readOnly: true } },
+      ],
+    },
     {
       name: 'author',
       type: 'relationship',
@@ -97,6 +114,13 @@ export const Skills: CollectionConfig = {
     },
     // ── 状态标签 ──
     { name: 'isOfficial', type: 'checkbox', defaultValue: false, label: '官方' },
+    {
+      name: 'isEssential',
+      type: 'checkbox',
+      defaultValue: false,
+      label: '必备',
+      admin: { description: '新用户上手第一屏推荐，强调快速尝到甜头。' },
+    },
     { name: 'isFeatured', type: 'checkbox', defaultValue: false, label: '精选' },
     { name: 'isFreeleech', type: 'checkbox', defaultValue: false, label: '限免' },
     // ── 列表行内操作（下架/发布 + 删除）──
@@ -107,8 +131,8 @@ export const Skills: CollectionConfig = {
       label: '指标（自动维护）',
       admin: { initCollapsed: true },
       fields: [
-        { name: 'skillRank', type: 'number', defaultValue: 0, index: true, label: 'SkillRank' },
-        { name: 'localScore', type: 'number', defaultValue: 0, label: 'LocalScore（本地兼容）' },
+        { name: 'skillRank', type: 'number', defaultValue: 0, index: true, label: '可信分' },
+        { name: 'localScore', type: 'number', defaultValue: 0, label: '兼容分（本地模型）' },
         { name: 'healthScore', type: 'number', defaultValue: 0, label: '健康度' },
         { name: 'runCount', type: 'number', defaultValue: 0, index: true, label: '调用次数' },
         { name: 'downloadCount', type: 'number', defaultValue: 0, label: '下载次数' },
@@ -150,6 +174,9 @@ export const Skills: CollectionConfig = {
     ],
     beforeChange: [
       ({ data, req, operation }) => {
+        if (req.user && data.visibility) {
+          data.visibility = normalizeSkillSubmissionVisibility(data.visibility, req.user)
+        }
         if (operation === 'create') {
           if (!data.slug && data.title) data.slug = slugify(data.title)
           if (!data.author && req.user) data.author = req.user.id
@@ -203,6 +230,9 @@ export const Skills: CollectionConfig = {
           // 发布即评测：只入 Redis 队列，真实跑测由 worker 串行处理并做成本上限控制；入队失败不阻断审核发布。
           enqueueBenchmarkJob(req.payload, { skillId: doc.id, slug: doc.slug, reason: 'published' }).catch((e) =>
             req.payload.logger?.error(`发布即评测入队异常 skill=${doc.id}: ${(e as Error).message}`),
+          )
+          refreshSkillPassport(req.payload, String(doc.id)).catch((e) =>
+            req.payload.logger?.error(`发布后刷新 Skill Passport 失败 skill=${doc.id}: ${(e as Error).message}`),
           )
         }
         return doc

@@ -4,9 +4,9 @@ import './globals.css'
 import { SiteNav } from '@/components/SiteNav'
 
 export const metadata = {
-  title: '衡术 Hengshu — Verified AI Skills, Powered by Contribution.',
+  title: '衡术 Hengshu — AI Skill 的可信与兼容控制平面',
   description:
-    '发现、运行、安装、评测和复用高质量 AI 技能，并通过贡献值机制获得更高权限和资源。',
+    '让 AI Skill 拥有身份、版本、签名、兼容证据、失败记录和企业治理能力，适配用户已有模型、网关和本地 Runner。',
 }
 
 type ThemeMode = 'light' | 'dark'
@@ -36,7 +36,7 @@ export default async function FrontendLayout({ children }: { children: React.Rea
         <footer className="border-t border-[var(--border)]">
           <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-2 px-4 py-8 text-xs text-[var(--faint)] sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
             <span>© 2026 衡术 Hengshu · v0.1</span>
-            <span>Verified AI Skills, Powered by Contribution.</span>
+            <span>Passport · Compatibility · Runner · Enterprise Registry</span>
           </div>
         </footer>
       </body>

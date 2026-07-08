@@ -8,7 +8,7 @@ import { acquireUserLedgerLock } from './dbLocks'
 const SETTLEMENT_ACTIONS = new Set<ContributionAction>(['bounty', 'consume', 'other'])
 
 /**
- * 发放术值：以 ContributionRules 为准取分值，并做反作弊前置校验。
+ * 发放贡献值：以 ContributionRules 为准取分值，并做反作弊前置校验。
  *
  * 规则优先级（非结算类）：
  *  1. 查 actionType 对应规则；规则 enabled=false → 不发；
@@ -40,7 +40,7 @@ export async function awardContribution(
   if (!userId) return
   const isSettlement = SETTLEMENT_ACTIONS.has(actionType)
 
-  // 账本读写必须同一用户串行，避免余额/术值 read-modify-write 丢更新。
+  // 账本读写必须同一用户串行，避免余额/贡献值 read-modify-write 丢更新。
   let ownTxId: number | string | undefined
   let writeReq = req
   if (!req?.transactionID) {
@@ -136,9 +136,9 @@ export async function awardContribution(
       ...tx,
     })
     const newScore = (user.contributionScore || 0) + points
-    // 防透支：术值余额不可为负（与 applyCredit 对称的纵深防御；结算类扣分若超额则回滚）
+    // 防透支：贡献值余额不可为负（与 applyCredit 对称的纵深防御；结算类扣分若超额则回滚）
     if (newScore < 0) {
-      throw new Error(`术值余额不足，需 ${-points}`)
+      throw new Error(`贡献值余额不足，需 ${-points}`)
     }
     await payload.update({
       collection: 'users',
@@ -164,7 +164,7 @@ export async function awardContribution(
     })
     await commitOwnTx()
   } catch (e) {
-    // 自开事务：回滚，避免“状态已改、术值未发”或“改了分没记流水”的不一致
+    // 自开事务：回滚，避免“状态已改、贡献值未发”或“改了分没记流水”的不一致
     if (ownTxId) await payload.db.rollbackTransaction(ownTxId)
     if (args.throwOnError) throw e
     payload.logger?.error(`awardContribution 写入失败: ${(e as Error).message}`)

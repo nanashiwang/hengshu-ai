@@ -32,11 +32,14 @@ export interface SkillPackageAnalysis {
   packageType: PackageType
   checksum: string
   fileSize: number
+  sourceFormat?: 'hengshu' | 'claude_skill' | 'gpts' | 'github_readme'
   entries: SkillPackageEntry[]
   manifestName?: string
   manifestText?: string
   manifest?: any
   readmeText?: string
+  importedSourceName?: string
+  importedSourceText?: string
   issues: SkillPackageIssue[]
   runtimeType?: string
   version: string
@@ -72,6 +75,8 @@ const MAX_TOTAL_UNCOMPRESSED_BYTES = 25 * 1024 * 1024
 const MAX_TEXT_BYTES = 96 * 1024
 const MANIFEST_NAMES = new Set(['hengshu.skill.yaml', 'hengshu.skill.yml'])
 const README_RE = /^readme\.(md|txt)$/i
+const CLAUDE_SKILL_RE = /^skill\.md$/i
+const GPTS_CONFIG_RE = /^(gpts?|gpt-config|actions)\.(json|yaml|yml)$/i
 const SECRET_RE = /(^|\/)(\.env|id_rsa|id_dsa|id_ed25519|.*\.pem|.*\.p12|.*\.pfx|.*\.key)$/i
 const RISKY_PATH_RE = /(^|\/)(node_modules|\.git|__pycache__|\.venv|venv|dist|build)(\/|$)/i
 const EXECUTABLE_RE = /\.(sh|bash|zsh|ps1|bat|cmd|exe|dll|so|dylib|app|dmg|pkg)$/i
@@ -111,6 +116,133 @@ function findReadme(entries: Map<string, Buffer>) {
     .filter((name) => README_RE.test(path.posix.basename(name)))
     .sort((a, b) => a.split('/').length - b.split('/').length || a.length - b.length)
   return candidates[0]
+}
+
+function findClaudeSkill(entries: Map<string, Buffer>) {
+  const candidates = [...entries.keys()]
+    .filter((name) => CLAUDE_SKILL_RE.test(path.posix.basename(name)))
+    .sort((a, b) => a.split('/').length - b.split('/').length || a.length - b.length)
+  return candidates[0]
+}
+
+function findGptsConfig(entries: Map<string, Buffer>) {
+  const candidates = [...entries.keys()]
+    .filter((name) => GPTS_CONFIG_RE.test(path.posix.basename(name)))
+    .sort((a, b) => a.split('/').length - b.split('/').length || a.length - b.length)
+  return candidates[0]
+}
+
+function safeParseStructured(text?: string, fileName?: string) {
+  if (!text) return undefined
+  try {
+    return fileName?.toLowerCase().endsWith('.json') ? JSON.parse(text) : parseYaml(text)
+  } catch {
+    return undefined
+  }
+}
+
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return undefined
+}
+
+function inferExternalImport(args: {
+  manifest?: any
+  readmeText?: string
+  claudeSkillName?: string
+  claudeSkillText?: string
+  gptsConfigName?: string
+  gptsConfigText?: string
+}): {
+  sourceFormat?: SkillPackageAnalysis['sourceFormat']
+  importedSourceName?: string
+  importedSourceText?: string
+  systemPrompt?: string
+  promptTemplate?: string
+  inputSchema?: any
+  outputSchema?: any
+  examples?: any
+  permissions?: SkillPackageAnalysis['permissions']
+  description?: string
+} {
+  if (args.manifest) return { sourceFormat: 'hengshu' }
+
+  if (args.claudeSkillText) {
+    const text = args.claudeSkillText.trim()
+    return {
+      sourceFormat: 'claude_skill',
+      importedSourceName: args.claudeSkillName,
+      importedSourceText: text,
+      systemPrompt: '你正在运行从 Claude Skill 导入的 Skill。请遵循原始 SKILL.md 的说明，并在能力不足时明确说明。',
+      promptTemplate: [
+        '原始 Claude Skill 说明：',
+        text,
+        '',
+        '用户本次任务：',
+        '{{request}}',
+      ].join('\n'),
+      inputSchema: {
+        request: { type: 'text', label: '本次任务', required: true },
+      },
+      permissions: { network: false, fileRead: false, fileWrite: false, shell: false },
+    }
+  }
+
+  if (args.gptsConfigText) {
+    const config = safeParseStructured(args.gptsConfigText, args.gptsConfigName) || {}
+    const instructions = firstString(config.instructions, config.instruction, config.system_prompt, config.systemPrompt, config.prompt)
+    const starters = Array.isArray(config.conversation_starters || config.conversationStarters)
+      ? (config.conversation_starters || config.conversationStarters)
+      : undefined
+    return {
+      sourceFormat: 'gpts',
+      importedSourceName: args.gptsConfigName,
+      importedSourceText: args.gptsConfigText.trim(),
+      systemPrompt: instructions || '你正在运行从 GPTs 配置导入的 Skill。',
+      promptTemplate: [
+        instructions || '请按导入的 GPTs 配置完成任务。',
+        '',
+        '用户本次任务：',
+        '{{request}}',
+      ].join('\n'),
+      inputSchema: {
+        request: { type: 'text', label: '本次任务', required: true },
+      },
+      examples: starters?.slice(0, 8).map((s: unknown) => ({ input: { request: String(s) } })),
+      permissions: {
+        network: Boolean(config.actions || config.tools || config.capabilities?.web_browsing),
+        fileRead: Boolean(config.capabilities?.code_interpreter),
+        fileWrite: false,
+        shell: false,
+      },
+      description: firstString(config.description),
+    }
+  }
+
+  if (args.readmeText) {
+    const text = args.readmeText.trim()
+    return {
+      sourceFormat: 'github_readme',
+      importedSourceName: 'README',
+      importedSourceText: text,
+      systemPrompt: '你正在运行从 GitHub/README 导入的 Skill。请只根据 README 中可确认的能力执行。',
+      promptTemplate: [
+        '项目 README：',
+        text,
+        '',
+        '用户本次任务：',
+        '{{request}}',
+      ].join('\n'),
+      inputSchema: {
+        request: { type: 'text', label: '本次任务', required: true },
+      },
+      permissions: { network: false, fileRead: false, fileWrite: false, shell: false },
+    }
+  }
+
+  return {}
 }
 
 function readUInt16(buffer: Buffer, offset: number) {
@@ -227,7 +359,7 @@ function normalizePermissions(raw: any): SkillPackageAnalysis['permissions'] {
 function collectStaticIssues(analysis: SkillPackageAnalysis) {
   const issues = analysis.issues
   if (!analysis.manifestName) {
-    issues.push({ level: 'warning', code: 'MANIFEST_MISSING', message: '未提供 hengshu.skill.yaml/yml，将按名称、简介和 README 生成兜底运行说明' })
+    issues.push({ level: 'manual', code: 'MANIFEST_MISSING', message: '未提供 hengshu.skill.yaml/yml，只能进入 Imported / 人工审核，不能自动 Verified 上架' })
   } else if (analysis.manifestName.split('/').length > 1) {
     issues.push({ level: 'warning', code: 'MANIFEST_NESTED', message: '建议把 hengshu.skill.yaml 放在压缩包根目录' })
   }
@@ -263,8 +395,12 @@ export function analyzeSkillPackage(fileName: string, input: Buffer): SkillPacka
   const parsed = packageType === 'zip' ? parseZip(input) : parseTarGz(input)
   const manifestName = findManifest(parsed.texts)
   const readmeName = findReadme(parsed.texts)
+  const claudeSkillName = findClaudeSkill(parsed.texts)
+  const gptsConfigName = findGptsConfig(parsed.texts)
   const manifestText = decodeText(manifestName ? parsed.texts.get(manifestName) : undefined)
   const readmeText = decodeText(readmeName ? parsed.texts.get(readmeName) : undefined)
+  const claudeSkillText = decodeText(claudeSkillName ? parsed.texts.get(claudeSkillName) : undefined)
+  const gptsConfigText = decodeText(gptsConfigName ? parsed.texts.get(gptsConfigName) : undefined)
   let manifest: any
   const issues = [...parsed.issues]
   if (manifestText) {
@@ -276,27 +412,31 @@ export function analyzeSkillPackage(fileName: string, input: Buffer): SkillPacka
   }
   const prompt = manifest?.prompt || {}
   const runtimeType = typeof manifest?.runtime === 'object' ? String(manifest.runtime?.type || '') : String(manifest?.runtime || '')
-  const permissions = normalizePermissions(manifest?.permissions || manifest?.runtime?.permissions)
+  const imported = inferExternalImport({ manifest, readmeText, claudeSkillName, claudeSkillText, gptsConfigName, gptsConfigText })
+  const permissions = manifest ? normalizePermissions(manifest?.permissions || manifest?.runtime?.permissions) : imported.permissions
   const analysis: SkillPackageAnalysis = {
     fileName,
     packageType,
     checksum: sha256(input),
     fileSize: input.byteLength,
+    sourceFormat: imported.sourceFormat || (manifest ? 'hengshu' : undefined),
     entries: parsed.entries,
     manifestName,
     manifestText,
     manifest,
     readmeText,
+    importedSourceName: imported.importedSourceName,
+    importedSourceText: imported.importedSourceText,
     issues,
     runtimeType,
     version: String(manifest?.version || '1.0.0'),
-    systemPrompt: typeof prompt.system === 'string' ? prompt.system : undefined,
-    promptTemplate: typeof prompt.user_template === 'string' ? prompt.user_template : typeof prompt.userTemplate === 'string' ? prompt.userTemplate : undefined,
-    inputSchema: manifest?.input_schema || manifest?.inputSchema,
-    outputSchema: manifest?.output_schema || manifest?.outputSchema,
+    systemPrompt: typeof prompt.system === 'string' ? prompt.system : imported.systemPrompt,
+    promptTemplate: typeof prompt.user_template === 'string' ? prompt.user_template : typeof prompt.userTemplate === 'string' ? prompt.userTemplate : imported.promptTemplate,
+    inputSchema: manifest?.input_schema || manifest?.inputSchema || imported.inputSchema,
+    outputSchema: manifest?.output_schema || manifest?.outputSchema || imported.outputSchema,
     recommendedModels: manifest?.models || manifest?.recommended_models || manifest?.recommendedModels,
     routePolicy: manifest?.route_policy || manifest?.routePolicy,
-    examples: manifest?.examples,
+    examples: manifest?.examples || imported.examples,
     license: typeof manifest?.license === 'string' ? manifest.license : undefined,
     minRunnerVersion: typeof manifest?.runtime?.min_runner_version === 'string' ? manifest.runtime.min_runner_version : undefined,
     permissions,

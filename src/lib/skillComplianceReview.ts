@@ -19,8 +19,8 @@ export const SKILL_REVIEW_PROMPT_TEMPLATE = [
   '5. 一致性和质量：如提供 manifest，需与 README/简介/文件列表一致；未提供 manifest 时，README/简介是否足够说明用途；是否空壳、广告、抄袭明显或无法运行。',
   '',
   '判定规则：',
-  '- approve：仅限低风险、用途明确、无敏感收集、无高风险权限；有 manifest 时格式完整；无 manifest 但 README/简介足够清楚时也可通过。',
-  '- manual_review：存在不确定风险、需要人工看代码/脚本、权限较高、说明不一致、质量存疑。',
+  '- approve：仅限低风险、用途明确、无敏感收集、无高风险权限，且提供格式完整的 hengshu.skill.yaml/yml。',
+  '- manual_review：无 manifest、存在不确定风险、需要人工看代码/脚本、权限较高、说明不一致、质量存疑。',
   '- reject：明显恶意、违法、诈骗、密钥泄漏、盗取凭据、绕过安全边界或高可信恶意。',
   '',
   '返回 JSON：',
@@ -49,6 +49,7 @@ export const SKILL_COMPLIANCE_REVIEWER_SKILL = {
   title: 'Skill 合规审核员',
   description: '审核待上架 Skill 的用途、manifest、README、权限声明和包内风险信号，给出自动通过或转人工结论。',
   category: 'evaluation',
+  essential: true,
   featured: true,
   license: 'MIT',
   systemPrompt: SKILL_REVIEW_SYSTEM_PROMPT,
@@ -143,6 +144,11 @@ export function normalizeSkillReviewDecision(value: unknown): PackageDecision {
   return value === 'approve' || value === 'reject' || value === 'manual_review' ? value : 'manual_review'
 }
 
-export function packageStatusForReview(review: Pick<SkillPackageReview, 'decision'>): 'published' | 'pending' {
-  return review.decision === 'approve' ? 'published' : 'pending'
+export function packageStatusForReview(
+  review: Pick<SkillPackageReview, 'decision'>,
+  analysis?: Pick<SkillPackageAnalysis, 'issues' | 'manifest'>,
+): 'published' | 'pending' {
+  if (!analysis?.manifest) return 'pending'
+  const requiresHumanReview = analysis?.issues?.some((issue) => issue.level === 'manual' || issue.level === 'blocker')
+  return review.decision === 'approve' && !requiresHumanReview ? 'published' : 'pending'
 }

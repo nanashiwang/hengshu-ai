@@ -4,6 +4,7 @@ import { getPayloadClient } from '@/lib/payload'
 import { getCurrentUser } from '@/lib/auth'
 import { BountyActions } from '@/components/BountyActions'
 import { formatNumber, timeAgo } from '@/lib/format'
+import { canReadBounty } from '@/lib/bountyAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,22 +24,39 @@ export default async function BountyDetailPage({
 }) {
   const { id } = await params
   const payload = await getPayloadClient()
-  const bounty = await payload.findByID({ collection: 'bounties', id, depth: 1 }).catch(() => null)
-  if (!bounty) notFound()
-  const creator = typeof bounty.creator === 'object' ? bounty.creator : null
-  const acceptor = typeof bounty.acceptedBy === 'object' ? bounty.acceptedBy : null
-  const submitted = typeof bounty.submittedSkill === 'object' ? bounty.submittedSkill : null
-
   const user = await getCurrentUser()
+  const bounty = await payload
+    .findByID({ collection: 'bounties', id, depth: 1, overrideAccess: true })
+    .catch(() => null)
+  if (!bounty || !canReadBounty(bounty, user)) notFound()
+  const creator = typeof bounty.creator === 'object' ? bounty.creator : null
+  const acceptor =
+    typeof bounty.acceptedBy === 'object' ? bounty.acceptedBy : null
+  const submitted =
+    typeof bounty.submittedSkill === 'object' ? bounty.submittedSkill : null
+
   const uid = (user as any)?.id
-  const creatorId = typeof bounty.creator === 'object' ? (bounty.creator as any)?.id : bounty.creator
-  const acceptorId = typeof bounty.acceptedBy === 'object' ? (bounty.acceptedBy as any)?.id : bounty.acceptedBy
+  const creatorId =
+    typeof bounty.creator === 'object'
+      ? (bounty.creator as any)?.id
+      : bounty.creator
+  const acceptorId =
+    typeof bounty.acceptedBy === 'object'
+      ? (bounty.acceptedBy as any)?.id
+      : bounty.acceptedBy
   const role: 'creator' | 'acceptor' | 'other' =
-    uid && uid === creatorId ? 'creator' : uid && uid === acceptorId ? 'acceptor' : 'other'
+    uid && uid === creatorId
+      ? 'creator'
+      : uid && uid === acceptorId
+        ? 'acceptor'
+        : 'other'
 
   return (
     <div className="space-y-4">
-      <Link href="/bounties" className="text-sm text-[var(--muted)] hover:text-[var(--text)]">
+      <Link
+        href="/bounties"
+        className="text-sm text-[var(--muted)] hover:text-[var(--text)]"
+      >
         ← 返回悬赏区
       </Link>
       <div className="card p-6">
@@ -50,17 +68,23 @@ export default async function BountyDetailPage({
             <h1 className="mt-2 text-2xl font-bold">{bounty.title}</h1>
             <p className="mt-1 text-sm text-[var(--muted)]">
               {creator?.username || '匿名'} · {timeAgo(bounty.createdAt)}
-              {bounty.dueAt ? ` · 截止 ${new Date(bounty.dueAt).toLocaleDateString('zh-CN')}` : ''}
+              {bounty.dueAt
+                ? ` · 截止 ${new Date(bounty.dueAt).toLocaleDateString('zh-CN')}`
+                : ''}
             </p>
           </div>
           <div className="shrink-0 text-right">
-            <div className="text-2xl font-bold text-[var(--accent-2)]">⚡ {formatNumber(bounty.rewardPoints)}</div>
+            <div className="text-2xl font-bold text-[var(--accent-2)]">
+              ⚡ {formatNumber(bounty.rewardPoints)}
+            </div>
             <div className="text-xs text-[var(--muted)]">
-              {(bounty as any).frozenPoints ? '已冻结术值' : '贡献值赏金'}
+              {(bounty as any).frozenPoints ? '已冻结贡献值' : '贡献值赏金'}
             </div>
           </div>
         </div>
-        <div className="mt-4 whitespace-pre-wrap text-sm">{bounty.description || '（无详细说明）'}</div>
+        <div className="mt-4 whitespace-pre-wrap text-sm">
+          {bounty.description || '（无详细说明）'}
+        </div>
 
         {(acceptor || submitted) && (
           <div className="mt-4 flex flex-wrap gap-4 border-t border-[var(--border)] pt-4 text-sm text-[var(--muted)]">
@@ -68,7 +92,10 @@ export default async function BountyDetailPage({
             {submitted && (
               <span>
                 交付：
-                <Link href={`/skills/${submitted.slug}`} className="link-accent ml-1">
+                <Link
+                  href={`/skills/${submitted.slug}`}
+                  className="link-accent ml-1"
+                >
                   {submitted.title}
                 </Link>
               </span>
@@ -79,7 +106,12 @@ export default async function BountyDetailPage({
 
       <div className="card p-5">
         <h2 className="mb-3 text-sm font-semibold">参与</h2>
-        <BountyActions bountyId={id} status={bounty.status as string} role={role} loggedIn={!!user} />
+        <BountyActions
+          bountyId={id}
+          status={bounty.status as string}
+          role={role}
+          loggedIn={!!user}
+        />
       </div>
     </div>
   )

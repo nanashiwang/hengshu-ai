@@ -9,6 +9,8 @@ import { maskRechargeCode, normalizeRechargeCode, rechargeCodeDigest, resolveRec
 import { consumeStrictRedisRateLimit } from '@/lib/rateLimit'
 import { recordAuditEvent } from '@/lib/audit'
 import { resolveRuntimeEnv } from '@/lib/deploymentSettings'
+import { isAccountRequestError, MAX_ACCOUNT_REQUEST_BYTES, normalizeRechargeCodeInput } from '@/lib/accountRequest'
+import { readJsonBodyWithLimit } from '@/lib/requestBody'
 
 const DEFAULT_RECHARGE_ATTEMPT_LIMIT_PER_10MIN = 10
 
@@ -43,14 +45,11 @@ export async function POST(request: Request) {
     )
   }
 
-  let body: any = {}
-  try {
-    body = await request.json()
-  } catch {
-    return Response.json({ error: '请求体无效' }, { status: 400 })
-  }
-  const codeText = normalizeRechargeCode(body.code)
-  if (!codeText) return Response.json({ error: '请输入充值码' }, { status: 400 })
+  const parsed = await readJsonBodyWithLimit(request, MAX_ACCOUNT_REQUEST_BYTES, '充值请求体过大')
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: parsed.status })
+  const codeInput = normalizeRechargeCodeInput(parsed.value?.code)
+  if (isAccountRequestError(codeInput)) return Response.json({ error: codeInput.error }, { status: codeInput.status })
+  const codeText = normalizeRechargeCode(codeInput)
   const codeHash = rechargeCodeDigest(codeText)
 
   const transactionID = await payload.db.beginTransaction()
@@ -110,6 +109,6 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, creditGranted: credit, newCreditBalance: grant.balance })
   } catch (e) {
     await payload.db.rollbackTransaction(transactionID)
-    return Response.json({ error: (e as Error).message || '充值失败' }, { status: 400 })
+    return Response.json({ error: '充值失败，请重试' }, { status: 400 })
   }
 }

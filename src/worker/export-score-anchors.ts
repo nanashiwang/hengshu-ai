@@ -4,9 +4,10 @@ import path from 'path'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { canonicalString } from '@/lib/canonical'
-import { buildScoreAnchorEntry, buildScoreAnchorManifest } from '@/lib/scoreAnchor'
+import { buildScoreAnchorEntry, buildScoreAnchorManifest, signScoreAnchorManifest } from '@/lib/scoreAnchor'
 import { scoreSnapshotCore, scoreSnapshotHash, verifyScoreSnapshot } from '@/lib/scoreSnapshotVerify'
 import { getPublicKeyInfo } from '@/lib/signing'
+import { isPublicScoreSnapshot, publicScoreSnapshotWhere } from '@/lib/scoreSnapshotPublic'
 
 const OUT = process.env.SCORE_ANCHOR_FILE || 'docs/anchors/score-snapshots.jsonl'
 const MANIFEST_OUT = process.env.SCORE_ANCHOR_MANIFEST_FILE || 'docs/anchors/score-snapshots.manifest.json'
@@ -22,14 +23,15 @@ async function main() {
   for (;;) {
     const res = await payload.find({
       collection: 'score-snapshots',
-      depth: 0,
+      where: publicScoreSnapshotWhere(),
+      depth: 1,
       limit: 500,
       page,
       overrideAccess: true,
       sort: 'createdAt',
     })
 
-    for (const s of res.docs as any[]) {
+    for (const s of (res.docs as any[]).filter(isPublicScoreSnapshot)) {
       const core = scoreSnapshotCore(s)
       if (!core) continue
       const verify = verifyScoreSnapshot(s, publicKey)
@@ -57,7 +59,8 @@ async function main() {
   await mkdir(path.dirname(outPath), { recursive: true })
   await mkdir(path.dirname(manifestPath), { recursive: true })
   await writeFile(outPath, lines.length ? `${lines.join('\n')}\n` : '', 'utf8')
-  await writeFile(manifestPath, `${canonicalString(buildScoreAnchorManifest(lines, new Date().toISOString()))}\n`, 'utf8')
+  const manifest = signScoreAnchorManifest(buildScoreAnchorManifest(lines, new Date().toISOString()))
+  await writeFile(manifestPath, `${canonicalString(manifest)}\n`, 'utf8')
   payload.logger.info(`已导出 ${exported} 条分数快照锚点：${OUT}；manifest=${MANIFEST_OUT}`)
   process.exit(0)
 }

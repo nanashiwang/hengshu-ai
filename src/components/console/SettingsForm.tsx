@@ -40,7 +40,7 @@ export function SettingsForm({ hasKey, bio }: { hasKey: boolean; bio?: string })
       <div className="space-y-2">
         <div className="text-sm font-medium">模型网关 Key（BYOK）</div>
         <p className="text-xs text-[var(--muted)]">
-          绑定你自己的 OpenAI 兼容网关 Key 后，在线运行直连你的额度、免平台代付加价（更省）。
+          绑定你自己的 OpenAI 兼容网关 Key 后，在线运行直连你的额度，减少平台代付加价。
           当前状态：{hasKey ? <span className="text-[var(--accent-2)]">已配置</span> : <span className="text-[var(--muted)]">未配置</span>}
         </p>
         <div className="flex gap-2">

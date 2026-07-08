@@ -1,5 +1,5 @@
 import type { CollectionConfig } from 'payload'
-import { isAdmin, isLoggedIn, ownerOrAdmin } from '@/access'
+import { isAdmin, isLoggedIn, ownerOrAdmin, readableReview } from '@/access'
 import { notify } from '@/lib/notify'
 
 // 重算某 Skill 的平均评分与评论数（在 hook 内调用须透传 req 以共享事务）
@@ -47,7 +47,7 @@ export const Reviews: CollectionConfig = {
     group: '审核治理',
   },
   access: {
-    read: () => true,
+    read: readableReview,
     create: isLoggedIn,
     update: ownerOrAdmin('user'),
     delete: ownerOrAdmin('user'),

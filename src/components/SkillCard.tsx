@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { SkillStatusTags } from './Tag'
-import { formatCost, formatLatency, formatNumber, formatPercent } from '@/lib/format'
+import { formatLatency, formatNumber, formatPercent } from '@/lib/format'
 
-// SkillRank 颜色
+// 可信分沿用 skillRank 字段，前台不再暴露旧名。
 function rankColor(rank?: number | null) {
   const r = rank || 0
   if (r >= 85) return 'var(--accent-2)'
@@ -14,6 +14,9 @@ function rankColor(rank?: number | null) {
 export function SkillCard({ skill }: { skill: any }) {
   const cat = typeof skill.category === 'object' ? skill.category : null
   const author = typeof skill.author === 'object' ? skill.author : null
+  const passport = skill.passport
+  const trustedCompatibleRunCount =
+    skill.trustedCompatibleRunCount ?? passport?.trustedCompatibleRunCount ?? 0
   return (
     <Link
       href={`/skills/${skill.slug}`}
@@ -30,11 +33,18 @@ export function SkillCard({ skill }: { skill: any }) {
         </div>
         <div
           className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl border"
-          style={{ borderColor: rankColor(skill.skillRank), color: rankColor(skill.skillRank) }}
-          title="SkillRank"
+          style={{
+            borderColor: rankColor(skill.skillRank),
+            color: rankColor(skill.skillRank),
+          }}
+          title="可信分"
         >
-          <span className="text-base font-bold leading-none">{Math.round(skill.skillRank || 0)}</span>
-          <span className="mt-0.5 text-[9px] tracking-wider text-[var(--faint)]">RANK</span>
+          <span className="text-base font-bold leading-none">
+            {Math.round(skill.skillRank || 0)}
+          </span>
+          <span className="mt-0.5 text-[9px] tracking-wider text-[var(--faint)]">
+            信任
+          </span>
         </div>
       </div>
 
@@ -44,15 +54,22 @@ export function SkillCard({ skill }: { skill: any }) {
             {cat.icon} {cat.name}
           </span>
         )}
-        {author && <span className="text-[var(--faint)]">· {author.username}</span>}
+        {author && (
+          <span className="text-[var(--faint)]">· {author.username}</span>
+        )}
         <SkillStatusTags skill={skill} />
       </div>
 
       <div className="grid grid-cols-4 gap-2 border-t border-[var(--border)] pt-3 text-center text-[11px]">
+        <Metric
+          label="Passport"
+          value={
+            passport ? String(Math.round(passport.trustScore || 0)) : '待生成'
+          }
+        />
         <Metric label="成功率" value={formatPercent(skill.successRate)} />
-        <Metric label="成本" value={formatCost(skill.avgCost)} />
         <Metric label="耗时" value={formatLatency(skill.avgLatencyMs)} />
-        <Metric label="调用" value={formatNumber(skill.runCount)} />
+        <Metric label="可信兼容" value={formatNumber(trustedCompatibleRunCount)} />
       </div>
     </Link>
   )

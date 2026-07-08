@@ -3,10 +3,10 @@ import { isAdmin } from '@/access'
 import { CONTRIBUTION_ACTIONS } from '@/lib/constants'
 import { rowActionsField } from './fields/rowActions'
 
-// 术值规则（可配置）。awardContribution 据此取分值并做反作弊（日上限/自操作排除）。
+// 贡献值规则（可配置）。awardContribution 据此取分值并做反作弊（日上限/自操作排除）。
 export const ContributionRules: CollectionConfig = {
   slug: 'contribution-rules',
-  labels: { singular: '术值规则', plural: '术值规则' },
+  labels: { singular: '贡献值规则', plural: '贡献值规则' },
   admin: {
     useAsTitle: 'actionType',
     defaultColumns: ['actionType', 'basePoints', 'dailyLimit', 'selfActionExcluded', 'enabled', 'rowActions'],
@@ -29,7 +29,7 @@ export const ContributionRules: CollectionConfig = {
       label: '行为',
       options: CONTRIBUTION_ACTIONS.map((a) => ({ label: a, value: a })),
     },
-    { name: 'basePoints', type: 'number', required: true, defaultValue: 0, label: '基础术值' },
+    { name: 'basePoints', type: 'number', required: true, defaultValue: 0, label: '基础贡献值' },
     {
       name: 'dailyLimit',
       type: 'number',

@@ -69,11 +69,14 @@ export interface Config {
   collections: {
     skills: Skill;
     'skill-versions': SkillVersion;
+    'skill-passports': SkillPassport;
     'skill-artifacts': SkillArtifact;
     categories: Category;
     'skill-runs': SkillRun;
     bounties: Bounty;
     'compat-reports': CompatReport;
+    'compat-test-cases': CompatTestCase;
+    'adapter-profiles': AdapterProfile;
     users: User;
     'invite-codes': InviteCode;
     'contribution-logs': ContributionLog;
@@ -87,8 +90,15 @@ export interface Config {
     notifications: Notification;
     reviews: Review;
     reports: Report;
+    'failure-cases': FailureCase;
+    'evidence-snapshots': EvidenceSnapshot;
     'audit-logs': AuditLog;
+    organizations: Organization;
+    'organization-members': OrganizationMember;
+    'enterprise-registries': EnterpriseRegistry;
+    'enterprise-audit-logs': EnterpriseAuditLog;
     media: Media;
+    'model-profiles': ModelProfile;
     'model-price-snapshots': ModelPriceSnapshot;
     'score-snapshots': ScoreSnapshot;
     'payload-kv': PayloadKv;
@@ -100,11 +110,14 @@ export interface Config {
   collectionsSelect: {
     skills: SkillsSelect<false> | SkillsSelect<true>;
     'skill-versions': SkillVersionsSelect<false> | SkillVersionsSelect<true>;
+    'skill-passports': SkillPassportsSelect<false> | SkillPassportsSelect<true>;
     'skill-artifacts': SkillArtifactsSelect<false> | SkillArtifactsSelect<true>;
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     'skill-runs': SkillRunsSelect<false> | SkillRunsSelect<true>;
     bounties: BountiesSelect<false> | BountiesSelect<true>;
     'compat-reports': CompatReportsSelect<false> | CompatReportsSelect<true>;
+    'compat-test-cases': CompatTestCasesSelect<false> | CompatTestCasesSelect<true>;
+    'adapter-profiles': AdapterProfilesSelect<false> | AdapterProfilesSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
     'invite-codes': InviteCodesSelect<false> | InviteCodesSelect<true>;
     'contribution-logs': ContributionLogsSelect<false> | ContributionLogsSelect<true>;
@@ -118,8 +131,15 @@ export interface Config {
     notifications: NotificationsSelect<false> | NotificationsSelect<true>;
     reviews: ReviewsSelect<false> | ReviewsSelect<true>;
     reports: ReportsSelect<false> | ReportsSelect<true>;
+    'failure-cases': FailureCasesSelect<false> | FailureCasesSelect<true>;
+    'evidence-snapshots': EvidenceSnapshotsSelect<false> | EvidenceSnapshotsSelect<true>;
     'audit-logs': AuditLogsSelect<false> | AuditLogsSelect<true>;
+    organizations: OrganizationsSelect<false> | OrganizationsSelect<true>;
+    'organization-members': OrganizationMembersSelect<false> | OrganizationMembersSelect<true>;
+    'enterprise-registries': EnterpriseRegistriesSelect<false> | EnterpriseRegistriesSelect<true>;
+    'enterprise-audit-logs': EnterpriseAuditLogsSelect<false> | EnterpriseAuditLogsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    'model-profiles': ModelProfilesSelect<false> | ModelProfilesSelect<true>;
     'model-price-snapshots': ModelPriceSnapshotsSelect<false> | ModelPriceSnapshotsSelect<true>;
     'score-snapshots': ScoreSnapshotsSelect<false> | ScoreSnapshotsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
@@ -180,6 +200,19 @@ export interface Skill {
   description?: string | null;
   clientSubmissionKey?: string | null;
   category?: (string | null) | Category;
+  importSourceFormat?: string | null;
+  importSourceLocator?: string | null;
+  importSourceHash?: string | null;
+  importSourceLastSyncedAt?: string | null;
+  importSourceLastDiff?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   author?: (string | null) | User;
   /**
    * 从哪个 Skill 复制而来（血统，用于变异-表现差分分析）
@@ -189,6 +222,10 @@ export interface Skill {
   status?: ('draft' | 'pending' | 'published' | 'rejected' | 'archived') | null;
   currentVersion?: (string | null) | SkillVersion;
   isOfficial?: boolean | null;
+  /**
+   * 新用户上手第一屏推荐，强调快速尝到甜头。
+   */
+  isEssential?: boolean | null;
   isFeatured?: boolean | null;
   isFreeleech?: boolean | null;
   skillRank?: number | null;
@@ -340,6 +377,8 @@ export interface SkillVersion {
     | boolean
     | null;
   changelog?: string | null;
+  contractHash?: string | null;
+  contractStatus?: ('initial' | 'compatible_change' | 'breaking_change') | null;
   license?: string | null;
   minRunnerVersion?: string | null;
   permissions?: {
@@ -362,6 +401,90 @@ export interface SkillVersion {
     | null;
   status?: ('draft' | 'active' | 'deprecated') | null;
   createdBy?: (string | null) | User;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Skill 的身份、签名、兼容证据、失败记录与治理状态。
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "skill-passports".
+ */
+export interface SkillPassport {
+  id: string;
+  title: string;
+  skill: string | Skill;
+  skillVersion?: (string | null) | SkillVersion;
+  status?: ('draft' | 'current' | 'stale' | 'revoked') | null;
+  skillClass?: ('verified' | 'imported' | 'high_risk' | 'rejected') | null;
+  trustScore?: number | null;
+  signatureStatus?: string | null;
+  manifestChecksum?: string | null;
+  capabilitySummary?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  compatibilitySummary?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  reliabilitySummary?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  safetySummary?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  failureSummary?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  evidenceSummary?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  evidenceHash?: string | null;
+  enterpriseSummary?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  lastVerifiedAt?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -394,8 +517,15 @@ export interface SkillRun {
   user?: (string | null) | User;
   skill: string | Skill;
   skillVersion?: (string | null) | SkillVersion;
+  rerunOf?: (string | null) | SkillRun;
+  rerunFromModel?: string | null;
+  adapterProfile?: (string | null) | AdapterProfile;
+  modelProfile?: (string | null) | ModelProfile;
   model?: string | null;
   routeMode?: ('cheap' | 'quality' | 'fast' | 'balanced') | null;
+  /**
+   * 用户原始输入；普通用户只能经 /v1/runs?includeIO=1 审计导出。
+   */
   inputJson?:
     | {
         [k: string]: unknown;
@@ -405,7 +535,13 @@ export interface SkillRun {
     | number
     | boolean
     | null;
+  /**
+   * 模型原始输出；普通用户只能经 /v1/runs?includeIO=1 审计导出。
+   */
   outputText?: string | null;
+  /**
+   * 结构化输出原文；普通用户只能经 /v1/runs?includeIO=1 审计导出。
+   */
   outputJson?:
     | {
         [k: string]: unknown;
@@ -422,7 +558,7 @@ export interface SkillRun {
   chargedAmount?: number | null;
   chargedCredits?: number | null;
   /**
-   * 相比默认premium模型省下的估算金额(省钱路由的累计价值)
+   * 相比默认 premium 模型降低的估算成本；作为后台履约优化指标，不作为主叙事。
    */
   savedAmount?: number | null;
   latencyMs?: number | null;
@@ -433,7 +569,230 @@ export interface SkillRun {
    * 对比/探测运行(skipAggregate)为 false，不计入 headline 指标，台账对账据此过滤
    */
   countedInMetrics?: boolean | null;
+  /**
+   * 内部排障句柄，不随用户私人台账或 Payload REST 直接返回。
+   */
   newapiLogId?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Skill × Model 的 prompt/schema/decoding/retry 适配补丁。
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "adapter-profiles".
+ */
+export interface AdapterProfile {
+  id: string;
+  title: string;
+  skill: string | Skill;
+  skillVersion?: (string | null) | SkillVersion;
+  sourceFailureCase?: (string | null) | FailureCase;
+  modelProfile?: (string | null) | ModelProfile;
+  modelName: string;
+  status?: ('draft' | 'active' | 'observed' | 'disabled') | null;
+  systemPromptAppend?: string | null;
+  userPromptAppend?: string | null;
+  outputSchemaPatch?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  decodingPatch?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  retryPolicy?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  failureTypes?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  liftScore?: number | null;
+  beforeMetrics?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  afterMetrics?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  evidenceHash?: string | null;
+  lastVerifiedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * 从 CompatReports/SkillRuns 聚类出的脱敏失败知识库。
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "failure-cases".
+ */
+export interface FailureCase {
+  id: string;
+  title: string;
+  profileKey?: string | null;
+  errorType: string;
+  modelName: string;
+  skill?: (string | null) | Skill;
+  skillVersion?: (string | null) | SkillVersion;
+  symptom?: string | null;
+  likelyCause?: string | null;
+  repairTemplate?: string | null;
+  verifyTemplate?: string | null;
+  primaryInputBucket?: string | null;
+  inputBuckets?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  outputBuckets?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  modelBreakdown?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  sourceBreakdown?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  evidenceHash?: string | null;
+  occurrenceCount?: number | null;
+  affectedSkillCount?: number | null;
+  status?: ('observed' | 'confirmed' | 'fixed' | 'ignored') | null;
+  lastObservedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * 模型的能力、价格、区域、常见失败和兼容证据 freshness。
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "model-profiles".
+ */
+export interface ModelProfile {
+  id: string;
+  provider?: string | null;
+  modelName: string;
+  modelVersion?: string | null;
+  profileStatus?: ('observed' | 'verified' | 'stale' | 'deprecated') | null;
+  contextLength?: number | null;
+  supportsStructuredOutput?: boolean | null;
+  supportsToolUse?: boolean | null;
+  chineseStyleScore?: number | null;
+  jsonStabilityScore?: number | null;
+  longOutputStabilityScore?: number | null;
+  inputPrice?: number | null;
+  outputPrice?: number | null;
+  region?: string | null;
+  platformPayAllowed?: boolean | null;
+  knownIssues?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  regressionAlerts?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  driftSummary?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  driftHistory?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  capabilities?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  freshness?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  lastObservedAt?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -488,6 +847,11 @@ export interface CompatReport {
   anonymousUserHash?: string | null;
   modelProvider?: string | null;
   modelName?: string | null;
+  modelProfile?: (string | null) | ModelProfile;
+  adapterProfile?: (string | null) | AdapterProfile;
+  benchmarkCase?: (string | null) | CompatTestCase;
+  benchmarkScore?: number | null;
+  benchmarkPassed?: boolean | null;
   modelVersion?: string | null;
   success?: boolean | null;
   latencyMs?: number | null;
@@ -497,7 +861,7 @@ export interface CompatReport {
   outputSizeBucket?: string | null;
   runnerVersion?: string | null;
   /**
-   * 被封禁用户的历史报告追溯降权：权重归 0、不进 LocalScore/榜
+   * 被封禁用户的历史报告追溯降权：权重归 0、不进兼容分/可信榜
    */
   suppressed?: boolean | null;
   source?: ('community' | 'verified' | 'online' | 'benchmark') | null;
@@ -525,6 +889,70 @@ export interface RunnerClient {
   anonymousMode?: boolean | null;
   trustedLevel?: ('community' | 'verified') | null;
   lastSeenAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * 用于系统 benchmark 的 Skill 兼容测试样例。
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "compat-test-cases".
+ */
+export interface CompatTestCase {
+  id: string;
+  title: string;
+  skill: string | Skill;
+  skillVersion?: (string | null) | SkillVersion;
+  caseType?: ('normal' | 'edge' | 'long_context' | 'structured_output' | 'safety') | null;
+  inputJson:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  expectedOutputShape?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * 如 ["title", "items.0.name"]；benchmark 会逐条检查。
+   */
+  requiredOutputPaths?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * 字符串数组；适用于非 JSON 输出的黄金样例打分。
+   */
+  expectedTextIncludes?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * 0-1；低于该分数视为该黄金样例未达标。
+   */
+  minScore?: number | null;
+  rubric?: string | null;
+  enabled?: boolean | null;
+  lastRunAt?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -766,6 +1194,22 @@ export interface Report {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "evidence-snapshots".
+ */
+export interface EvidenceSnapshot {
+  id: string;
+  targetType: 'skill_passport' | 'failure_case' | 'adapter_profile';
+  targetId: string;
+  evidenceHash: string;
+  payloadHash?: string | null;
+  keyId?: string | null;
+  signature?: string | null;
+  signedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "audit-logs".
  */
 export interface AuditLog {
@@ -777,6 +1221,143 @@ export interface AuditLog {
   targetId?: string | null;
   ipHash?: string | null;
   summary?: string | null;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * 企业/团队租户，Enterprise Registry 的隔离边界。
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "organizations".
+ */
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  owner: string | User;
+  plan?: ('team' | 'enterprise') | null;
+  status?: ('active' | 'suspended') | null;
+  modelAllowlist?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  policy?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * 企业身份治理骨架；企业管理员请走控制台身份策略面板，避免 REST 直接暴露 SCIM tokenDigest。
+   */
+  identityPolicy?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * 组织成员、角色与状态，用于 Enterprise Registry 运行授权。
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "organization-members".
+ */
+export interface OrganizationMember {
+  id: string;
+  organization: string | Organization;
+  user: string | User;
+  role?: ('member' | 'approver' | 'auditor' | 'admin') | null;
+  status?: ('active' | 'suspended') | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * 企业 AI Skill 注册表：审批、版本锁定、模型白名单与审计治理入口。
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "enterprise-registries".
+ */
+export interface EnterpriseRegistry {
+  id: string;
+  name: string;
+  organization: string | Organization;
+  skill: string | Skill;
+  skillVersion?: (string | null) | SkillVersion;
+  passport?: (string | null) | SkillPassport;
+  approvalStatus?: ('pending' | 'approved' | 'restricted' | 'disabled' | 'deprecated') | null;
+  approvedBy?: (string | null) | User;
+  approvedAt?: string | null;
+  modelAllowlist?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  usageScope?: string | null;
+  riskNotes?: string | null;
+  auditPolicy?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * 企业 Skill 运行与策略拒绝的审计台账；不含输入/输出原文。
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "enterprise-audit-logs".
+ */
+export interface EnterpriseAuditLog {
+  id: string;
+  organization: string | Organization;
+  registry?: (string | null) | EnterpriseRegistry;
+  actor?: (string | null) | User;
+  skill: string | Skill;
+  skillVersion?: (string | null) | SkillVersion;
+  skillRun?: (string | null) | SkillRun;
+  runId: string;
+  modelName?: string | null;
+  modelProfile?: (string | null) | ModelProfile;
+  outcome: 'success' | 'failed' | 'denied';
+  errorCode?: string | null;
+  policyReason?: string | null;
+  inputSizeBucket?: string | null;
+  outputSizeBucket?: string | null;
+  latencyMs?: number | null;
+  estimatedCost?: number | null;
+  chargedCredits?: number | null;
   metadata?:
     | {
         [k: string]: unknown;
@@ -873,6 +1454,10 @@ export interface PayloadLockedDocument {
         value: string | SkillVersion;
       } | null)
     | ({
+        relationTo: 'skill-passports';
+        value: string | SkillPassport;
+      } | null)
+    | ({
         relationTo: 'skill-artifacts';
         value: string | SkillArtifact;
       } | null)
@@ -891,6 +1476,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'compat-reports';
         value: string | CompatReport;
+      } | null)
+    | ({
+        relationTo: 'compat-test-cases';
+        value: string | CompatTestCase;
+      } | null)
+    | ({
+        relationTo: 'adapter-profiles';
+        value: string | AdapterProfile;
       } | null)
     | ({
         relationTo: 'users';
@@ -945,12 +1538,40 @@ export interface PayloadLockedDocument {
         value: string | Report;
       } | null)
     | ({
+        relationTo: 'failure-cases';
+        value: string | FailureCase;
+      } | null)
+    | ({
+        relationTo: 'evidence-snapshots';
+        value: string | EvidenceSnapshot;
+      } | null)
+    | ({
         relationTo: 'audit-logs';
         value: string | AuditLog;
       } | null)
     | ({
+        relationTo: 'organizations';
+        value: string | Organization;
+      } | null)
+    | ({
+        relationTo: 'organization-members';
+        value: string | OrganizationMember;
+      } | null)
+    | ({
+        relationTo: 'enterprise-registries';
+        value: string | EnterpriseRegistry;
+      } | null)
+    | ({
+        relationTo: 'enterprise-audit-logs';
+        value: string | EnterpriseAuditLog;
+      } | null)
+    | ({
         relationTo: 'media';
         value: string | Media;
+      } | null)
+    | ({
+        relationTo: 'model-profiles';
+        value: string | ModelProfile;
       } | null)
     | ({
         relationTo: 'model-price-snapshots';
@@ -1012,12 +1633,18 @@ export interface SkillsSelect<T extends boolean = true> {
   description?: T;
   clientSubmissionKey?: T;
   category?: T;
+  importSourceFormat?: T;
+  importSourceLocator?: T;
+  importSourceHash?: T;
+  importSourceLastSyncedAt?: T;
+  importSourceLastDiff?: T;
   author?: T;
   forkedFrom?: T;
   visibility?: T;
   status?: T;
   currentVersion?: T;
   isOfficial?: T;
+  isEssential?: T;
   isFeatured?: T;
   isFreeleech?: T;
   skillRank?: T;
@@ -1051,6 +1678,8 @@ export interface SkillVersionsSelect<T extends boolean = true> {
   recommendedModels?: T;
   routePolicy?: T;
   changelog?: T;
+  contractHash?: T;
+  contractStatus?: T;
   license?: T;
   minRunnerVersion?: T;
   permissions?:
@@ -1064,6 +1693,31 @@ export interface SkillVersionsSelect<T extends boolean = true> {
   examples?: T;
   status?: T;
   createdBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "skill-passports_select".
+ */
+export interface SkillPassportsSelect<T extends boolean = true> {
+  title?: T;
+  skill?: T;
+  skillVersion?: T;
+  status?: T;
+  skillClass?: T;
+  trustScore?: T;
+  signatureStatus?: T;
+  manifestChecksum?: T;
+  capabilitySummary?: T;
+  compatibilitySummary?: T;
+  reliabilitySummary?: T;
+  safetySummary?: T;
+  failureSummary?: T;
+  evidenceSummary?: T;
+  evidenceHash?: T;
+  enterpriseSummary?: T;
+  lastVerifiedAt?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1105,6 +1759,10 @@ export interface SkillRunsSelect<T extends boolean = true> {
   user?: T;
   skill?: T;
   skillVersion?: T;
+  rerunOf?: T;
+  rerunFromModel?: T;
+  adapterProfile?: T;
+  modelProfile?: T;
   model?: T;
   routeMode?: T;
   inputJson?: T;
@@ -1159,6 +1817,11 @@ export interface CompatReportsSelect<T extends boolean = true> {
   anonymousUserHash?: T;
   modelProvider?: T;
   modelName?: T;
+  modelProfile?: T;
+  adapterProfile?: T;
+  benchmarkCase?: T;
+  benchmarkScore?: T;
+  benchmarkPassed?: T;
   modelVersion?: T;
   success?: T;
   latencyMs?: T;
@@ -1169,6 +1832,52 @@ export interface CompatReportsSelect<T extends boolean = true> {
   runnerVersion?: T;
   suppressed?: T;
   source?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "compat-test-cases_select".
+ */
+export interface CompatTestCasesSelect<T extends boolean = true> {
+  title?: T;
+  skill?: T;
+  skillVersion?: T;
+  caseType?: T;
+  inputJson?: T;
+  expectedOutputShape?: T;
+  requiredOutputPaths?: T;
+  expectedTextIncludes?: T;
+  minScore?: T;
+  rubric?: T;
+  enabled?: T;
+  lastRunAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "adapter-profiles_select".
+ */
+export interface AdapterProfilesSelect<T extends boolean = true> {
+  title?: T;
+  skill?: T;
+  skillVersion?: T;
+  sourceFailureCase?: T;
+  modelProfile?: T;
+  modelName?: T;
+  status?: T;
+  systemPromptAppend?: T;
+  userPromptAppend?: T;
+  outputSchemaPatch?: T;
+  decodingPatch?: T;
+  retryPolicy?: T;
+  failureTypes?: T;
+  liftScore?: T;
+  beforeMetrics?: T;
+  afterMetrics?: T;
+  evidenceHash?: T;
+  lastVerifiedAt?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1395,6 +2104,49 @@ export interface ReportsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "failure-cases_select".
+ */
+export interface FailureCasesSelect<T extends boolean = true> {
+  title?: T;
+  profileKey?: T;
+  errorType?: T;
+  modelName?: T;
+  skill?: T;
+  skillVersion?: T;
+  symptom?: T;
+  likelyCause?: T;
+  repairTemplate?: T;
+  verifyTemplate?: T;
+  primaryInputBucket?: T;
+  inputBuckets?: T;
+  outputBuckets?: T;
+  modelBreakdown?: T;
+  sourceBreakdown?: T;
+  evidenceHash?: T;
+  occurrenceCount?: T;
+  affectedSkillCount?: T;
+  status?: T;
+  lastObservedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "evidence-snapshots_select".
+ */
+export interface EvidenceSnapshotsSelect<T extends boolean = true> {
+  targetType?: T;
+  targetId?: T;
+  evidenceHash?: T;
+  payloadHash?: T;
+  keyId?: T;
+  signature?: T;
+  signedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "audit-logs_select".
  */
 export interface AuditLogsSelect<T extends boolean = true> {
@@ -1405,6 +2157,80 @@ export interface AuditLogsSelect<T extends boolean = true> {
   targetId?: T;
   ipHash?: T;
   summary?: T;
+  metadata?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "organizations_select".
+ */
+export interface OrganizationsSelect<T extends boolean = true> {
+  name?: T;
+  slug?: T;
+  owner?: T;
+  plan?: T;
+  status?: T;
+  modelAllowlist?: T;
+  policy?: T;
+  identityPolicy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "organization-members_select".
+ */
+export interface OrganizationMembersSelect<T extends boolean = true> {
+  organization?: T;
+  user?: T;
+  role?: T;
+  status?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "enterprise-registries_select".
+ */
+export interface EnterpriseRegistriesSelect<T extends boolean = true> {
+  name?: T;
+  organization?: T;
+  skill?: T;
+  skillVersion?: T;
+  passport?: T;
+  approvalStatus?: T;
+  approvedBy?: T;
+  approvedAt?: T;
+  modelAllowlist?: T;
+  usageScope?: T;
+  riskNotes?: T;
+  auditPolicy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "enterprise-audit-logs_select".
+ */
+export interface EnterpriseAuditLogsSelect<T extends boolean = true> {
+  organization?: T;
+  registry?: T;
+  actor?: T;
+  skill?: T;
+  skillVersion?: T;
+  skillRun?: T;
+  runId?: T;
+  modelName?: T;
+  modelProfile?: T;
+  outcome?: T;
+  errorCode?: T;
+  policyReason?: T;
+  inputSizeBucket?: T;
+  outputSizeBucket?: T;
+  latencyMs?: T;
+  estimatedCost?: T;
+  chargedCredits?: T;
   metadata?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1426,6 +2252,35 @@ export interface MediaSelect<T extends boolean = true> {
   height?: T;
   focalX?: T;
   focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "model-profiles_select".
+ */
+export interface ModelProfilesSelect<T extends boolean = true> {
+  provider?: T;
+  modelName?: T;
+  modelVersion?: T;
+  profileStatus?: T;
+  contextLength?: T;
+  supportsStructuredOutput?: T;
+  supportsToolUse?: T;
+  chineseStyleScore?: T;
+  jsonStabilityScore?: T;
+  longOutputStabilityScore?: T;
+  inputPrice?: T;
+  outputPrice?: T;
+  region?: T;
+  platformPayAllowed?: T;
+  knownIssues?: T;
+  regressionAlerts?: T;
+  driftSummary?: T;
+  driftHistory?: T;
+  capabilities?: T;
+  freshness?: T;
+  lastObservedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1522,7 +2377,7 @@ export interface EconomySetting {
   id: string;
   exchangeEnabled?: boolean | null;
   /**
-   * 新用户注册即送的试用额度（营销成本，§7A 建议 30-50）。0=不送。赠送的 credit 只能消耗，不产术值
+   * 新用户注册即送的试用额度（营销成本，§7A 建议 30-50）。0=不送。赠送的 credit 只能消耗，不产生贡献值
    */
   freeCreditOnRegister?: number | null;
   alpha?: number | null;
@@ -1609,6 +2464,10 @@ export interface DeploymentSetting {
   backupOffsiteConfirmed?: boolean | null;
   backupRestoreDrillAt?: string | null;
   backupNotes?: string | null;
+  /**
+   * 逗号分隔；格式 target|urlPrefix 或 urlPrefix。用于 /v1/anchors/verify 判断 publishedTo 是否命中可信网络。
+   */
+  anchorTrustedPublishers?: string | null;
   updatedAt?: string | null;
   createdAt?: string | null;
 }
@@ -1682,6 +2541,7 @@ export interface DeploymentSettingsSelect<T extends boolean = true> {
   backupOffsiteConfirmed?: T;
   backupRestoreDrillAt?: T;
   backupNotes?: T;
+  anchorTrustedPublishers?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

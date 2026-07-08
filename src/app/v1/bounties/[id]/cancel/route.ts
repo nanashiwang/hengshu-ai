@@ -4,7 +4,7 @@ import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
 import { awardContribution } from '@/lib/contribution'
 
-// POST /v1/bounties/{id}/cancel —— 发布人取消，退还冻结术值
+// POST /v1/bounties/{id}/cancel —— 发布人取消，退还冻结贡献值
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const payload = await getPayload({ config })
@@ -24,7 +24,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   const frozen = b.frozenPoints || 0
 
-  // 原子结算：状态变更 + 退还术值绑进同一事务，任一步失败整体回滚
+  // 原子结算：状态变更 + 退还贡献值绑进同一事务，任一步失败整体回滚
   const transactionID = await payload.db.beginTransaction()
   const txReq: Partial<PayloadRequest> | undefined = transactionID ? { transactionID } : undefined
   try {

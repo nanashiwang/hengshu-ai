@@ -8,7 +8,13 @@ interface Category {
 }
 
 type SubmitResult = {
+  id?: string
+  slug?: string
   status?: string
+  contractUrl?: string
+  passportUrl?: string
+  certificateUrl?: string
+  certificateVerifyPageUrl?: string
   autoPublished?: boolean
   requiresHumanReview?: boolean
   review?: {
@@ -90,11 +96,21 @@ export function SkillForm({ categories }: { categories: Category[] }) {
     return (
       <div className="max-w-2xl rounded-lg border border-[var(--border)] bg-[var(--panel)] p-6 text-sm">
         <p className="mb-2 text-base font-medium">
-          {published ? '✓ AI 审核通过，已自动上架' : aiRejected ? 'AI 未通过，已转人工审核' : '✓ 已提交，等待人工审核'}
+          {published
+            ? '✓ AI 审核通过，已自动上架'
+            : aiRejected
+              ? 'AI 未通过，已转人工审核'
+              : '✓ 已提交，等待人工审核'}
         </p>
         <p className="mb-3 text-[var(--muted)]">
-          {done.review?.summary || (published ? 'Skill 已进入市场。' : '审核员确认后再上架。')}
+          {done.review?.summary ||
+            (published ? 'Skill 已进入市场。' : '审核员确认后再上架。')}
         </p>
+        {!published ? (
+          <p className="mb-3 text-xs text-[var(--muted)]">
+            下面是作者预览证据；审核发布后，Passport 会刷新为当前状态，证书才可能从预备状态变成正式达标。
+          </p>
+        ) : null}
         {done.review?.findings?.length ? (
           <ul className="mb-4 list-disc space-y-1 pl-5 text-xs text-[var(--muted)]">
             {done.review.findings.map((f) => (
@@ -102,9 +118,37 @@ export function SkillForm({ categories }: { categories: Category[] }) {
             ))}
           </ul>
         ) : null}
-        <div className="flex gap-4">
+        <div className="mb-4 grid gap-2 text-xs md:grid-cols-3">
+          <a
+            href={done.contractUrl || (done.slug ? `/v1/skills/${done.slug}/contract` : '#')}
+            className="rounded-md border border-[var(--border)] px-3 py-2 text-[var(--accent)]"
+          >
+            查看 Contract
+          </a>
+          <a
+            href={done.passportUrl || (done.slug ? `/v1/skills/${done.slug}/passport` : '#')}
+            className="rounded-md border border-[var(--border)] px-3 py-2 text-[var(--accent)]"
+          >
+            查看 Passport
+          </a>
+          <a
+            href={done.certificateVerifyPageUrl || (done.slug ? `/verify?certificateUrl=${encodeURIComponent(done.certificateUrl || `/v1/skills/${encodeURIComponent(done.slug)}/certificate`)}` : '#')}
+            className="rounded-md border border-[var(--border)] px-3 py-2 text-[var(--accent)]"
+          >
+            查看证书{published ? '' : '预览'}
+          </a>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          {done.slug ? (
+            <a href={`/skills/${done.slug}`} className="text-[var(--accent)]">
+              查看 Skill
+            </a>
+          ) : null}
+          <a href="/console/skills" className="text-[var(--accent)]">
+            我的作品
+          </a>
           <a href="/console" className="text-[var(--accent)]">
-            返回控制台
+            控制台
           </a>
           <button
             type="button"
@@ -112,7 +156,12 @@ export function SkillForm({ categories }: { categories: Category[] }) {
               setDone(null)
               setSubmissionKey(newSubmissionKey())
               setSkillPackage(null)
-              setForm({ title: '', categorySlug: '', description: '', visibility: 'public' })
+              setForm({
+                title: '',
+                categorySlug: '',
+                description: '',
+                visibility: 'public',
+              })
             }}
             className="text-[var(--accent)]"
           >
@@ -130,25 +179,74 @@ export function SkillForm({ categories }: { categories: Category[] }) {
 
   return (
     <form onSubmit={submit} className="max-w-2xl space-y-4">
-      {error && <div className="rounded-md bg-[var(--panel-2)] px-3 py-2 text-sm text-[var(--danger)]">{error}</div>}
+      {error && (
+        <div className="rounded-md bg-[var(--panel-2)] px-3 py-2 text-sm text-[var(--danger)]">
+          {error}
+        </div>
+      )}
 
       <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 text-xs text-[var(--muted)]">
         <p className="mb-2 font-medium text-[var(--text)]">Skill 包要求</p>
         <ul className="list-disc space-y-1 pl-5">
-          <li>上传 .zip / .tar.gz / .tgz；建议包含 README，便于 AI 理解用途。</li>
-          <li><code>hengshu.skill.yaml</code> 是可选标准 manifest；提供后可获得更好的在线运行表单和本地安装体验。</li>
-          <li>低风险 Skill 会自动上架；含网络、文件、Shell、脚本或不确定风险时转人工审核。</li>
+          <li>
+            上传 .zip / .tar.gz / .tgz；建议包含 README，便于 AI 理解用途。
+          </li>
+          <li>
+            <code>hengshu.skill.yaml</code> 是推荐标准
+            manifest；提供后可生成更明确的 Skill
+            Contract、在线运行表单和本地安装体验。
+          </li>
+          <li>
+            请在包内写清输入 schema、输出
+            schema、示例、权限和推荐模型；这些会进入 Passport /
+            达标证书的证据链。
+          </li>
+          <li>
+            低风险 Skill
+            会自动上架；含网络、文件、Shell、脚本或不确定风险时转人工审核。
+          </li>
         </ul>
+      </div>
+
+      <div className="grid gap-3 text-xs md:grid-cols-3">
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3">
+          <div className="font-medium text-[var(--text)]">1. Contract</div>
+          <p className="mt-1 text-[var(--muted)]">
+            先把能力、输入输出和权限边界写清楚。
+          </p>
+        </div>
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3">
+          <div className="font-medium text-[var(--text)]">2. Passport</div>
+          <p className="mt-1 text-[var(--muted)]">
+            发布后沉淀身份、签名、兼容、失败和治理证据。
+          </p>
+        </div>
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3">
+          <div className="font-medium text-[var(--text)]">3. 适配维护</div>
+          <p className="mt-1 text-[var(--muted)]">
+            后续用失败库和 Adapter 建议持续修复模型差异。
+          </p>
+        </div>
       </div>
 
       <div>
         <label className={labelCls}>Skill 名称 *</label>
-        <input value={form.title} onChange={(e) => set('title', e.target.value)} className={inputCls} placeholder="如：小红书标题生成器" required />
+        <input
+          value={form.title}
+          onChange={(e) => set('title', e.target.value)}
+          className={inputCls}
+          placeholder="如：小红书标题生成器"
+          required
+        />
       </div>
 
       <div>
         <label className={labelCls}>分类</label>
-        <select value={form.categorySlug} onChange={(e) => set('categorySlug', e.target.value)} className={inputCls}>
+        <select
+          value={form.categorySlug}
+          onChange={(e) => set('categorySlug', e.target.value)}
+          className={inputCls}
+        >
           <option value="">（不选）</option>
           {categories.map((c) => (
             <option key={c.slug} value={c.slug}>
@@ -160,7 +258,11 @@ export function SkillForm({ categories }: { categories: Category[] }) {
 
       <div>
         <label className={labelCls}>可见性</label>
-        <select value={form.visibility} onChange={(e) => set('visibility', e.target.value)} className={inputCls}>
+        <select
+          value={form.visibility}
+          onChange={(e) => set('visibility', e.target.value)}
+          className={inputCls}
+        >
           <option value="public">公开</option>
           <option value="unlisted">不公开列出</option>
           <option value="private">私有</option>
@@ -169,12 +271,21 @@ export function SkillForm({ categories }: { categories: Category[] }) {
 
       <div>
         <label className={labelCls}>简介</label>
-        <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3} className={inputCls} placeholder="一句话说明这个 Skill 做什么、适合谁使用" />
+        <textarea
+          value={form.description}
+          onChange={(e) => set('description', e.target.value)}
+          rows={3}
+          className={inputCls}
+          placeholder="一句话说明这个 Skill 做什么、适合谁使用"
+        />
       </div>
 
       <div>
         <label className={labelCls}>Skill 压缩包 *</label>
-        <p className={hintCls}>无需强制 manifest；若有标准入口，请命名为 hengshu.skill.yaml / hengshu.skill.yml。</p>
+        <p className={hintCls}>
+          推荐提供 manifest；标准入口命名为 hengshu.skill.yaml /
+          hengshu.skill.yml，可提升 Contract/Passport 质量。
+        </p>
         <input
           type="file"
           accept=".zip,.tar.gz,.tgz,application/zip,application/gzip"
@@ -184,16 +295,22 @@ export function SkillForm({ categories }: { categories: Category[] }) {
         />
         {skillPackage && (
           <p className="mt-1 text-xs text-[var(--muted)]">
-            已选择：{skillPackage.name}（{(skillPackage.size / 1024).toFixed(1)} KB）
+            已选择：{skillPackage.name}（{(skillPackage.size / 1024).toFixed(1)}{' '}
+            KB）
           </p>
         )}
       </div>
 
       <div className="flex items-center gap-3 pt-1">
-        <button disabled={loading} className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        <button
+          disabled={loading}
+          className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        >
           {loading ? 'AI 审核中…' : '提交并自动审核'}
         </button>
-        <span className="text-xs text-[var(--muted)]">AI 通过会自动上架；不确定风险转人工。</span>
+        <span className="text-xs text-[var(--muted)]">
+          AI 通过会自动上架；不确定风险转人工。
+        </span>
       </div>
     </form>
   )
@@ -201,12 +318,17 @@ export function SkillForm({ categories }: { categories: Category[] }) {
 
 function isSupportedPackage(fileName: string): boolean {
   const lower = fileName.toLowerCase()
-  return lower.endsWith('.zip') || lower.endsWith('.tar.gz') || lower.endsWith('.tgz')
+  return (
+    lower.endsWith('.zip') ||
+    lower.endsWith('.tar.gz') ||
+    lower.endsWith('.tgz')
+  )
 }
 
 function newSubmissionKey(): string {
   try {
-    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return `skill:${crypto.randomUUID()}`
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      return `skill:${crypto.randomUUID()}`
   } catch {
     // ignore
   }

@@ -4,6 +4,8 @@ import { headers as nextHeaders } from 'next/headers'
 import { syncNewApiQuotaToBalance } from '@/lib/newapiQuota'
 import { suppressUserCompatReports } from '@/lib/moderation'
 import { recordAuditEvent } from '@/lib/audit'
+import { isModerationRequestError, MAX_MODERATION_REQUEST_BYTES, normalizeReportHandleRequest } from '@/lib/moderationRequest'
+import { readJsonBodyWithLimit } from '@/lib/requestBody'
 
 // POST /v1/reports/{id}/handle  { action, note? } —— 审核员/管理员处置举报（封禁闭环）。
 // action: dismiss(驳回) | resolve(标记已解决) | ban_target(封禁责任用户) | hide_target(隐藏内容)
@@ -16,16 +18,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!user) return Response.json({ error: '请先登录' }, { status: 401 })
   if (!STAFF.includes(user.role as string)) return Response.json({ error: '无权处置' }, { status: 403 })
 
-  let body: any = {}
-  try {
-    body = await request.json()
-  } catch {
-    /* 容忍空 body */
-  }
-  const action = String(body.action || '')
-  if (!['dismiss', 'resolve', 'ban_target', 'hide_target'].includes(action)) {
-    return Response.json({ error: '无效的处置动作' }, { status: 400 })
-  }
+  const parsed = await readJsonBodyWithLimit(request, MAX_MODERATION_REQUEST_BYTES, '举报处置请求体过大', { emptyValue: {} })
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: parsed.status })
+  const normalized = normalizeReportHandleRequest(parsed.value)
+  if (isModerationRequestError(normalized)) return Response.json({ error: normalized.error }, { status: normalized.status })
+  const { action, note } = normalized
 
   const report = await payload.findByID({ collection: 'reports', id, depth: 0, overrideAccess: true }).catch(() => null)
   if (!report) return Response.json({ error: '举报不存在' }, { status: 404 })
@@ -57,13 +54,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         targetType,
         targetId,
         summary: '举报处置封禁责任用户',
-        metadata: { reportId: id, action, note: body.note },
+        metadata: { reportId: id, action, note },
         request,
       })
       syncNewApiQuotaToBalance(payload, String(ownerId)).catch((e) =>
         payload.logger?.error(`封禁后网关配额归零失败: ${(e as Error).message}`),
       )
-      // 追溯降权：抑制该用户历史 online + Runner 兼容报告，权重归 0 不再影响 LocalScore/榜。
+      // 追溯降权：抑制该用户历史 online + Runner 兼容报告，权重归 0 不再影响兼容分/榜。
       try {
         await suppressUserCompatReports(payload, String(ownerId))
       } catch (e) {
@@ -83,7 +80,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await payload.update({
       collection: 'reports',
       id,
-      data: { status: newStatus, handledBy: user.id, detail: body.note ? `${(report as any).detail || ''}\n[处置] ${body.note}`.slice(0, 2000) : (report as any).detail },
+      data: { status: newStatus, handledBy: user.id, detail: note ? `${(report as any).detail || ''}\n[处置] ${note}`.slice(0, 2000) : (report as any).detail },
       overrideAccess: true,
     })
     if (action !== 'ban_target') {
@@ -93,7 +90,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         targetType,
         targetId,
         summary: `举报处置：${action}`,
-        metadata: { reportId: id, action, status: newStatus, note: body.note },
+        metadata: { reportId: id, action, status: newStatus, note },
         request,
       })
     }

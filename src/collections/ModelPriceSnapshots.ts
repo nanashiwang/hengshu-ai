@@ -3,7 +3,7 @@ import { isAdmin } from '@/access'
 import { rowActionsField } from './fields/rowActions'
 
 // 模型官方报价快照（四面墙·成本真值隔离）：排名/双列价用的"官方价"来自此集合(有来源+采集时间)，
-// 非平台可在排名代码里编辑的价——杜绝"改价操纵省钱结论"。公开可读(官方价本就公开)。
+// 非平台可在排名代码里编辑的价——杜绝“改价操纵成本结论”。公开可读(官方价本就公开)。
 export const ModelPriceSnapshots: CollectionConfig = {
   slug: 'model-price-snapshots',
   labels: { singular: '模型报价快照', plural: '模型报价快照' },

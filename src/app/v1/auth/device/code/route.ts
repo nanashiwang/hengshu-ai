@@ -4,17 +4,17 @@ import { genUserCode, randomToken } from '@/lib/runnerAuth'
 import { getClientIp, hashIp } from '@/lib/clientMeta'
 import { getServerUrl } from '@/lib/siteUrl'
 import { resolveRuntimeEnv } from '@/lib/deploymentSettings'
+import { readJsonBodyWithLimit } from '@/lib/requestBody'
+import { isDeviceAuthError, MAX_DEVICE_AUTH_REQUEST_BYTES, normalizeDeviceCodeMeta } from '@/lib/deviceAuthRequest'
 
 // POST /v1/auth/device/code —— Runner 申请设备码（无需登录）
 export async function POST(request: Request) {
   const payload = await getPayload({ config })
   const runtimeEnv = await resolveRuntimeEnv(payload)
-  let body: any = {}
-  try {
-    body = await request.json()
-  } catch {
-    /* 容忍空 body */
-  }
+  const parsed = await readJsonBodyWithLimit(request, MAX_DEVICE_AUTH_REQUEST_BYTES, '设备码请求体过大', { emptyValue: {} })
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: parsed.status })
+  const meta = normalizeDeviceCodeMeta(parsed.value)
+  if (isDeviceAuthError(meta)) return Response.json({ error: meta.error }, { status: meta.status })
 
   const ipHashValue = hashIp(getClientIp(request.headers, runtimeEnv))
   if (ipHashValue) {
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       deviceCode,
       userCode,
       status: 'pending',
-      meta: { runnerVersion: body.runnerVersion, os: body.os, arch: body.arch, label: body.label },
+      meta,
       ipHash: ipHashValue || undefined,
       expiresAt,
     },

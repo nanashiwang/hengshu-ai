@@ -1,4 +1,4 @@
-// SkillRank 加权计算（产品文档 §11.2）
+// 可信分加权计算（沿用 skillRank 字段，前台展示为“可信分”）
 
 export interface SkillMetricsInput {
   evalPassRate?: number // 评测通过率 0..1
@@ -24,19 +24,20 @@ export function computeSkillRank(m: SkillMetricsInput): number {
   return Math.round(score * 1000) / 10 // → 0..100，一位小数
 }
 
-/** 由 Skill 聚合指标推导 SkillRank（缺评测集时用稳定性近似评测通过率） */
+/** 由 Skill 聚合指标推导可信分（缺评测集时用稳定性近似评测通过率） */
 export function skillRankFromAggregates(s: {
   successRate?: number | null
   avgCost?: number | null
   avgLatencyMs?: number | null
   formatSuccessRate?: number | null
   avgRating?: number | null
+  trustedCompatibleRunCount?: number | null
   lastUpdatedAt?: string | Date | null
 }): number {
   const costAdvantage = s.avgCost != null ? 1 / (1 + (s.avgCost as number) * 50) : 0.5
   const latencyScore =
     s.avgLatencyMs != null ? 1 / (1 + (s.avgLatencyMs as number) / 4000) : 0.5
-  return computeSkillRank({
+  const base = computeSkillRank({
     evalPassRate: s.successRate ?? 0,
     stability: s.successRate ?? 0,
     costAdvantage,
@@ -45,6 +46,9 @@ export function skillRankFromAggregates(s: {
     maintenance: recencyScore(s.lastUpdatedAt),
     userFeedback: (s.avgRating ?? 0) / 5,
   })
+  if (s.trustedCompatibleRunCount == null) return base
+  const trustedEvidenceScore = trustedCompatibleEvidenceScore(s.trustedCompatibleRunCount)
+  return Math.round((base * 0.85 + trustedEvidenceScore * 15) * 10) / 10
 }
 
 function recencyScore(d?: string | Date | null): number {
@@ -54,4 +58,10 @@ function recencyScore(d?: string | Date | null): number {
   if (days <= 30) return 0.7
   if (days <= 90) return 0.4
   return 0.2
+}
+
+export function trustedCompatibleEvidenceScore(count?: number | null): number {
+  const n = Math.max(0, Number(count || 0))
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.min(1, Math.log10(1 + n) / Math.log10(101))
 }

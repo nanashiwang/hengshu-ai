@@ -4,7 +4,7 @@ import config from '../payload.config'
 import { benchmarkSkill } from '../lib/benchmark'
 import { modelGatewayConfigured, resolveRuntimeEnv } from '../lib/deploymentSettings'
 
-// 发布即评测(#8) worker：对指定 Skill(或全部已发布)跑系统评测播种初始数据 + LocalScore。
+// 发布即评测(#8) worker：对指定 Skill(或全部已发布)跑系统评测播种初始数据 + 兼容分。
 // 用法：npm run worker:benchmark <slug>            # 单个
 //      npm run worker:benchmark -- --all           # 全部已发布(谨慎，按模型×样例产生真实 API 成本)
 //      npm run worker:benchmark <slug> --models deepseek-chat,glm-4
@@ -55,7 +55,7 @@ async function run() {
     }
     const r = await benchmarkSkill(payload, { skill, version, models })
     payload.logger.info(
-      `评测 ${skill.slug}：模型[${r.models.join(',')}] × ${r.inputs}样例 = ${r.attempted}次，真实${r.reported}/mock${r.mocked}，LocalScore→${r.localScore}`,
+      `评测 ${skill.slug}：模型[${r.models.join(',')}] × ${r.inputs}样例 = ${r.attempted}次，真实${r.reported}/mock${r.mocked}，兼容分→${r.localScore}`,
     )
   }
   payload.logger.info('发布即评测完成')

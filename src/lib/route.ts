@@ -20,7 +20,7 @@ export interface SelectModelOptions {
   personalized?: string[]
 }
 
-// 成本代理：每 1k token 进+出价之和（越小越省），仅用于同 Skill 内模型省钱排序
+// 成本代理：每 1k token 进+出价之和（越小越省），仅用于同 Skill 内模型成本排序
 export function modelCostProxy(model: string): number {
   const p = MODEL_PRICES[model] || MODEL_PRICES.default
   return (p?.in || 0) + (p?.out || 0)
