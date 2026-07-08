@@ -72,6 +72,9 @@ function metricSnapshotFromProfile(profile: any, observedAt?: string) {
     taskProfileSummary: Array.isArray((capabilities as any).taskProfileSummary)
       ? (capabilities as any).taskProfileSummary
       : [],
+    skillProfileSummary: Array.isArray((capabilities as any).skillProfileSummary)
+      ? (capabilities as any).skillProfileSummary
+      : [],
   }
 }
 
@@ -115,6 +118,7 @@ export function buildModelProfileData(args: BuildModelProfileArgs) {
       sourceSummary: stat?.sourceSummary || [],
       inputBucketSummary: stat?.inputBucketSummary || [],
       taskProfileSummary: stat?.taskProfileSummary || [],
+      skillProfileSummary: stat?.skillProfileSummary || [],
     },
     freshness: {
       lastObservedAt: now.toISOString(),

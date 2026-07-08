@@ -50,8 +50,8 @@
 | `/v1/runner/install` | Runner 登录后安装公开 Skill；返回冻结 manifest、checksum、版本和安装 playbook，提示先验签、再绑定本地/自有网关运行、只回传脱敏兼容报告，并在 checksum 变化时先更新。 |
 | `/v1/runner/check` | Runner 检查本地安装 checksum 是否过期；返回更新复验 playbook，提示过期 Skill 先 update、重新验签，再用同一输入复验并回流。 |
 | `/v1/runner/report` | Runner 本地兼容回流；要求当前 Runner 存在 active install 且 checksum 匹配，只存成功率、格式、延迟、错误类型、输入/输出大小档等指标，不存输入/输出原文。 |
-| `/models` | 中立模型榜；显示 ModelProfile 稳定/回归告警、输入规模档/任务画像表现、来源权重、有效样本、客户决策步骤和画像筛选表单；每行可跳转模型画像 API、该模型失败库与 Adapter API，不污染排序。 |
-| `/v1/model-profiles` | 公开读取模型画像、版本漂移、输入规模档/任务画像表现、回归告警、有效样本、来源权重和 use/trial/review/avoid 决策 playbook；支持 modelName/modelVersion/provider/status 过滤；返回采用复验 checklist、私人台账复验、失败库和 Adapter 排障入口，不暴露平台收益字段。 |
+| `/models` | 中立模型榜；显示 ModelProfile 稳定/回归告警、输入规模档/任务画像/Skill任务画像表现、来源权重、有效样本、客户决策步骤和画像筛选表单；每行可跳转模型画像 API、该模型失败库与 Adapter API，不污染排序。 |
+| `/v1/model-profiles` | 公开读取模型画像、版本漂移、输入规模档/任务画像/Skill任务画像表现、回归告警、有效样本、来源权重和 use/trial/review/avoid 决策 playbook；支持 modelName/modelVersion/provider/status 过滤；返回采用复验 checklist、私人台账复验、失败库和 Adapter 排障入口，不暴露平台收益字段。 |
 | `/failures` | 优先读取 FailureCases；展示“发现失败模式 → 生成 Adapter 草稿 → 复验 lift”的闭环和“客户怎么用”排障步骤；展示 profileKey、主输入档、模型分布、Adapter 建议、Adapter 复用/复验说明、模型画像入口、Adapter API、失败/Adapter 证据验签入口和多维筛选表单；只有 Skill 作者、审核员或管理员可从失败案例生成待人工评审 Adapter 草稿并直达后台草稿审核。 |
 | `/v1/failures` | 公开读取脱敏 FailureCase 列表、人工归因摘要、复验覆盖、客户排障 playbook、triage checklist、私人台账复现入口、修复/复验建议、模型/来源分布、模型画像/Adapter/复验计划入口和 API/页面证据验签入口；支持 errorType/modelName/modelVersion/status/skillId/profileKey/inputBucket/source 过滤。 |
 | `/rank` | 可信发现榜；公开说明排序口径，把可信分（skillRank）、成功率、可信兼容运行数和 Passport 可信分放在一起，并提供公开 Passport 证据入口，避免把下载量/普通调用量当成可信度。 |

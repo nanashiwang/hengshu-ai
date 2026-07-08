@@ -124,9 +124,9 @@ describe('compat — 活体数据窗口', () => {
     const payload = {
       find: async () => ({
         docs: [
-          { modelName: 'qwen-plus', inputSizeBucket: '0-100', success: true, formatValid: true, source: 'verified', createdAt: now },
-          { modelName: 'qwen-plus', inputSizeBucket: '0-100', success: false, formatValid: true, source: 'verified', createdAt: now },
-          { modelName: 'qwen-plus', inputSizeBucket: '8k+', success: false, formatValid: false, source: 'community', createdAt: now },
+          { skill: { id: 'skill-a', slug: 'writer', title: 'Writer' }, modelName: 'qwen-plus', inputSizeBucket: '0-100', success: true, formatValid: true, source: 'verified', createdAt: now },
+          { skill: { id: 'skill-a', slug: 'writer', title: 'Writer' }, modelName: 'qwen-plus', inputSizeBucket: '0-100', success: false, formatValid: true, source: 'verified', createdAt: now },
+          { skill: 'skill-b', modelName: 'qwen-plus', inputSizeBucket: '8k+', success: false, formatValid: false, source: 'community', createdAt: now },
         ],
         hasNextPage: false,
       }),
@@ -142,6 +142,11 @@ describe('compat — 活体数据窗口', () => {
       { profileKey: '0-100|success', inputBucket: '0-100', errorType: 'success', count: 1, effectiveSamples: 1, successRate: 1, formatRate: 1 },
       { profileKey: '0-100|unknown_error', inputBucket: '0-100', errorType: 'unknown_error', count: 1, effectiveSamples: 1, successRate: 0, formatRate: 1 },
       { profileKey: '8k+|unknown_error', inputBucket: '8k+', errorType: 'unknown_error', count: 1, effectiveSamples: 0.5, successRate: 0, formatRate: 0 },
+    ])
+    expect(row.skillProfileSummary).toEqual([
+      { profileKey: 'skill-a|0-100|success', skillId: 'skill-a', skillSlug: 'writer', skillTitle: 'Writer', inputBucket: '0-100', errorType: 'success', count: 1, effectiveSamples: 1, successRate: 1, formatRate: 1 },
+      { profileKey: 'skill-a|0-100|unknown_error', skillId: 'skill-a', skillSlug: 'writer', skillTitle: 'Writer', inputBucket: '0-100', errorType: 'unknown_error', count: 1, effectiveSamples: 1, successRate: 0, formatRate: 1 },
+      { profileKey: 'skill-b|8k+|unknown_error', skillId: 'skill-b', skillSlug: null, skillTitle: null, inputBucket: '8k+', errorType: 'unknown_error', count: 1, effectiveSamples: 0.5, successRate: 0, formatRate: 0 },
     ])
   })
 })

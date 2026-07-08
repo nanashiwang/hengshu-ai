@@ -137,6 +137,7 @@ export default async function ModelsPage({
         sourceSummary: s.sourceSummary,
         inputBucketSummary: s.inputBucketSummary,
         taskProfileSummary: s.taskProfileSummary,
+        skillProfileSummary: s.skillProfileSummary,
         officialInputPrice: price?.inputPrice,
         officialOutputPrice: price?.outputPrice,
       }
@@ -427,12 +428,17 @@ export default async function ModelsPage({
                         : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-[var(--muted)]">
-                      {m.taskProfileSummary?.length
-                        ? m.taskProfileSummary
+                      {m.skillProfileSummary?.length
+                        ? m.skillProfileSummary
                             .slice(0, 2)
-                            .map((p: any) => `${p.inputBucket}/${p.errorType}:${p.count}`)
+                            .map((p: any) => `${p.skillSlug || p.skillId}:${p.inputBucket}/${p.errorType}:${p.count}`)
                             .join(' / ')
-                        : '—'}
+                        : m.taskProfileSummary?.length
+                          ? m.taskProfileSummary
+                              .slice(0, 2)
+                              .map((p: any) => `${p.inputBucket}/${p.errorType}:${p.count}`)
+                              .join(' / ')
+                          : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-xs">
                       <a

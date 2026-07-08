@@ -137,6 +137,7 @@ export function publicModelProfile(profile: any) {
       sourceSummary: Array.isArray(capabilities.sourceSummary) ? capabilities.sourceSummary : [],
       inputBucketSummary: Array.isArray(capabilities.inputBucketSummary) ? capabilities.inputBucketSummary : [],
       taskProfileSummary: Array.isArray(capabilities.taskProfileSummary) ? capabilities.taskProfileSummary : [],
+      skillProfileSummary: Array.isArray(capabilities.skillProfileSummary) ? capabilities.skillProfileSummary : [],
     },
     regressionAlerts: publicSanitize(Array.isArray(profile?.regressionAlerts) ? profile.regressionAlerts : []),
     driftSummary: publicSanitize(profile?.driftSummary && typeof profile.driftSummary === 'object' ? profile.driftSummary : null),

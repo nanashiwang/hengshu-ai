@@ -12,6 +12,7 @@ export interface ModelRankRow {
   sourceSummary?: Array<{ source: string; count: number; weight: number }>
   inputBucketSummary?: Array<{ inputBucket: string; count: number; effectiveSamples: number; successRate: number; formatRate: number }>
   taskProfileSummary?: Array<{ profileKey: string; inputBucket: string; errorType: string; count: number; effectiveSamples: number; successRate: number; formatRate: number }>
+  skillProfileSummary?: Array<{ profileKey: string; skillId: string; skillSlug?: string | null; skillTitle?: string | null; inputBucket: string; errorType: string; count: number; effectiveSamples: number; successRate: number; formatRate: number }>
   officialInputPrice?: number // 元/1k token（官方报价快照，缺失则不计入性价比）
   officialOutputPrice?: number
 }

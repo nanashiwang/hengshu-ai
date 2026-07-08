@@ -69,6 +69,7 @@ describe('modelProfilePublic — 公开模型画像输出', () => {
         sourceSummary: [{ source: 'benchmark', count: 3, weight: 1 }],
         inputBucketSummary: [{ inputBucket: '8k+', count: 2, effectiveSamples: 1.5, successRate: 0.5, formatRate: 1, rawInput: 'secret' }],
         taskProfileSummary: [{ profileKey: '8k+|schema_error', inputBucket: '8k+', errorType: 'schema_error', count: 2, effectiveSamples: 1.5, successRate: 0, formatRate: 0, rawOutput: 'secret' }],
+        skillProfileSummary: [{ profileKey: 'skill-1|8k+|schema_error', skillId: 'skill-1', skillSlug: 'writer', skillTitle: 'Writer', inputBucket: '8k+', errorType: 'schema_error', count: 2, effectiveSamples: 1.5, successRate: 0, formatRate: 0, rawOutput: 'secret' }],
         platformRevenue: 99,
       },
       driftHistory: [{ successRate: 0.9, rawInput: 'secret' }],
@@ -83,6 +84,7 @@ describe('modelProfilePublic — 公开模型画像输出', () => {
         effectiveSamples: 7.5,
         inputBucketSummary: [{ inputBucket: '8k+', count: 2, effectiveSamples: 1.5, successRate: 0.5, formatRate: 1 }],
         taskProfileSummary: [{ profileKey: '8k+|schema_error', inputBucket: '8k+', errorType: 'schema_error', count: 2, effectiveSamples: 1.5, successRate: 0, formatRate: 0 }],
+        skillProfileSummary: [{ profileKey: 'skill-1|8k+|schema_error', skillId: 'skill-1', skillSlug: 'writer', skillTitle: 'Writer', inputBucket: '8k+', errorType: 'schema_error', count: 2, effectiveSamples: 1.5, successRate: 0, formatRate: 0 }],
       },
       driftHistory: [{ successRate: 0.9 }],
       failuresUrl: '/failures?modelName=gpt-4.1-mini&modelVersion=2026-07-01',
@@ -117,6 +119,7 @@ describe('modelProfilePublic — 公开模型画像输出', () => {
     expect(row.capabilities.platformRevenue).toBeUndefined()
     expect(JSON.stringify(row.capabilities.inputBucketSummary)).not.toContain('secret')
     expect(JSON.stringify(row.capabilities.taskProfileSummary)).not.toContain('secret')
+    expect(JSON.stringify(row.capabilities.skillProfileSummary)).not.toContain('secret')
     expect(row.regressionAlerts).toEqual([{ reason: 'ok' }])
   })
 

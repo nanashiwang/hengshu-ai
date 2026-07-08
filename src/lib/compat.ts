@@ -65,6 +65,18 @@ export type CompatTaskProfileSummary = {
   successRate: number
   formatRate: number
 }
+export type CompatSkillProfileSummary = {
+  profileKey: string
+  skillId: string
+  skillSlug?: string | null
+  skillTitle?: string | null
+  inputBucket: string
+  errorType: string
+  count: number
+  effectiveSamples: number
+  successRate: number
+  formatRate: number
+}
 
 function summarizeSources(reports: any[]): CompatSourceSummary[] {
   const bySource = new Map<string, { count: number; weight: number }>()
@@ -120,6 +132,48 @@ function summarizeTaskProfiles(reports: any[], nowMs: number, limit = 8): Compat
   return Array.from(byProfile.entries())
     .map(([profileKey, row]) => ({
       profileKey,
+      inputBucket: row.inputBucket,
+      errorType: row.errorType,
+      count: row.count,
+      effectiveSamples: Math.round(row.wSum * 10) / 10,
+      successRate: row.wSum > 0 ? row.wSuccess / row.wSum : 0,
+      formatRate: row.wSum > 0 ? row.wFormat / row.wSum : 0,
+    }))
+    .sort((a, b) => b.effectiveSamples - a.effectiveSamples || b.count - a.count || a.profileKey.localeCompare(b.profileKey))
+    .slice(0, limit)
+}
+
+function skillSummary(value: any): { id: string; slug?: string | null; title?: string | null } | null {
+  if (!value) return null
+  if (typeof value === 'object') {
+    const id = value.id ? String(value.id) : ''
+    return id ? { id, slug: value.slug || null, title: value.title || value.name || null } : null
+  }
+  return { id: String(value) }
+}
+
+function summarizeSkillProfiles(reports: any[], nowMs: number, limit = 8): CompatSkillProfileSummary[] {
+  const byProfile = new Map<string, { skillId: string; skillSlug?: string | null; skillTitle?: string | null; inputBucket: string; errorType: string; count: number; wSum: number; wSuccess: number; wFormat: number }>()
+  for (const r of reports) {
+    const skill = skillSummary(r.skill)
+    if (!skill?.id) continue
+    const inputBucket = String(r.inputSizeBucket || 'unknown').trim() || 'unknown'
+    const errorType = r.success ? 'success' : String(r.errorType || 'unknown_error').trim() || 'unknown_error'
+    const profileKey = `${skill.id}|${inputBucket}|${errorType}`
+    const current = byProfile.get(profileKey) || { skillId: skill.id, skillSlug: skill.slug, skillTitle: skill.title, inputBucket, errorType, count: 0, wSum: 0, wSuccess: 0, wFormat: 0 }
+    const w = r.suppressed ? 0 : decayWeight(r.createdAt, nowMs) * sourceWeight(r.source)
+    current.count++
+    current.wSum += w
+    if (r.success) current.wSuccess += w
+    if (r.formatValid) current.wFormat += w
+    byProfile.set(profileKey, current)
+  }
+  return Array.from(byProfile.entries())
+    .map(([profileKey, row]) => ({
+      profileKey,
+      skillId: row.skillId,
+      skillSlug: row.skillSlug || null,
+      skillTitle: row.skillTitle || null,
       inputBucket: row.inputBucket,
       errorType: row.errorType,
       count: row.count,
@@ -375,6 +429,7 @@ export interface GlobalModelStat {
   sourceSummary?: CompatSourceSummary[]
   inputBucketSummary?: CompatInputBucketSummary[]
   taskProfileSummary?: CompatTaskProfileSummary[]
+  skillProfileSummary?: CompatSkillProfileSummary[]
 }
 export async function aggregateModelsGlobal(
   payload: Payload,
@@ -433,6 +488,7 @@ export async function aggregateModelsGlobal(
       sourceSummary: summarizeSources(a.reports),
       inputBucketSummary: summarizeInputBuckets(a.reports, now),
       taskProfileSummary: summarizeTaskProfiles(a.reports, now),
+      skillProfileSummary: summarizeSkillProfiles(a.reports, now),
     })
   }
   return out
