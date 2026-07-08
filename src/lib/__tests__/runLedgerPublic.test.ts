@@ -78,6 +78,19 @@ describe('runLedgerPublic — 私人运行台账导出', () => {
       modelProfileUrl: '/models?modelName=qwen-plus&modelVersion=2026-07-01',
       failureKnowledgeUrl: '/failures?skillId=skill-1&modelName=qwen-plus&modelVersion=2026-07-01&errorType=json_parse_error',
       savedAmount: 0.02,
+      playbook: {
+        customerValue: expect.stringContaining('你的历史输入'),
+        rerunUrl: '/v1/runs/run-1/rerun',
+        nextActions: expect.arrayContaining([
+          expect.objectContaining({ label: '用同一输入换模型重跑' }),
+          expect.objectContaining({ label: '对比成本、延迟和成功状态' }),
+          expect.objectContaining({
+            label: '失败时查失败库',
+            href: '/failures?skillId=skill-1&modelName=qwen-plus&modelVersion=2026-07-01&errorType=json_parse_error',
+          }),
+          expect.objectContaining({ label: '沉淀私人证据' }),
+        ]),
+      },
     })
     expect(row.inputJson).toBeUndefined()
     expect(row.outputText).toBeUndefined()

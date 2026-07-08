@@ -109,7 +109,7 @@ curl http://127.0.0.1:8787/health
 | `GET /v1/adapters` | 公开读取 active Adapter 效果摘要、lift 指标和 API/页面证据验签入口；支持 skillId/modelName/modelVersion/failureType/failureId/modelProfile 过滤，不暴露补丁正文或草稿 |
 | `GET /v1/evidence/verify?targetType=...&targetId=...` | 校验已知 Passport / FailureCase / Adapter 的证据快照，返回公开脱敏 `targetSummary`、payloadHash 和签名状态；不提供匿名全量枚举 |
 | `POST /v1/anchors/verify` | 校验 score/evidence 外锚 JSONL + manifest + 可信发布/时间戳声明，并返回外锚可信等级 |
-| `GET /v1/runs` | 当前用户私人运行台账导出；支持 skillId/model/modelVersion/routeMode/success/formatValid/trustedCompatible/rerunOf 过滤；默认不含输入/输出，返回模型画像、可信兼容标记和失败库排障入口，`includeIO=1` 仅本人导出原文并写审计 |
+| `GET /v1/runs` | 当前用户私人运行台账导出；支持 skillId/model/modelVersion/routeMode/success/formatValid/trustedCompatible/rerunOf 过滤；默认不含输入/输出，返回模型画像、可信兼容标记、失败库排障入口和换模型重跑 playbook，`includeIO=1` 仅本人导出原文并写审计 |
 | `POST /v1/runs/[id]/rerun` | 用私人台账中的历史输入换模型重跑，可携带 modelProvider/modelVersion，写入重跑血缘 |
 | `GET /v1/enterprise/registry/[id]/passport` | 企业内读取已批准/可审 Skill 的 Passport、治理状态、证书状态摘要和绑定 Contract 的达标证书 |
 | `GET /v1/enterprise/audit/export` | 企业审计 CSV 导出，含模型版本治理元数据，不含输入输出原文 |

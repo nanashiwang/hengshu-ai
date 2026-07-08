@@ -268,6 +268,24 @@ export default async function ConsoleSection({
           <div className="mt-1">
             默认只导出模型、成本、延迟、成功状态、重跑血缘等账本指标；如需迁移完整个人数据，可导出输入/输出原文。下方筛选会同步作用于列表和导出。
           </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-4">
+            <div className="rounded border border-[var(--border)] bg-[var(--bg)] p-2">
+              <div className="font-medium text-[var(--text)]">1. 留住历史输入</div>
+              <div className="mt-1">每次试跑都沉淀为你的私人账本，不再只是看完即走。</div>
+            </div>
+            <div className="rounded border border-[var(--border)] bg-[var(--bg)] p-2">
+              <div className="font-medium text-[var(--text)]">2. 同输入换模型</div>
+              <div className="mt-1">一键重跑保留 Skill 版本和输入，只替换模型/版本。</div>
+            </div>
+            <div className="rounded border border-[var(--border)] bg-[var(--bg)] p-2">
+              <div className="font-medium text-[var(--text)]">3. 对比省钱回执</div>
+              <div className="mt-1">重跑血缘会展示成本、延迟和成功结果变化。</div>
+            </div>
+            <div className="rounded border border-[var(--border)] bg-[var(--bg)] p-2">
+              <div className="font-medium text-[var(--text)]">4. 失败进知识库</div>
+              <div className="mt-1">失败运行可直达失败库，继续生成 Adapter 修复闭环。</div>
+            </div>
+          </div>
           <form
             action="/console/runs"
             className="mt-3 grid gap-2 md:grid-cols-3 lg:grid-cols-6"
