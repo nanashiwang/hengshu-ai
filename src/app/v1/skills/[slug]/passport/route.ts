@@ -54,7 +54,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
 
   return Response.json({
     skill: { id: skill.id, slug: skill.slug, title: skill.title },
-    passport: publicSkillPassport(passport, benchmarkEvidence),
+    passport: publicSkillPassport(passport, benchmarkEvidence, { slug: skill.slug }),
     evidenceSnapshot: snapshot
       ? {
           id: snapshot.id,
