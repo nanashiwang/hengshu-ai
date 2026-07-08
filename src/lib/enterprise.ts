@@ -1208,6 +1208,71 @@ export async function upsertEnterpriseRegistry(
   return { ok: true, registry, created: true, certificateSummary }
 }
 
+
+export function evaluateEnterpriseAdoptionBaselineDrift(
+  registry: any,
+  current: { version?: any; passport?: any; certificateSummary?: any } = {},
+) {
+  const baseline = registry?.adoptionBaseline && typeof registry.adoptionBaseline === 'object' ? registry.adoptionBaseline : null
+  if (!baseline) {
+    return {
+      status: 'missing_baseline',
+      reapprovalRequired: false,
+      reasons: ['adoption_baseline_missing'],
+      customerValue: '该 Registry 尚无批准时采用基线；建议重新保存一次准入记录，冻结 Contract/Passport/证书摘要。',
+    }
+  }
+  const currentContract = current.version ? publicSkillContract(current.version, { slug: registry?.skill?.slug }) : null
+  const reasons: string[] = []
+  if (baseline.contract?.contractHash && currentContract?.contractHash && baseline.contract.contractHash !== currentContract.contractHash) {
+    reasons.push('contractHash_changed')
+  }
+  if (baseline.contract?.versionId && current.version?.id && String(baseline.contract.versionId) !== String(current.version.id)) {
+    reasons.push('version_changed')
+  }
+  if (baseline.passport?.id && current.passport?.id && String(baseline.passport.id) !== String(current.passport.id)) {
+    reasons.push('passport_changed')
+  }
+  if (baseline.passport?.evidenceHash && current.passport?.evidenceHash && baseline.passport.evidenceHash !== current.passport.evidenceHash) {
+    reasons.push('passport_evidence_changed')
+  }
+  const currentPassportStatus = current.passport?.status ? String(current.passport.status) : ''
+  if (currentPassportStatus && currentPassportStatus !== 'current') reasons.push('passport_not_current')
+  const baselineCertStatus = baseline.certificate?.status ? String(baseline.certificate.status) : ''
+  const currentCertStatus = current.certificateSummary?.status ? String(current.certificateSummary.status) : ''
+  if (baselineCertStatus === 'passed' && currentCertStatus && currentCertStatus !== 'passed') reasons.push('certificate_status_worse')
+  if (baseline.certificate?.certificateHash && current.certificateSummary?.certificateHash && baseline.certificate.certificateHash !== current.certificateSummary.certificateHash) {
+    reasons.push('certificate_hash_changed')
+  }
+  const reapprovalRequired = reasons.some((r) => ['contractHash_changed', 'version_changed', 'certificate_status_worse'].includes(r))
+  return {
+    status: reasons.length ? (reapprovalRequired ? 'reapproval_required' : 'review_recommended') : 'unchanged',
+    reapprovalRequired,
+    reasons,
+    baselineCapturedAt: baseline.capturedAt || null,
+    current: publicSanitize({
+      contractHash: currentContract?.contractHash || null,
+      versionId: current.version?.id ? String(current.version.id) : null,
+      passportId: current.passport?.id ? String(current.passport.id) : null,
+      passportStatus: currentPassportStatus || null,
+      passportEvidenceHash: current.passport?.evidenceHash || null,
+      certificateStatus: currentCertStatus || null,
+      certificateHash: current.certificateSummary?.certificateHash || null,
+    }),
+    nextActions: [
+      {
+        label: reapprovalRequired ? '重新审批 Skill' : '复核证据变化',
+        description: reapprovalRequired
+          ? '当前 Contract/版本/证书状态相对批准基线发生强变化，应重新走企业准入审批。'
+          : reasons.length
+            ? '当前 Passport 或证据 hash 有变化，建议审核员复核后决定是否更新基线。'
+            : '当前证据与批准基线一致，可继续按原治理策略使用。',
+        href: registry?.id ? `/v1/enterprise/registry/${encodeURIComponent(String(registry.id))}/passport` : null,
+      },
+    ],
+  }
+}
+
 export async function getEnterpriseApprovalCertificateSummary(
   payload: Payload,
   args: { skill: any; skillId: string; skillVersionId?: string; passportId?: string },

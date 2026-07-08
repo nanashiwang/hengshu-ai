@@ -2,7 +2,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
 import { resolveRuntimeEnv } from '@/lib/deploymentSettings'
-import { getEnterpriseRegistryPassport, publicEnterpriseRegistry } from '@/lib/enterprise'
+import { evaluateEnterpriseAdoptionBaselineDrift, getEnterpriseRegistryPassport, publicEnterpriseRegistry } from '@/lib/enterprise'
 import { verifyEvidenceSnapshot } from '@/lib/evidenceSnapshotVerify'
 import { getPublicKeyInfo } from '@/lib/signing'
 import { getSkillBenchmarkEvidence } from '@/lib/benchmarkEvidence'
@@ -86,10 +86,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     : passport && skillDoc && !contractVersionValid
       ? { status: 'failed', statusReasons: ['contract_version_invalid'], signed: false }
       : null
+  const adoptionBaselineDrift = evaluateEnterpriseAdoptionBaselineDrift(registry, {
+    version,
+    passport,
+    certificateSummary,
+  })
 
   return Response.json({
     organizationId: result.organizationId,
-    registry: { ...publicEnterpriseRegistry(registry), certificateSummary },
+    registry: { ...publicEnterpriseRegistry(registry), certificateSummary, adoptionBaselineDrift },
     passport: passport ? { ...publicSkillPassport(passport, benchmarkEvidence, { slug: skillDoc?.slug }), certificate } : null,
     evidenceSnapshot: snapshot
       ? {

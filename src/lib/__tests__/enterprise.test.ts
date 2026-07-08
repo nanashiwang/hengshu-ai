@@ -13,6 +13,7 @@ import {
   buildEnterpriseOidcTokenRequest,
   buildEnterpriseSsoAuthorizeUrl,
   buildEnterpriseAdoptionBaseline,
+  evaluateEnterpriseAdoptionBaselineDrift,
   verifyEnterpriseOidcIdTokenClaims,
   signEnterpriseSsoState,
   verifyEnterpriseSsoState,
@@ -750,6 +751,41 @@ describe('enterprise — 企业 Registry 授权', () => {
       },
     })
     expect(JSON.stringify(baseline)).not.toContain('secret')
+  })
+
+  it('企业采用基线能识别 Contract 与证书漂移并要求重审', () => {
+    const drift = evaluateEnterpriseAdoptionBaselineDrift({
+      id: 'reg-1',
+      adoptionBaseline: {
+        capturedAt: '2026-07-08T00:00:00.000Z',
+        contract: { versionId: 'ver-1', contractHash: 'old-contract' },
+        passport: { id: 'passport-1', evidenceHash: 'old-evidence', status: 'current' },
+        certificate: { status: 'passed', certificateHash: 'old-cert' },
+      },
+    }, {
+      version: { id: 'ver-2', skill: 'skill-1', version: '2.0.0', contractHash: 'new-contract', status: 'active' },
+      passport: { id: 'passport-1', evidenceHash: 'new-evidence', status: 'current' },
+      certificateSummary: { status: 'provisional', certificateHash: 'new-cert' },
+    })
+
+    expect(drift).toMatchObject({
+      status: 'reapproval_required',
+      reapprovalRequired: true,
+      reasons: expect.arrayContaining([
+        'contractHash_changed',
+        'version_changed',
+        'passport_evidence_changed',
+        'certificate_status_worse',
+        'certificate_hash_changed',
+      ]),
+      baselineCapturedAt: '2026-07-08T00:00:00.000Z',
+      current: {
+        contractHash: 'new-contract',
+        versionId: 'ver-2',
+        passportEvidenceHash: 'new-evidence',
+        certificateStatus: 'provisional',
+      },
+    })
   })
 
   it('企业批准前会要求确认未达标证书风险', async () => {
