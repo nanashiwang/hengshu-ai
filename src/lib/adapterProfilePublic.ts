@@ -54,6 +54,53 @@ function relationSummary(value: any) {
   return { id: String(value), slug: null, title: null }
 }
 
+function adapterPlaybook(adapter: any) {
+  const before = adapter?.beforeMetrics && typeof adapter.beforeMetrics === 'object' ? adapter.beforeMetrics : {}
+  const after = adapter?.afterMetrics && typeof adapter.afterMetrics === 'object' ? adapter.afterMetrics : {}
+  const beforeSamples = Number(before.samples || 0)
+  const afterSamples = Number(after.samples || 0)
+  const liftScore = Number(adapter?.liftScore || 0)
+  const decision =
+    liftScore > 0 && afterSamples >= 3
+      ? 'reuse'
+      : liftScore > 0
+        ? 'verify'
+        : 'observe'
+  return {
+    customerValue:
+      'Adapter 把失败库里的已知问题变成可复用修复证据：看适用模型、失败类型、前后样本和 lift，再决定复用、复验或继续观察。',
+    decision,
+    nextActions: [
+      {
+        label: '确认适用范围',
+        description: `仅用于 ${adapter?.modelName || '指定模型'}${adapter?.modelVersion ? ` · ${adapter.modelVersion}` : ''} 的 ${Array.isArray(adapter?.failureTypes) && adapter.failureTypes.length ? adapter.failureTypes.join(' / ') : '已知失败类型'}。`,
+      },
+      {
+        label: '看 lift 和样本',
+        description: `lift ${Number.isFinite(liftScore) ? liftScore : 0}；前 ${beforeSamples} / 后 ${afterSamples}。样本少时先复验，不要直接大规模启用。`,
+      },
+      {
+        label: '验签修复证据',
+        description: '公开只展示效果摘要，不暴露 prompt/schema/decoding 补丁正文；可验签 evidenceHash。',
+        href: evidenceVerifyPageUrl('adapter_profile', adapter?.id),
+      },
+      {
+        label: '回到失败库',
+        description: '查看来源失败画像，确认症状、模型版本和输入档是否与你的任务一致。',
+        href: adapter?.modelName
+          ? `/failures?${new URLSearchParams({
+              modelName: String(adapter.modelName),
+              ...(adapter?.modelVersion ? { modelVersion: String(adapter.modelVersion) } : {}),
+              ...(Array.isArray(adapter?.failureTypes) && adapter.failureTypes[0]
+                ? { errorType: String(adapter.failureTypes[0]) }
+                : {}),
+            }).toString()}`
+          : null,
+      },
+    ],
+  }
+}
+
 export function publicAdapterProfile(adapter: any) {
   const skill = isPublicSkillRelation(adapter?.skill) ? relationSummary(adapter?.skill) : null
   return {
@@ -70,6 +117,7 @@ export function publicAdapterProfile(adapter: any) {
     liftScore: adapter?.liftScore ?? 0,
     beforeMetrics: publicSanitize(adapter?.beforeMetrics || null),
     afterMetrics: publicSanitize(adapter?.afterMetrics || null),
+    playbook: publicSanitize(adapterPlaybook(adapter)),
     evidenceHash: adapter?.evidenceHash || null,
     evidenceVerifyUrl: evidenceVerifyApiUrl('adapter_profile', adapter?.id),
     evidenceVerifyPageUrl: evidenceVerifyPageUrl('adapter_profile', adapter?.id),

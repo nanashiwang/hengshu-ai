@@ -70,6 +70,22 @@ describe('adapterProfilePublic — 公开 Adapter 效果摘要', () => {
       modelVersion: '2026-07-01',
       modelProfile: { id: 'profile-1', title: 'qwen-plus', modelVersion: '2026-07-01', provider: 'qwen' },
       liftScore: 12.5,
+      playbook: {
+        customerValue: expect.stringContaining('可复用修复证据'),
+        decision: 'reuse',
+        nextActions: expect.arrayContaining([
+          expect.objectContaining({ label: '确认适用范围' }),
+          expect.objectContaining({ label: '看 lift 和样本' }),
+          expect.objectContaining({
+            label: '验签修复证据',
+            href: '/verify?targetType=adapter_profile&targetId=adapter-1',
+          }),
+          expect.objectContaining({
+            label: '回到失败库',
+            href: '/failures?modelName=qwen-plus&modelVersion=2026-07-01&errorType=json_parse_error',
+          }),
+        ]),
+      },
       evidenceVerifyUrl: '/v1/evidence/verify?targetType=adapter_profile&targetId=adapter-1',
       evidenceVerifyPageUrl: '/verify?targetType=adapter_profile&targetId=adapter-1',
     })
@@ -78,6 +94,37 @@ describe('adapterProfilePublic — 公开 Adapter 效果摘要', () => {
     expect(row.decodingPatch).toBeUndefined()
     expect(row.beforeMetrics).toEqual({ samples: 10, successRate: 0.6 })
     expect(row.afterMetrics).toEqual({ samples: 8, successRate: 0.85 })
+    expect(JSON.stringify(row.playbook)).not.toContain('secret patch')
+  })
+
+  it('Adapter playbook 根据 lift 和样本给出复用/复验/观察动作', () => {
+    expect(
+      (publicAdapterProfile({
+        id: 'reuse',
+        status: 'active',
+        skill: { id: 's', status: 'published', visibility: 'public' },
+        liftScore: 1,
+        afterMetrics: { samples: 3 },
+      }) as any).playbook.decision,
+    ).toBe('reuse')
+    expect(
+      (publicAdapterProfile({
+        id: 'verify',
+        status: 'active',
+        skill: { id: 's', status: 'published', visibility: 'public' },
+        liftScore: 1,
+        afterMetrics: { samples: 1 },
+      }) as any).playbook.decision,
+    ).toBe('verify')
+    expect(
+      (publicAdapterProfile({
+        id: 'observe',
+        status: 'active',
+        skill: { id: 's', status: 'published', visibility: 'public' },
+        liftScore: 0,
+        afterMetrics: { samples: 5 },
+      }) as any).playbook.decision,
+    ).toBe('observe')
   })
 
   it('截断公开 Adapter 筛选中的超长字符串', () => {

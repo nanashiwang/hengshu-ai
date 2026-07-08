@@ -430,6 +430,9 @@ export default async function FailuresPage({
                 {adapters.length > 0 && (
                   <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3 text-xs">
                     <b>此失败已验证 Adapter：</b>
+                    <div className="mt-1 text-[var(--muted)]">
+                      先看适用模型/失败类型，再看 before/after 样本和 lift；样本少先复验，证据可公开验签，补丁正文仍只给作者/审核员。
+                    </div>
                     <div className="mt-2 space-y-1 text-[var(--muted)]">
                       {adapters.map((a) => (
                         <div
