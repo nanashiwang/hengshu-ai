@@ -9,6 +9,7 @@ import {
   formatPercent,
   timeAgo,
 } from '@/lib/format'
+import { resolveEssentialStarterPack } from '@/lib/essentialStarterPack'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,6 +45,7 @@ export default async function SkillsPage({
   const activeCat = sp.category
     ? categories.find((c: any) => c.slug === sp.category)
     : null
+  const activeCatId = activeCat?.id ? String(activeCat.id) : undefined
   const requestedSortKey = sp.sort || 'skillRank'
   const activeSort = SORTS.find((s) => s.key === requestedSortKey) || SORTS[0]
   const sortKey = activeSort.key
@@ -62,35 +64,36 @@ export default async function SkillsPage({
   if (q) where.and.push({ title: { like: q } })
 
   const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
-  const essentialWhere: any = {
-    and: [
-      { status: { equals: 'published' } },
-      { visibility: { equals: 'public' } },
-      { isEssential: { equals: true } },
-    ],
-  }
-  if (activeCat) essentialWhere.and.push({ category: { equals: activeCat.id } })
-  const [res, essential] = await Promise.all([
-    payload.find({
-      collection: 'skills',
-      where,
-      depth: 1,
-      limit: PAGE_SIZE,
-      page,
-      sort,
-    }),
-    page === 1 && !q && !essentialOnly
-      ? payload.find({
-          collection: 'skills',
-          where: essentialWhere,
-          depth: 1,
-          limit: 6,
-          sort: '-skillRank',
-        })
-      : Promise.resolve({ docs: [] }),
-  ])
+  const starterPack = await resolveEssentialStarterPack(payload, {
+    q,
+    categoryId: activeCatId,
+    limit: essentialOnly ? PAGE_SIZE : 6,
+    page: essentialOnly ? page : 1,
+    sort,
+  })
+  const packSkill = (entry: any) => ({
+    ...entry.skill,
+    isEssential: true,
+    essentialReason: entry.reason || entry.skill?.essentialReason,
+    starterExample: entry.starterExample,
+  })
+  const res = essentialOnly
+    ? {
+        docs: starterPack.entries.map(packSkill),
+        totalDocs: starterPack.totalDocs,
+        totalPages: starterPack.totalPages,
+        page: starterPack.page,
+      }
+    : await payload.find({
+        collection: 'skills',
+        where,
+        depth: 1,
+        limit: PAGE_SIZE,
+        page,
+        sort,
+      })
   const skills = res.docs
-  const essentials = essential.docs as any[]
+  const essentials = page === 1 && !q && !essentialOnly ? starterPack.entries.map(packSkill) : []
   const passportEntries = await Promise.all(
     [...(skills as any[]), ...essentials].map(async (skill: any) => {
       const passports = await payload.find({

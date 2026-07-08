@@ -3,12 +3,13 @@ import { getPayloadClient } from '@/lib/payload'
 import { getCurrentUser } from '@/lib/auth'
 import { SkillCard } from '@/components/SkillCard'
 import { ForkButton } from '@/components/ForkButton'
+import { resolveEssentialStarterPack } from '@/lib/essentialStarterPack'
 
 export const dynamic = 'force-dynamic'
 
 async function getData() {
   const payload = await getPayloadClient()
-  const [featured, recent, essentials, categories, stats] = await Promise.all([
+  const [featured, recent, starterPack, categories, stats] = await Promise.all([
     payload.find({
       collection: 'skills',
       where: {
@@ -34,19 +35,7 @@ async function getData() {
       limit: 8,
       sort: '-createdAt',
     }),
-    payload.find({
-      collection: 'skills',
-      where: {
-        and: [
-          { status: { equals: 'published' } },
-          { visibility: { equals: 'public' } },
-          { isEssential: { equals: true } },
-        ],
-      },
-      depth: 1,
-      limit: 3,
-      sort: '-skillRank',
-    }),
+    resolveEssentialStarterPack(payload, { limit: 3, page: 1 }),
     payload.find({ collection: 'categories', limit: 20, sort: 'order' }),
     payload.find({
       collection: 'skills',
@@ -72,6 +61,14 @@ async function getData() {
     limit: 3,
     sort: '-skillRank',
   })
+  const essentials = {
+    docs: starterPack.entries.map((entry: any) => ({
+      ...entry.skill,
+      isEssential: true,
+      essentialReason: entry.reason || entry.skill?.essentialReason,
+      starterExample: entry.starterExample,
+    })),
+  }
   const cardSkills = [...featured.docs, ...recent.docs, ...essentials.docs]
   const ids = [...new Set(cardSkills.map((s: any) => s.id).filter(Boolean))]
   const passportEntries = await Promise.all(

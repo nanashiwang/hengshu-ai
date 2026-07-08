@@ -1,6 +1,12 @@
 import { certificateVerifyPageUrl, evidenceVerifyApiUrl, evidenceVerifyPageUrl } from './evidenceLinks'
 import { publicSkillRankBasis } from './skillrank'
 
+export type StarterPackOverride = {
+  reason?: string | null
+  starterExample?: unknown
+  order?: number
+}
+
 function relationSummary(value: any) {
   if (!value) return null
   if (typeof value === 'object') {
@@ -62,6 +68,7 @@ function starterPlaybook(skill: any, passportInfo: any) {
   const skillId = skill?.id ? String(skill.id) : ''
   const isEssential = Boolean(skill?.isEssential)
   const hasCurrentPassport = passportInfo?.status === 'current'
+  const starterExampleConfigured = skill?.starterExample !== undefined && skill?.starterExample !== null
   const decision = isEssential
     ? 'start_here'
     : hasCurrentPassport
@@ -89,7 +96,9 @@ function starterPlaybook(skill: any, passportInfo: any) {
       },
       {
         label: '默认输入试跑',
-        description: '用在线试跑或本地 Runner 跑一次，把结果沉淀到你的私人运行台账。',
+        description: starterExampleConfigured
+          ? '后台已配置公开默认示例，可直接试跑并把结果沉淀到你的私人运行台账。'
+          : '用在线试跑或本地 Runner 跑一次，把结果沉淀到你的私人运行台账。',
         href: slug ? `/skills/${encodeURIComponent(slug)}/run` : null,
       },
       {
@@ -101,7 +110,15 @@ function starterPlaybook(skill: any, passportInfo: any) {
   }
 }
 
-export function publicSkillSummary(skill: any, passport?: any) {
+export function publicSkillSummary(skill: any, passport?: any, starterOverride?: StarterPackOverride | null) {
+  const starterSkill = starterOverride
+    ? {
+        ...skill,
+        isEssential: true,
+        essentialReason: starterOverride.reason || skill?.essentialReason,
+        starterExample: starterOverride.starterExample,
+      }
+    : skill
   const slug = skill?.slug ? String(skill.slug) : null
   const passportInfo = passportSummary(passport, slug)
   return {
@@ -113,8 +130,10 @@ export function publicSkillSummary(skill: any, passport?: any) {
     author: relationSummary(skill?.author),
     status: skill?.status || null,
     visibility: skill?.visibility || null,
-    isEssential: Boolean(skill?.isEssential),
-    essentialReason: skill?.essentialReason || null,
+    isEssential: Boolean(starterSkill?.isEssential),
+    essentialReason: starterSkill?.essentialReason || null,
+    starterPackOrder: starterOverride?.order ?? null,
+    starterExample: starterOverride?.starterExample ?? null,
     isFeatured: Boolean(skill?.isFeatured),
     skillRank: Math.round(Number(skill?.skillRank || 0)),
     rankBasis: publicSkillRankBasis(skill, passport),
@@ -139,7 +158,7 @@ export function publicSkillSummary(skill: any, passport?: any) {
       : null,
     evidenceVerifyUrl: passportInfo.evidenceVerifyUrl,
     evidenceVerifyPageUrl: passportInfo.evidenceVerifyPageUrl,
-    starterPlaybook: starterPlaybook(skill, passportInfo),
+    starterPlaybook: starterPlaybook(starterSkill, passportInfo),
     updatedAt: skill?.updatedAt || null,
   }
 }

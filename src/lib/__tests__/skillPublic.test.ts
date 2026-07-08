@@ -95,4 +95,28 @@ describe('skillPublic — 公开 Skill 列表输出', () => {
       ]),
     })
   })
+
+  it('后台 Starter Pack 可覆盖必备理由和默认示例', () => {
+    const row = publicSkillSummary(
+      { id: 'skill-3', slug: 'starter', title: 'Starter', isEssential: false },
+      null,
+      { reason: '后台推荐理由', starterExample: { topic: '周报' }, order: 2 },
+    ) as any
+
+    expect(row).toMatchObject({
+      isEssential: true,
+      essentialReason: '后台推荐理由',
+      starterPackOrder: 2,
+      starterExample: { topic: '周报' },
+      starterPlaybook: {
+        decision: 'start_here',
+        nextActions: expect.arrayContaining([
+          expect.objectContaining({
+            label: '默认输入试跑',
+            description: expect.stringContaining('后台已配置公开默认示例'),
+          }),
+        ]),
+      },
+    })
+  })
 })

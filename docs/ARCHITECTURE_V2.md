@@ -7,7 +7,7 @@
 
 | v2 对象/能力 | 当前实现 | 说明 |
 |---|---|---|
-| Skill | `src/collections/Skills.ts` | Skill 市场、状态、可见性、作者、指标；`isEssential` + `essentialReason` 支撑必备 Skill onboarding。 |
+| Skill | `src/collections/Skills.ts`、`src/globals/SiteSettings.ts`、`src/lib/essentialStarterPack.ts` | Skill 市场、状态、可见性、作者、指标；`isEssential` + `essentialReason` 作为必备 Skill 回退；后台 `essentialStarterPack` 可配置 Starter Pack 排序、推荐理由和公开默认示例。 |
 | SkillVersion / Skill Contract | `src/collections/SkillVersions.ts`、`src/lib/skillContract.ts`、`src/lib/skillContractPublic.ts` | 已有 prompt、input/output schema、permissions、examples、recommended models、routePolicy；自动生成 `contractHash`，并标记初始/兼容/破坏性变更；公开 Contract 只输出 hash/schema/权限摘要、可选基线 diff 和客户复核 playbook，Skill 详情页可视化并筛选破坏性/兼容字段变化，prompt/examples/changelog 原文按字段权限隐藏。 |
 | Manifest 快照 | `src/collections/SkillArtifacts.ts` | 发布时冻结 manifest/checksum/signature；原始集合仅后台可读，公开下载走 `/v1/skills/[slug]/manifest`；无 manifest 走人工审核。 |
 | Runner | `runner/hengshu.mjs`、`src/lib/runnerInstallPlaybook.ts`、`src/lib/runnerUpdatePlaybook.ts`、`src/app/v1/runner/install/route.ts` | 支持安装、本地运行、验签和兼容报告回流；安装/检查更新响应返回“验签 → 本地运行 → 脱敏回流 → 更新/复验”的客户指引，避免把 Runner 只做成下载器。 |
@@ -43,8 +43,8 @@
 
 | 页面/API | 当前能力 |
 |---|---|
-| 首页 + `/skills` | 首页“先跑必备 Skill”新手入口；必备卡片展示“为什么先跑”；首页 SkillCard 展示 Passport 可信分；首页引导从已有运行证据的 Skill fork 成新版本；`/skills?essential=1` 必备筛选；市场顶部 Starter Pack；必备页展示“看 Passport → 默认输入试跑 → 回控制台看台账/重跑”的新手路径；列表展示 Passport 可信分和证据入口，并可直达试跑页和该 Skill 私人台账；分类、搜索、排序。 |
-| `/v1/skills` | 公开 Skill 摘要列表 API，支持 `essential=1` 输出必备 Skill starter pack，并返回必备推荐理由、新手 starterPlaybook、可信榜排序依据、Passport 可信摘要、证据入口、证书入口、试跑入口和台账入口。 |
+| 首页 + `/skills` | 首页“先跑必备 Skill”新手入口优先读取后台 Starter Pack；必备卡片展示“为什么先跑”；首页 SkillCard 展示 Passport 可信分；首页引导从已有运行证据的 Skill fork 成新版本；`/skills?essential=1` 必备筛选；市场顶部 Starter Pack；必备页展示“看 Passport → 默认输入试跑 → 回控制台看台账/重跑”的新手路径；列表展示 Passport 可信分和证据入口，并可直达试跑页和该 Skill 私人台账；分类、搜索、排序。 |
+| `/v1/skills` | 公开 Skill 摘要列表 API，支持 `essential=1` 输出必备 Skill starter pack；优先读取后台配置的排序、推荐理由和 starterExample，未配置时回退 `isEssential`，并返回新手 starterPlaybook、可信榜排序依据、Passport 可信摘要、证据入口、证书入口、试跑入口和台账入口。 |
 | `/v1/skills/[slug]/contract` | 公开读取能力契约摘要；返回 contractHash、promptHash、schema/权限摘要、availableBaselines 和可选 compareVersion/compareVersionId 基线 diff，并给出“核对 Hash → 检查破坏性变更 → 验签证书 → 试跑/重跑”的复核 playbook，不暴露 prompt 正文。 |
 | `/skills/[slug]` | Passport 区块、Contract diff 可视化与破坏性/兼容筛选、证据快照摘要、黄金样例基准分、公开 Contract/Passport API、达标证书可视化验签入口、证据验签入口、兼容矩阵；兼容矩阵可跳转模型画像、该 Skill×模型失败库与 Adapter API。 |
 | `/skills/[slug]/run` | 在线试跑页；运行前展示 Passport 可信分，并提供 Passport、Contract、达标证书和证据验签入口；运行请求可携带 modelProvider/modelVersion，结果进入私人台账并按模型版本回流兼容证据。 |

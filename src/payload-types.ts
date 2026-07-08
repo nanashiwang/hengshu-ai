@@ -526,6 +526,7 @@ export interface SkillRun {
   adapterProfile?: (string | null) | AdapterProfile;
   modelProfile?: (string | null) | ModelProfile;
   model?: string | null;
+  modelVersion?: string | null;
   routeMode?: ('cheap' | 'quality' | 'fast' | 'balanced') | null;
   /**
    * 用户原始输入；普通用户只能经 /v1/runs?includeIO=1 审计导出。
@@ -594,7 +595,12 @@ export interface AdapterProfile {
   sourceFailureCase?: (string | null) | FailureCase;
   modelProfile?: (string | null) | ModelProfile;
   modelName: string;
+  modelVersion?: string | null;
   status?: ('draft' | 'active' | 'observed' | 'disabled') | null;
+  reviewStatus?: ('pending' | 'needs_changes' | 'approved' | 'rejected') | null;
+  reviewedBy?: (string | null) | User;
+  reviewedAt?: string | null;
+  reviewerNotes?: string | null;
   systemPromptAppend?: string | null;
   userPromptAppend?: string | null;
   outputSchemaPatch?:
@@ -669,10 +675,27 @@ export interface FailureCase {
   profileKey?: string | null;
   errorType: string;
   modelName: string;
+  primaryModelVersion?: string | null;
   skill?: (string | null) | Skill;
   skillVersion?: (string | null) | SkillVersion;
   symptom?: string | null;
   likelyCause?: string | null;
+  triageStatus?: ('pending' | 'attributed' | 'needs_more_evidence' | 'verified') | null;
+  rootCauseCategory?:
+    | ('model_drift' | 'prompt_boundary' | 'schema_mismatch' | 'adapter_gap' | 'data_quality' | 'unknown')
+    | null;
+  triagedBy?: (string | null) | User;
+  triagedAt?: string | null;
+  triageNotes?: string | null;
+  verificationCoverage?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   repairTemplate?: string | null;
   verifyTemplate?: string | null;
   primaryInputBucket?: string | null;
@@ -695,6 +718,24 @@ export interface FailureCase {
     | boolean
     | null;
   modelBreakdown?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  modelVersions?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  modelVersionBreakdown?:
     | {
         [k: string]: unknown;
       }
@@ -1205,6 +1246,15 @@ export interface EvidenceSnapshot {
   targetType: 'skill_passport' | 'failure_case' | 'adapter_profile';
   targetId: string;
   evidenceHash: string;
+  targetSummary?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   payloadHash?: string | null;
   keyId?: string | null;
   signature?: string | null;
@@ -1334,6 +1384,18 @@ export interface EnterpriseRegistry {
     | number
     | boolean
     | null;
+  /**
+   * 批准时冻结 Contract/Passport/证书摘要，用于后续版本漂移和重新审批判断。
+   */
+  adoptionBaseline?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1353,6 +1415,7 @@ export interface EnterpriseAuditLog {
   skillRun?: (string | null) | SkillRun;
   runId: string;
   modelName?: string | null;
+  modelVersion?: string | null;
   modelProfile?: (string | null) | ModelProfile;
   outcome: 'success' | 'failed' | 'denied';
   errorCode?: string | null;
@@ -1769,6 +1832,7 @@ export interface SkillRunsSelect<T extends boolean = true> {
   adapterProfile?: T;
   modelProfile?: T;
   model?: T;
+  modelVersion?: T;
   routeMode?: T;
   inputJson?: T;
   outputText?: T;
@@ -1871,7 +1935,12 @@ export interface AdapterProfilesSelect<T extends boolean = true> {
   sourceFailureCase?: T;
   modelProfile?: T;
   modelName?: T;
+  modelVersion?: T;
   status?: T;
+  reviewStatus?: T;
+  reviewedBy?: T;
+  reviewedAt?: T;
+  reviewerNotes?: T;
   systemPromptAppend?: T;
   userPromptAppend?: T;
   outputSchemaPatch?: T;
@@ -2116,16 +2185,25 @@ export interface FailureCasesSelect<T extends boolean = true> {
   profileKey?: T;
   errorType?: T;
   modelName?: T;
+  primaryModelVersion?: T;
   skill?: T;
   skillVersion?: T;
   symptom?: T;
   likelyCause?: T;
+  triageStatus?: T;
+  rootCauseCategory?: T;
+  triagedBy?: T;
+  triagedAt?: T;
+  triageNotes?: T;
+  verificationCoverage?: T;
   repairTemplate?: T;
   verifyTemplate?: T;
   primaryInputBucket?: T;
   inputBuckets?: T;
   outputBuckets?: T;
   modelBreakdown?: T;
+  modelVersions?: T;
+  modelVersionBreakdown?: T;
   sourceBreakdown?: T;
   evidenceHash?: T;
   occurrenceCount?: T;
@@ -2143,6 +2221,7 @@ export interface EvidenceSnapshotsSelect<T extends boolean = true> {
   targetType?: T;
   targetId?: T;
   evidenceHash?: T;
+  targetSummary?: T;
   payloadHash?: T;
   keyId?: T;
   signature?: T;
@@ -2211,6 +2290,7 @@ export interface EnterpriseRegistriesSelect<T extends boolean = true> {
   usageScope?: T;
   riskNotes?: T;
   auditPolicy?: T;
+  adoptionBaseline?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -2227,6 +2307,7 @@ export interface EnterpriseAuditLogsSelect<T extends boolean = true> {
   skillRun?: T;
   runId?: T;
   modelName?: T;
+  modelVersion?: T;
   modelProfile?: T;
   outcome?: T;
   errorCode?: T;
@@ -2367,6 +2448,29 @@ export interface SiteSetting {
   slogan?: string | null;
   featuredSkills?: (string | Skill)[] | null;
   /**
+   * 后台配置新用户第一跑 Skill 包：排序、推荐理由和公开默认示例。为空时回退 Skill 自身 isEssential/essentialReason。
+   */
+  essentialStarterPack?:
+    | {
+        skill: string | Skill;
+        order?: number | null;
+        reason?: string | null;
+        /**
+         * 给新用户试跑的公开示例对象；不要填写真实客户输入。
+         */
+        starterExample?:
+          | {
+              [k: string]: unknown;
+            }
+          | unknown[]
+          | string
+          | number
+          | boolean
+          | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
    * 开启时注册页要求填写邮箱；关闭时用户可不填，系统会生成内部占位邮箱用于账号登录态。
    */
   registrationEmailRequired?: boolean | null;
@@ -2484,6 +2588,15 @@ export interface SiteSettingsSelect<T extends boolean = true> {
   siteName?: T;
   slogan?: T;
   featuredSkills?: T;
+  essentialStarterPack?:
+    | T
+    | {
+        skill?: T;
+        order?: T;
+        reason?: T;
+        starterExample?: T;
+        id?: T;
+      };
   registrationEmailRequired?: T;
   announcement?: T;
   updatedAt?: T;

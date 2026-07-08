@@ -11,6 +11,7 @@ import { refreshSkillPassport } from '@/lib/passportRefresh'
 import { normalizeSkillSubmissionVisibility } from '@/lib/skillVisibility'
 import { readJsonBodyWithLimit } from '@/lib/requestBody'
 import { boundedIntParam, boundedStringParam } from '@/lib/queryParams'
+import { resolveEssentialStarterPack } from '@/lib/essentialStarterPack'
 import { MAX_SKILL_PROMPT_SUBMISSION_BYTES, normalizeSkillPromptSubmission } from '@/lib/skillPromptSubmissionRequest'
 import {
   MAX_SKILL_PACKAGE_CATEGORY_LENGTH,
@@ -41,13 +42,13 @@ export async function GET(request: Request) {
   const page = boundedIntParam(url.searchParams, 'page', 1, 1, 10_000)
   const sort =
     url.searchParams.get('sort') === 'new' ? '-createdAt' : '-skillRank'
+  let categoryId: string | undefined
 
   const and: any[] = [
     { status: { equals: 'published' } },
     { visibility: { equals: 'public' } },
   ]
   if (q) and.push({ title: { like: q } })
-  if (essential) and.push({ isEssential: { equals: true } })
   if (featured) and.push({ isFeatured: { equals: true } })
   if (category) {
     const cats = await payload.find({
@@ -66,7 +67,50 @@ export async function GET(request: Request) {
         limit,
         docs: [],
       })
+    categoryId = String(cat.id)
     and.push({ category: { equals: cat.id } })
+  }
+
+  if (essential) {
+    const pack = await resolveEssentialStarterPack(payload, { q, categoryId, limit, page, sort })
+    const passportEntries = await Promise.all(
+      pack.entries.map(async (entry) => {
+        const skill = entry.skill
+        const passports = await payload.find({
+          collection: 'skill-passports' as any,
+          where: {
+            and: [
+              { skill: { equals: skill.id } },
+              { status: { equals: 'current' } },
+            ],
+          },
+          sort: '-lastVerifiedAt',
+          limit: 1,
+          depth: 0,
+          overrideAccess: true,
+        })
+        return [skill.id, passports.docs[0] || null] as const
+      }),
+    )
+    const passportBySkillId = new Map(passportEntries)
+    return Response.json({
+      totalDocs: pack.totalDocs,
+      page: pack.page,
+      totalPages: pack.totalPages,
+      limit: pack.limit,
+      starterPack: {
+        configured: pack.configured,
+        source: pack.configured ? 'site-settings' : 'skill-flags',
+        playbook: '后台 Starter Pack 可配置排序、推荐理由和公开默认示例；为空时回退 Skill 自身 isEssential。',
+      },
+      docs: pack.entries.map((entry) =>
+        publicSkillSummary(entry.skill, passportBySkillId.get(entry.skill.id), {
+          reason: entry.reason,
+          starterExample: entry.starterExample,
+          order: entry.order,
+        }),
+      ),
+    })
   }
 
   const res = await payload.find({

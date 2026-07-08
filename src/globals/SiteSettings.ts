@@ -25,6 +25,25 @@ export const SiteSettings: GlobalConfig = {
       label: '首页精选 Skill',
     },
     {
+      name: 'essentialStarterPack',
+      type: 'array',
+      label: '必备 Skill Starter Pack',
+      admin: {
+        description: '后台配置新用户第一跑 Skill 包：排序、推荐理由和公开默认示例。为空时回退 Skill 自身 isEssential/essentialReason。',
+      },
+      fields: [
+        { name: 'skill', type: 'relationship', relationTo: 'skills', required: true, label: 'Skill' },
+        { name: 'order', type: 'number', defaultValue: 0, label: '排序' },
+        { name: 'reason', type: 'textarea', label: '为什么先跑' },
+        {
+          name: 'starterExample',
+          type: 'json',
+          label: '公开默认示例',
+          admin: { description: '给新用户试跑的公开示例对象；不要填写真实客户输入。' },
+        },
+      ],
+    },
+    {
       name: 'registrationEmailRequired',
       type: 'checkbox',
       defaultValue: false,
