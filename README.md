@@ -23,7 +23,7 @@
 
 - **下载→运行主线**：Skill Spec v1 · 发布快照+checksum · Runner 设备码登录 · 本地安装/离线运行（CLI 六命令）· 安装响应返回“验签→本地跑→脱敏回流→更新”playbook · 兼容报告回流形成兼容分 · 贡献值规则引擎 · 求术悬赏闭环
 - **信任模型**：manifest ed25519 签名 + Runner 验签 + `/v1/keys` 公钥分发 + `/verify` 分数快照公开验签 + `/v1/evidence/verify` 证据快照验签 + `/v1/anchors/verify` 外锚 manifest 验签 + `/v1/skills/[slug]/certificate` 达标证书 + `/v1/certificates/verify` 证书验签（完整响应或裸证书均可）
-- **护城河数据层**：逐模型/版本兼容真值表（时间衰减 + 来源权重 + 置信度，并展示有效样本）· ModelProfile 漂移曲线/输入规模档/任务画像/Skill任务画像表现 · 黄金样例逐条打分 · 在线运行回流喂评测数据 · 失败知识库（`/failures` + 归因看板，含人工归因/复验覆盖/证据验签/私人台账复验计划）· 从失败案例生成待评审 Adapter 草稿并直达前台评审看板，批准后自动复验入队 · 企业内 Passport/达标证书 · 企业准入批量重审 · 企业策略包/身份策略骨架 · 企业失败知识库 · 来源分级权重
+- **护城河数据层**：逐模型/版本兼容真值表（时间衰减 + 来源权重 + 置信度，并展示有效样本）· ModelProfile 漂移曲线/输入规模档/任务画像/Skill任务画像表现 · 黄金样例逐条打分 · 在线运行回流喂评测数据 · 失败知识库（`/failures` + 归因看板，含人工归因/审核员批量确认/复验覆盖/证据验签/私人台账复验计划）· 从失败案例生成待评审 Adapter 草稿并直达前台评审看板，批准后自动复验入队 · 企业内 Passport/达标证书 · 企业准入批量重审 · 企业策略包/身份策略骨架 · 企业失败知识库 · 来源分级权重
 - **创作者供给**：前台发布 Skill（`/console/skills/new`，引导上传包→Contract→Passport→适配维护，并返回发布后维护 playbook）· AI 合规审核通过自动上架/未通过转人工 · GitHub README / Claude Skill / GPTs 配置导入为待审 Imported Skill · 批量来源导入 worker · 我的作品展示 Contract/Passport/证书预览/失败库入口 · 未发布 Skill 作者可预览
 - **经济闭环（骨架）**：credit 台账 + 贡献值兑换池（`/console/exchange`，默认关闭待接真值）
 - **前台**：首页发现（先跑必备 Skill）· Skill 市场（必备筛选/分类/排序/搜索）· 详情（Passport/Contract diff筛选/兼容矩阵/评论/版本）· 可信榜（公开排序口径，非下载量热榜）· 悬赏区 · 控制台 · Adapter 评审看板/批量评审/自动复验 · 失败归因看板 · 订阅更新通知 · 移动端导航 · SEO(sitemap/robots/metadata)
@@ -113,6 +113,7 @@ curl http://127.0.0.1:8787/health
 | `GET /v1/model-profiles` | 公开读取模型画像、版本漂移、输入规模档、任务画像与 Skill 任务画像表现、回归告警、有效样本、来源权重、采用复验 checklist 和客户决策 playbook；支持 modelName/modelVersion/provider/status 过滤，并返回私人台账复验、失败库/Adapter 排障入口 |
 | `GET /v1/failures` | 公开读取脱敏失败知识库、人工归因摘要、复验覆盖、客户排障 playbook、triage checklist、私人台账复现、修复/复验建议、模型画像/Adapter 排障入口和 API/页面证据验签入口；支持 skillId/profileKey/inputBucket/modelVersion/source 过滤 |
 | `GET /v1/failures/[id]/reverify-plan` | 登录后基于当前用户私人台账生成失败复现与 Adapter 复验计划：候选失败运行、rerunUrl、覆盖缺口、已批准 Adapter 和 triage 回写动作；不暴露原始输入输出或补丁正文 |
+| `POST /v1/failures/triage` | 审核员批量确认 FailureCase 归因、根因分类、复验覆盖和公开状态；最多 100 条，不回显归因备注原文 |
 | `POST /v1/failures/[id]/reverify-queue` | 登录后把该失败案例的私人台账复验计划放入 Redis 批量队列；按 failureCaseId+userId 去重，返回 plan 和 jobPreview，未配置 Redis 时显式 503 降级；`worker:reverify-queue` 消费后回写复验覆盖 |
 | `POST /v1/adapters/review` | 审核员批量批准/拒绝/要求修改 Adapter 草稿；批准启用 active 后自动按来源 FailureCase 查找同类私人失败运行并放入复验队列，最多 100 条，不暴露补丁正文或用户输入输出 |
 | `GET /v1/adapters` | 公开读取已批准 active Adapter 效果摘要、lift 指标、复用/复验 checklist、私人台账复验入口和 API/页面证据验签入口；支持 skillId/modelName/modelVersion/failureType/failureId/modelProfile 过滤，不暴露补丁正文或未批准草稿 |
