@@ -368,6 +368,55 @@ export function buildEnterpriseSsoAuthorizeUrl(
   }
 }
 
+export function buildEnterpriseOidcTokenRequest(
+  rawPolicy: unknown,
+  args: { code: string; callbackUrl: string },
+): { ok: true; tokenRequest: any } | { ok: false; reason: string; issues?: EnterpriseIdentityPolicyIssue[] } {
+  const policy = normalizeEnterpriseIdentityPolicy(rawPolicy)
+  const issues = validateEnterpriseIdentityPolicy(policy)
+  const blockers = issues.filter((issue) => issue.level === 'blocker')
+  if (blockers.length) return { ok: false, reason: '身份策略存在阻断项，不能换取 OIDC token', issues }
+  const sso = policy?.sso
+  if (!sso?.enabled) return { ok: false, reason: '组织未启用 SSO' }
+  const provider = String(sso.provider || '').toLowerCase()
+  if (!['oidc', 'okta', 'azuread', 'google'].includes(provider)) return { ok: false, reason: '当前只支持 OIDC 类 token exchange', issues }
+  if (!sso.clientId) return { ok: false, reason: 'SSO 缺少 clientId', issues }
+  const tokenEndpoint = sso.tokenEndpoint || (sso.issuer ? `${sso.issuer.replace(/\/$/, '')}/token` : '')
+  if (!tokenEndpoint || !isHttpsUrl(tokenEndpoint)) return { ok: false, reason: 'SSO 缺少 HTTPS tokenEndpoint', issues }
+  if (!isHttpsUrl(args.callbackUrl)) return { ok: false, reason: 'callbackUrl 必须是 HTTPS URL', issues }
+
+  return {
+    ok: true,
+    tokenRequest: publicSanitize({
+      method: 'POST',
+      tokenEndpoint,
+      contentType: 'application/x-www-form-urlencoded',
+      body: {
+        grant_type: 'authorization_code',
+        code: args.code ? '<callback_code>' : '',
+        redirect_uri: args.callbackUrl,
+        client_id: sso.clientId,
+      },
+      secretHandling:
+        '如 IdP 要求 client_secret，应在服务端密钥仓库补充并只在后端 token exchange 使用，不进入公开响应或浏览器。',
+      nextActions: [
+        {
+          label: '服务端换取 token',
+          description: '用该请求包在后端调用 tokenEndpoint；不得把 client_secret 下发到浏览器。',
+        },
+        {
+          label: '校验 ID Token',
+          description: '下一步校验 issuer、audience、exp、nonce，再读取 email / email_verified。',
+        },
+        {
+          label: '绑定组织成员',
+          description: '通过邮箱域白名单和组织成员关系后，才创建登录会话。',
+        },
+      ],
+    }),
+  }
+}
+
 export function publicEnterpriseOrganization(org: any) {
   if (!org) return null
   return {

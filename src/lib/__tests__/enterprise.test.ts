@@ -10,6 +10,7 @@ import {
   enterpriseScimTokenDigest,
   enterpriseScimUserResource,
   enterpriseIdentityPlaybook,
+  buildEnterpriseOidcTokenRequest,
   buildEnterpriseSsoAuthorizeUrl,
   signEnterpriseSsoState,
   verifyEnterpriseSsoState,
@@ -202,6 +203,50 @@ describe('enterprise — 企业 Registry 授权', () => {
         payload: { organizationId: 'org-1', redirectPath: '/console/enterprise', nonce: 'nonce-2' },
       })
     }
+  })
+
+  it('企业 OIDC token exchange 请求包不泄漏授权码或 client secret', () => {
+    const result = buildEnterpriseOidcTokenRequest({
+      sso: {
+        enabled: true,
+        provider: 'oidc',
+        issuer: 'https://idp.example.com',
+        clientId: 'client-1',
+        tokenEndpoint: 'https://idp.example.com/oauth2/v1/token',
+      },
+    }, {
+      code: 'secret-auth-code',
+      callbackUrl: 'https://hengshu.example.com/v1/enterprise/identity/callback',
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.tokenRequest).toMatchObject({
+        method: 'POST',
+        tokenEndpoint: 'https://idp.example.com/oauth2/v1/token',
+        contentType: 'application/x-www-form-urlencoded',
+        body: {
+          grant_type: 'authorization_code',
+          code: '<callback_code>',
+          redirect_uri: 'https://hengshu.example.com/v1/enterprise/identity/callback',
+          client_id: 'client-1',
+        },
+        nextActions: expect.arrayContaining([
+          expect.objectContaining({ label: '服务端换取 token' }),
+          expect.objectContaining({ label: '校验 ID Token' }),
+          expect.objectContaining({ label: '绑定组织成员' }),
+        ]),
+      })
+      expect(JSON.stringify(result.tokenRequest)).not.toContain('secret-auth-code')
+      expect(result.tokenRequest.body.client_secret).toBeUndefined()
+    }
+
+    expect(buildEnterpriseOidcTokenRequest({
+      sso: { enabled: true, provider: 'oidc', issuer: 'https://idp.example.com', clientId: 'client-1', tokenEndpoint: 'http://idp.example.com/token' },
+    }, {
+      code: 'code',
+      callbackUrl: 'https://hengshu.example.com/v1/enterprise/identity/callback',
+    })).toMatchObject({ ok: false, reason: '身份策略存在阻断项，不能换取 OIDC token' })
   })
 
   it('SCIM token 使用 sha256 digest 校验', () => {

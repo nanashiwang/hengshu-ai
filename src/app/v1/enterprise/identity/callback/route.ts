@@ -1,7 +1,9 @@
+import { getPayload } from 'payload'
+import config from '@payload-config'
 import { readEnterpriseOptionalQuery } from '@/lib/enterpriseRequest'
-import { verifyEnterpriseSsoState } from '@/lib/enterprise'
+import { buildEnterpriseOidcTokenRequest, verifyEnterpriseSsoState } from '@/lib/enterprise'
 
-// GET /v1/enterprise/identity/callback —— OIDC 回调占位：先接住 code/state，后续接 token exchange 与成员绑定。
+// GET /v1/enterprise/identity/callback —— OIDC 回调：校验 state，生成服务端 token exchange 请求包。
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const codeParam = readEnterpriseOptionalQuery(url.searchParams, 'code', 4000)
@@ -19,6 +21,16 @@ export async function GET(request: Request) {
   if (!code || !state) return Response.json({ ok: false, error: '缺少 OIDC code 或 state' }, { status: 400 })
   const stateCheck = verifyEnterpriseSsoState(state)
   if (!stateCheck.ok) return Response.json({ ok: false, error: stateCheck.reason }, { status: 400 })
+  const payload = await getPayload({ config })
+  const org = await payload.findByID({
+    collection: 'organizations' as any,
+    id: stateCheck.payload.organizationId,
+    depth: 0,
+    overrideAccess: true,
+  }).catch(() => null) as any
+  if (!org || org.status === 'suspended') return Response.json({ ok: false, error: '组织不存在或已暂停' }, { status: 404 })
+  const callbackUrl = `${url.origin}/v1/enterprise/identity/callback`
+  const tokenExchange = buildEnterpriseOidcTokenRequest(org.identityPolicy, { code, callbackUrl })
   return Response.json({
     ok: false,
     status: 'callback_received',
@@ -27,6 +39,7 @@ export async function GET(request: Request) {
     organizationId: stateCheck.payload.organizationId,
     redirectPath: stateCheck.payload.redirectPath,
     nonceReceived: Boolean(stateCheck.payload.nonce),
-    next: '已完成 state 签名校验并还原组织上下文；后续在这里完成 code 换 token、ID Token/nonce 校验、邮箱域白名单校验和组织成员绑定。',
+    tokenExchange: tokenExchange.ok ? tokenExchange.tokenRequest : { error: tokenExchange.reason, issues: tokenExchange.issues || [] },
+    next: '已完成 state 签名校验并还原组织上下文；下一步按 tokenExchange 在服务端换 token，再做 ID Token/nonce、邮箱域白名单和组织成员绑定。',
   }, { status: 501 })
 }
