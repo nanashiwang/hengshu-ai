@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { aggregateFailureKnowledge } from '@/lib/failureKnowledge'
 
 describe('failureKnowledge — 失败知识库聚合', () => {
-  it('按 skill + 输入档 + errorType 聚合，只输出摘要不依赖原文', () => {
+  it('按 skill + 输入档 + errorType + modelVersion 聚合，只输出摘要不依赖原文', () => {
     const groups = aggregateFailureKnowledge([
       {
         errorType: 'json_invalid',
@@ -32,18 +32,18 @@ describe('failureKnowledge — 失败知识库聚合', () => {
     ])
 
     expect(groups[0]).toMatchObject({
-      profileKey: 's1|500-2k|json_invalid',
+      profileKey: 's1|500-2k|json_invalid|2026-07-01',
       errorType: 'json_invalid',
       modelName: 'deepseek-chat',
       primaryInputBucket: '500-2k',
       primaryModelVersion: '2026-07-01',
-      count: 2,
+      count: 1,
       skillCount: 1,
       inputBuckets: ['500-2k'],
-      modelBreakdown: { 'deepseek-chat': 2 },
-      modelVersions: ['2026-07-01', '2026-07-02'],
-      modelVersionBreakdown: { '2026-07-01': 1, '2026-07-02': 1 },
-      sourceBreakdown: { online: 1, benchmark: 1 },
+      modelBreakdown: { 'deepseek-chat': 1 },
+      modelVersions: ['2026-07-01'],
+      modelVersionBreakdown: { '2026-07-01': 1 },
+      sourceBreakdown: { online: 1 },
     })
     expect(groups[0].meta.publicFixHint).toContain('JSON')
   })
@@ -59,12 +59,12 @@ describe('failureKnowledge — 失败知识库聚合', () => {
 
   it('同类错误按任务输入画像分组，模型只作为分布事实', () => {
     const groups = aggregateFailureKnowledge([
-      { errorType: 'format_drift', modelName: 'm1', skill: 's1', inputSizeBucket: '0-100' },
-      { errorType: 'format_drift', modelName: 'm2', skill: 's1', inputSizeBucket: '0-100' },
-      { errorType: 'format_drift', modelName: 'm2', skill: 's1', inputSizeBucket: '8k+' },
+      { errorType: 'format_drift', modelName: 'm1', modelVersion: 'v1', skill: 's1', inputSizeBucket: '0-100' },
+      { errorType: 'format_drift', modelName: 'm2', modelVersion: 'v1', skill: 's1', inputSizeBucket: '0-100' },
+      { errorType: 'format_drift', modelName: 'm2', modelVersion: 'v2', skill: 's1', inputSizeBucket: '8k+' },
     ])
     expect(groups).toHaveLength(2)
     expect(groups[0].modelBreakdown).toMatchObject({ m1: 1, m2: 1 })
-    expect(groups.map((g) => g.profileKey).sort()).toEqual(['s1|0-100|format_drift', 's1|8k+|format_drift'])
+    expect(groups.map((g) => g.profileKey).sort()).toEqual(['s1|0-100|format_drift|v1', 's1|8k+|format_drift|v2'])
   })
 })

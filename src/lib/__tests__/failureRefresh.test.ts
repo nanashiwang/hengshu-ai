@@ -12,6 +12,7 @@ describe('failureRefresh — 回流后刷新失败库', () => {
               {
                 errorType: 'json_invalid',
                 modelName: 'qwen-plus',
+                modelVersion: '2026-07-01',
                 skill: { id: 'skill-1', title: 'JSON Skill', slug: 'json-skill' },
                 inputSizeBucket: '100-500',
                 outputSizeBucket: '0-100',
@@ -20,6 +21,7 @@ describe('failureRefresh — 回流后刷新失败库', () => {
               {
                 errorType: 'json_invalid',
                 modelName: 'deepseek-chat',
+                modelVersion: '2026-07-01',
                 skill: { id: 'skill-1', title: 'JSON Skill', slug: 'json-skill' },
                 inputSizeBucket: '100-500',
                 outputSizeBucket: '0-100',
@@ -43,7 +45,7 @@ describe('failureRefresh — 回流后刷新失败库', () => {
     expect(writes[0]).toMatchObject({
       collection: 'failure-cases',
       data: {
-        profileKey: 'skill-1|100-500|json_invalid',
+        profileKey: 'skill-1|100-500|json_invalid|2026-07-01',
         errorType: 'json_invalid',
         primaryInputBucket: '100-500',
         modelBreakdown: { 'qwen-plus': 1, 'deepseek-chat': 1 },

@@ -110,8 +110,8 @@ curl http://127.0.0.1:8787/health
 | `POST /v1/runner/check` | Runner 检查本地安装 checksum 是否过期，返回“先更新→重新验签→复验回流”playbook |
 | `POST /v1/runner/report` | Runner 回流本地兼容报告；只接收指标，不接收输入/输出原文，且要求当前安装版本与 checksum 匹配 |
 | `POST /v1/certificates/verify` | 校验完整证书响应或裸 certificate 的 hash 与 ed25519 签名，并返回绑定的 Contract/Passport/基准摘要、客户复核指引和未达正式达标原因；前台 `/verify?certificateUrl=...` 可自动加载证书并验签 |
-| `GET /v1/model-profiles` | 公开读取模型画像、版本漂移、输入规模档、任务画像与 Skill 任务画像表现、回归告警、有效样本、来源权重、采用复验 checklist 和客户决策 playbook；支持 modelName/modelVersion/provider/status 过滤，并返回私人台账复验、失败库/Adapter 排障入口 |
-| `GET /v1/failures` | 公开读取脱敏失败知识库、人工归因摘要、复验覆盖、客户排障 playbook、triage checklist、私人台账复现、修复/复验建议、模型画像/Adapter 排障入口和 API/页面证据验签入口；支持 skillId/profileKey/inputBucket/modelVersion/source 过滤 |
+| `GET /v1/model-profiles` | 公开读取模型画像、版本漂移、输入规模档、任务画像与 Skill 任务画像表现（profileKey 下沉到输入档 × errorType × modelVersion / Skill × 输入档 × errorType × modelVersion）、回归告警、有效样本、来源权重、采用复验 checklist 和客户决策 playbook；支持 modelName/modelVersion/provider/status 过滤，并返回私人台账复验、失败库/Adapter 排障入口 |
+| `GET /v1/failures` | 公开读取脱敏失败知识库、人工归因摘要、复验覆盖、客户排障 playbook、triage checklist、私人台账复现、修复/复验建议、模型画像/Adapter 排障入口和 API/页面证据验签入口；失败 profileKey 按 Skill × 输入档 × errorType × modelVersion 聚合，支持 skillId/profileKey/inputBucket/modelVersion/source 过滤 |
 | `GET /v1/failures/[id]/reverify-plan` | 登录后基于当前用户私人台账生成失败复现与 Adapter 复验计划：候选失败运行、rerunUrl、覆盖缺口、已批准 Adapter 和 triage 回写动作；不暴露原始输入输出或补丁正文 |
 | `POST /v1/failures/triage` | 审核员批量确认 FailureCase 归因、根因分类、复验覆盖和公开状态；最多 100 条，不回显归因备注原文 |
 | `POST /v1/failures/[id]/reverify-queue` | 登录后把该失败案例的私人台账复验计划放入 Redis 批量队列；按 failureCaseId+userId 去重，返回 plan 和 jobPreview，未配置 Redis 时显式 503 降级；`worker:reverify-queue` 消费后回写复验覆盖 |

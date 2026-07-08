@@ -60,6 +60,7 @@ export type CompatTaskProfileSummary = {
   profileKey: string
   inputBucket: string
   errorType: string
+  modelVersion?: string | null
   count: number
   effectiveSamples: number
   successRate: number
@@ -72,6 +73,7 @@ export type CompatSkillProfileSummary = {
   skillTitle?: string | null
   inputBucket: string
   errorType: string
+  modelVersion?: string | null
   count: number
   effectiveSamples: number
   successRate: number
@@ -115,13 +117,19 @@ function summarizeInputBuckets(reports: any[], nowMs: number): CompatInputBucket
     .sort((a, b) => b.effectiveSamples - a.effectiveSamples || b.count - a.count || a.inputBucket.localeCompare(b.inputBucket))
 }
 
+function reportModelVersion(report: any): string {
+  const profile = report?.modelProfile && typeof report.modelProfile === 'object' ? report.modelProfile : null
+  return String(profile?.modelVersion || report?.modelVersion || 'unversioned').trim() || 'unversioned'
+}
+
 function summarizeTaskProfiles(reports: any[], nowMs: number, limit = 8): CompatTaskProfileSummary[] {
-  const byProfile = new Map<string, { inputBucket: string; errorType: string; count: number; wSum: number; wSuccess: number; wFormat: number }>()
+  const byProfile = new Map<string, { inputBucket: string; errorType: string; modelVersion: string; count: number; wSum: number; wSuccess: number; wFormat: number }>()
   for (const r of reports) {
     const inputBucket = String(r.inputSizeBucket || 'unknown').trim() || 'unknown'
     const errorType = r.success ? 'success' : String(r.errorType || 'unknown_error').trim() || 'unknown_error'
-    const profileKey = `${inputBucket}|${errorType}`
-    const current = byProfile.get(profileKey) || { inputBucket, errorType, count: 0, wSum: 0, wSuccess: 0, wFormat: 0 }
+    const modelVersion = reportModelVersion(r)
+    const profileKey = `${inputBucket}|${errorType}|${modelVersion}`
+    const current = byProfile.get(profileKey) || { inputBucket, errorType, modelVersion, count: 0, wSum: 0, wSuccess: 0, wFormat: 0 }
     const w = r.suppressed ? 0 : decayWeight(r.createdAt, nowMs) * sourceWeight(r.source)
     current.count++
     current.wSum += w
@@ -134,6 +142,7 @@ function summarizeTaskProfiles(reports: any[], nowMs: number, limit = 8): Compat
       profileKey,
       inputBucket: row.inputBucket,
       errorType: row.errorType,
+      modelVersion: row.modelVersion === 'unversioned' ? null : row.modelVersion,
       count: row.count,
       effectiveSamples: Math.round(row.wSum * 10) / 10,
       successRate: row.wSum > 0 ? row.wSuccess / row.wSum : 0,
@@ -153,14 +162,15 @@ function skillSummary(value: any): { id: string; slug?: string | null; title?: s
 }
 
 function summarizeSkillProfiles(reports: any[], nowMs: number, limit = 8): CompatSkillProfileSummary[] {
-  const byProfile = new Map<string, { skillId: string; skillSlug?: string | null; skillTitle?: string | null; inputBucket: string; errorType: string; count: number; wSum: number; wSuccess: number; wFormat: number }>()
+  const byProfile = new Map<string, { skillId: string; skillSlug?: string | null; skillTitle?: string | null; inputBucket: string; errorType: string; modelVersion: string; count: number; wSum: number; wSuccess: number; wFormat: number }>()
   for (const r of reports) {
     const skill = skillSummary(r.skill)
     if (!skill?.id) continue
     const inputBucket = String(r.inputSizeBucket || 'unknown').trim() || 'unknown'
     const errorType = r.success ? 'success' : String(r.errorType || 'unknown_error').trim() || 'unknown_error'
-    const profileKey = `${skill.id}|${inputBucket}|${errorType}`
-    const current = byProfile.get(profileKey) || { skillId: skill.id, skillSlug: skill.slug, skillTitle: skill.title, inputBucket, errorType, count: 0, wSum: 0, wSuccess: 0, wFormat: 0 }
+    const modelVersion = reportModelVersion(r)
+    const profileKey = `${skill.id}|${inputBucket}|${errorType}|${modelVersion}`
+    const current = byProfile.get(profileKey) || { skillId: skill.id, skillSlug: skill.slug, skillTitle: skill.title, inputBucket, errorType, modelVersion, count: 0, wSum: 0, wSuccess: 0, wFormat: 0 }
     const w = r.suppressed ? 0 : decayWeight(r.createdAt, nowMs) * sourceWeight(r.source)
     current.count++
     current.wSum += w
@@ -176,6 +186,7 @@ function summarizeSkillProfiles(reports: any[], nowMs: number, limit = 8): Compa
       skillTitle: row.skillTitle || null,
       inputBucket: row.inputBucket,
       errorType: row.errorType,
+      modelVersion: row.modelVersion === 'unversioned' ? null : row.modelVersion,
       count: row.count,
       effectiveSamples: Math.round(row.wSum * 10) / 10,
       successRate: row.wSum > 0 ? row.wSuccess / row.wSum : 0,

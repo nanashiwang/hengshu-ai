@@ -6,7 +6,7 @@ import type { FailureKnowledgeGroup } from '@/lib/failureKnowledge'
 describe('failureCase — 失败知识一等资产', () => {
   it('从聚合失败组生成脱敏 FailureCase', () => {
     const data = buildFailureCaseData({
-      profileKey: 'skill-1|100-500|json_invalid',
+      profileKey: 'skill-1|100-500|json_invalid|2026-07-01',
       errorType: 'json_invalid',
       modelName: 'qwen-plus',
       primaryModelVersion: '2026-07-01',
@@ -33,7 +33,7 @@ describe('failureCase — 失败知识一等资产', () => {
 
     expect(data).toMatchObject({
       title: '非 JSON 输出 · JSON 生成 · qwen-plus',
-      profileKey: 'skill-1|100-500|json_invalid',
+      profileKey: 'skill-1|100-500|json_invalid|2026-07-01',
       errorType: 'json_invalid',
       modelName: 'qwen-plus',
       primaryModelVersion: '2026-07-01',

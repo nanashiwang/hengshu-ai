@@ -168,10 +168,11 @@ export function aggregateFailureKnowledge(
     if (!errorType) continue
     const modelName = (r.modelName || 'unknown').trim() || 'unknown'
     const modelVersion = (r.modelVersion || '').trim()
+    const modelVersionKey = modelVersion || 'unversioned'
     const s = skillInfo(r.skill)
     const skillId = s?.id || 'unknown-skill'
     const primaryInputBucket = (r.inputSizeBucket || 'unknown-input').trim() || 'unknown-input'
-    const key = `${skillId}|${primaryInputBucket}|${errorType}`
+    const key = `${skillId}|${primaryInputBucket}|${errorType}|${modelVersionKey}`
     const g: FailureAggregate =
       groups.get(key) ||
       {
