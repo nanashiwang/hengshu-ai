@@ -13,6 +13,7 @@ describe('modelProfile — 模型画像初稿生成', () => {
         samples: 12,
         effectiveSamples: 9.5,
         sourceSummary: [{ source: 'verified', count: 6, weight: 1 }],
+        inputBucketSummary: [{ inputBucket: '500-2k', count: 4, effectiveSamples: 3.5, successRate: 0.75, formatRate: 1 }],
       },
       price: { inputPrice: 0.001, outputPrice: 0.004 },
       now: new Date('2026-07-08T00:00:00.000Z'),
@@ -27,7 +28,12 @@ describe('modelProfile — 模型画像初稿生成', () => {
       inputPrice: 0.001,
       outputPrice: 0.004,
       lastObservedAt: '2026-07-08T00:00:00.000Z',
-      capabilities: { observedSamples: 12, effectiveSamples: 9.5, sourceSummary: [{ source: 'verified', count: 6, weight: 1 }] },
+      capabilities: {
+        observedSamples: 12,
+        effectiveSamples: 9.5,
+        sourceSummary: [{ source: 'verified', count: 6, weight: 1 }],
+        inputBucketSummary: [{ inputBucket: '500-2k', count: 4, effectiveSamples: 3.5, successRate: 0.75, formatRate: 1 }],
+      },
     })
   })
 
@@ -109,7 +115,7 @@ describe('modelProfile — 模型画像初稿生成', () => {
     const history = buildDriftHistory(
       {
         knownIssues: { successRate: 0.95, formatRate: 0.9, avgLatencyMs: 800 },
-        capabilities: { observedSamples: 20 },
+        capabilities: { observedSamples: 20, inputBucketSummary: [{ inputBucket: '8k+', count: 2, effectiveSamples: 1, successRate: 0.5, formatRate: 0.5 }] },
         lastObservedAt: '2026-07-01T00:00:00.000Z',
         driftHistory: [{ observedAt: '2026-06-30T00:00:00.000Z', successRate: 0.96 }],
       },
@@ -118,8 +124,15 @@ describe('modelProfile — 模型画像初稿生成', () => {
     )
 
     expect(history).toEqual([
-      { observedAt: '2026-07-01T00:00:00.000Z', successRate: 0.95, formatRate: 0.9, avgLatencyMs: 800, samples: 20 },
-      { observedAt: '2026-07-08T00:00:00.000Z', successRate: 0.8, formatRate: 0.7, avgLatencyMs: 900, samples: 11 },
+      {
+        observedAt: '2026-07-01T00:00:00.000Z',
+        successRate: 0.95,
+        formatRate: 0.9,
+        avgLatencyMs: 800,
+        samples: 20,
+        inputBucketSummary: [{ inputBucket: '8k+', count: 2, effectiveSamples: 1, successRate: 0.5, formatRate: 0.5 }],
+      },
+      { observedAt: '2026-07-08T00:00:00.000Z', successRate: 0.8, formatRate: 0.7, avgLatencyMs: 900, samples: 11, inputBucketSummary: [] },
     ])
   })
 

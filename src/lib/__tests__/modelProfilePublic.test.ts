@@ -63,7 +63,13 @@ describe('modelProfilePublic — 公开模型画像输出', () => {
       inputPrice: 1,
       outputPrice: 2,
       platformPayAllowed: true,
-      capabilities: { observedSamples: 10, effectiveSamples: 7.5, sourceSummary: [{ source: 'benchmark', count: 3, weight: 1 }], platformRevenue: 99 },
+      capabilities: {
+        observedSamples: 10,
+        effectiveSamples: 7.5,
+        sourceSummary: [{ source: 'benchmark', count: 3, weight: 1 }],
+        inputBucketSummary: [{ inputBucket: '8k+', count: 2, effectiveSamples: 1.5, successRate: 0.5, formatRate: 1, rawInput: 'secret' }],
+        platformRevenue: 99,
+      },
       driftHistory: [{ successRate: 0.9, rawInput: 'secret' }],
       regressionAlerts: [{ reason: 'ok', outputText: 'secret' }],
     }) as any
@@ -71,7 +77,11 @@ describe('modelProfilePublic — 公开模型画像输出', () => {
       provider: 'openai',
       modelName: 'gpt-4.1-mini',
       modelVersion: '2026-07-01',
-      capabilities: { observedSamples: 10, effectiveSamples: 7.5 },
+      capabilities: {
+        observedSamples: 10,
+        effectiveSamples: 7.5,
+        inputBucketSummary: [{ inputBucket: '8k+', count: 2, effectiveSamples: 1.5, successRate: 0.5, formatRate: 1 }],
+      },
       driftHistory: [{ successRate: 0.9 }],
       failuresUrl: '/failures?modelName=gpt-4.1-mini&modelVersion=2026-07-01',
       adaptersUrl: '/v1/adapters?modelName=gpt-4.1-mini&modelVersion=2026-07-01',
@@ -80,6 +90,7 @@ describe('modelProfilePublic — 公开模型画像输出', () => {
         decision: 'review',
         adoptionChecklist: expect.arrayContaining([
           expect.stringContaining('modelName + modelVersion'),
+          expect.stringContaining('inputBucket'),
           expect.stringContaining('私人台账'),
         ]),
         nextActions: expect.arrayContaining([
@@ -101,6 +112,7 @@ describe('modelProfilePublic — 公开模型画像输出', () => {
     expect(row.outputPrice).toBeUndefined()
     expect(row.platformPayAllowed).toBeUndefined()
     expect(row.capabilities.platformRevenue).toBeUndefined()
+    expect(JSON.stringify(row.capabilities.inputBucketSummary)).not.toContain('secret')
     expect(row.regressionAlerts).toEqual([{ reason: 'ok' }])
   })
 

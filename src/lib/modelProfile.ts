@@ -59,12 +59,16 @@ export function modelRegressionAlerts(previous: any, next: ReturnType<typeof bui
 
 function metricSnapshotFromProfile(profile: any, observedAt?: string) {
   const issues = profile?.knownIssues && typeof profile.knownIssues === 'object' ? profile.knownIssues : {}
+  const capabilities = profile?.capabilities && typeof profile.capabilities === 'object' ? profile.capabilities : {}
   return {
     observedAt: observedAt || profile?.lastObservedAt || profile?.updatedAt || profile?.createdAt || new Date().toISOString(),
     successRate: metricNumber((issues as any).successRate),
     formatRate: metricNumber((issues as any).formatRate),
     avgLatencyMs: metricNumber((issues as any).avgLatencyMs),
-    samples: metricNumber((profile?.capabilities as any)?.observedSamples) ?? 0,
+    samples: metricNumber((capabilities as any).observedSamples) ?? 0,
+    inputBucketSummary: Array.isArray((capabilities as any).inputBucketSummary)
+      ? (capabilities as any).inputBucketSummary
+      : [],
   }
 }
 
@@ -106,6 +110,7 @@ export function buildModelProfileData(args: BuildModelProfileArgs) {
       observedSamples: stat?.samples || 0,
       effectiveSamples: stat?.effectiveSamples ?? stat?.samples ?? 0,
       sourceSummary: stat?.sourceSummary || [],
+      inputBucketSummary: stat?.inputBucketSummary || [],
     },
     freshness: {
       lastObservedAt: now.toISOString(),
@@ -116,7 +121,14 @@ export function buildModelProfileData(args: BuildModelProfileArgs) {
       comparedWithPrevious: false,
       status: 'new_or_uncompared',
     },
-    driftHistory: [] as Array<{ observedAt: string; successRate: number | null; formatRate: number | null; avgLatencyMs: number | null; samples: number | null }>,
+    driftHistory: [] as Array<{
+      observedAt: string
+      successRate: number | null
+      formatRate: number | null
+      avgLatencyMs: number | null
+      samples: number | null
+      inputBucketSummary?: GlobalModelStat['inputBucketSummary']
+    }>,
     lastObservedAt: now.toISOString(),
   }
 }

@@ -49,6 +49,13 @@ function sourceWeight(source: unknown): number {
 }
 
 export type CompatSourceSummary = { source: string; count: number; weight: number }
+export type CompatInputBucketSummary = {
+  inputBucket: string
+  count: number
+  effectiveSamples: number
+  successRate: number
+  formatRate: number
+}
 
 function summarizeSources(reports: any[]): CompatSourceSummary[] {
   const bySource = new Map<string, { count: number; weight: number }>()
@@ -61,6 +68,30 @@ function summarizeSources(reports: any[]): CompatSourceSummary[] {
   return Array.from(bySource.entries())
     .map(([source, row]) => ({ source, count: row.count, weight: row.weight }))
     .sort((a, b) => b.weight - a.weight || b.count - a.count || a.source.localeCompare(b.source))
+}
+
+function summarizeInputBuckets(reports: any[], nowMs: number): CompatInputBucketSummary[] {
+  const byBucket = new Map<string, { count: number; wSum: number; wSuccess: number; wFormat: number }>()
+  for (const r of reports) {
+    const inputBucket = String(r.inputSizeBucket || '').trim()
+    if (!inputBucket) continue
+    const current = byBucket.get(inputBucket) || { count: 0, wSum: 0, wSuccess: 0, wFormat: 0 }
+    const w = r.suppressed ? 0 : decayWeight(r.createdAt, nowMs) * sourceWeight(r.source)
+    current.count++
+    current.wSum += w
+    if (r.success) current.wSuccess += w
+    if (r.formatValid) current.wFormat += w
+    byBucket.set(inputBucket, current)
+  }
+  return Array.from(byBucket.entries())
+    .map(([inputBucket, row]) => ({
+      inputBucket,
+      count: row.count,
+      effectiveSamples: Math.round(row.wSum * 10) / 10,
+      successRate: row.wSum > 0 ? row.wSuccess / row.wSum : 0,
+      formatRate: row.wSum > 0 ? row.wFormat / row.wSum : 0,
+    }))
+    .sort((a, b) => b.effectiveSamples - a.effectiveSamples || b.count - a.count || a.inputBucket.localeCompare(b.inputBucket))
 }
 
 async function fetchRecentCompatReports(
@@ -305,6 +336,7 @@ export interface GlobalModelStat {
   samples: number
   effectiveSamples?: number
   sourceSummary?: CompatSourceSummary[]
+  inputBucketSummary?: CompatInputBucketSummary[]
 }
 export async function aggregateModelsGlobal(
   payload: Payload,
@@ -361,6 +393,7 @@ export async function aggregateModelsGlobal(
       samples: a.n,
       effectiveSamples: Math.round(a.wSum * 10) / 10,
       sourceSummary: summarizeSources(a.reports),
+      inputBucketSummary: summarizeInputBuckets(a.reports, now),
     })
   }
   return out

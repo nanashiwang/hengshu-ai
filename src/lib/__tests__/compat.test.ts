@@ -118,4 +118,25 @@ describe('compat — 活体数据窗口', () => {
     expect(row.successRate).toBeGreaterThan(0.8)
     expect(row.successRate).toBeLessThan(0.9)
   })
+
+  it('全站模型画像按输入规模档输出细粒度成功率', async () => {
+    const now = new Date().toISOString()
+    const payload = {
+      find: async () => ({
+        docs: [
+          { modelName: 'qwen-plus', inputSizeBucket: '0-100', success: true, formatValid: true, source: 'verified', createdAt: now },
+          { modelName: 'qwen-plus', inputSizeBucket: '0-100', success: false, formatValid: true, source: 'verified', createdAt: now },
+          { modelName: 'qwen-plus', inputSizeBucket: '8k+', success: false, formatValid: false, source: 'community', createdAt: now },
+        ],
+        hasNextPage: false,
+      }),
+    }
+
+    const [row] = await aggregateModelsGlobal(payload as any)
+
+    expect(row.inputBucketSummary).toEqual([
+      { inputBucket: '0-100', count: 2, effectiveSamples: 2, successRate: 0.5, formatRate: 1 },
+      { inputBucket: '8k+', count: 1, effectiveSamples: 0.5, successRate: 0, formatRate: 0 },
+    ])
+  })
 })

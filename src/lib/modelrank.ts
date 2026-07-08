@@ -10,6 +10,7 @@ export interface ModelRankRow {
   samples: number // 报告样本数（低样本不参与排名主榜）
   effectiveSamples?: number // 衰减×来源权重后的有效样本量，只用于解释，不参与收益排序
   sourceSummary?: Array<{ source: string; count: number; weight: number }>
+  inputBucketSummary?: Array<{ inputBucket: string; count: number; effectiveSamples: number; successRate: number; formatRate: number }>
   officialInputPrice?: number // 元/1k token（官方报价快照，缺失则不计入性价比）
   officialOutputPrice?: number
 }
