@@ -76,6 +76,12 @@ export function ConsoleSidebar({
           >
             Adapter 评审
           </Link>
+          <Link
+            href="/console/failures/triage"
+            className={itemCls(pathname === '/console/failures/triage')}
+          >
+            失败归因
+          </Link>
           {/* 分组为二级标题；组内集合在内容区以横向子标题 Tab 切换 */}
           {ADMIN_GROUPS.map((g) => {
             const href = `/console/admin/${g.items[0].slug}`
