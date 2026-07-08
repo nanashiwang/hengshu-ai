@@ -36,9 +36,12 @@ export interface RunSkillArgs {
   modelVersion?: string
   forceModel?: string // 固定模型、不路由、不 fallback（多模型对比用）
   skipAggregate?: boolean // 跳过 Skill 指标更新与贡献值发放（对比模式避免污染聚合）
+  skipCompatReport?: boolean // 企业私有评测等只留台账/审计，不写公开兼容证据
   benchmark?: boolean // 系统评测(#8)：不限频/不预检/不扣费/不排除自跑，compat 报告 source=benchmark
   benchmarkCase?: { id?: string; title?: string; expectedOutputShape?: unknown; requiredOutputPaths?: unknown; expectedTextIncludes?: unknown; minScore?: number }
   organizationId?: string // 企业 Registry 运行上下文；传入后强制校验组织批准和模型白名单
+  enterprisePrivateBenchmark?: boolean // 企业管理员私有准入评测：调用方已完成 Registry 鉴权/策略检查
+  enterpriseRegistryId?: string
   rerunOf?: string // 私人台账：从哪条历史运行换模型重跑
   rerunFromModel?: string
 }
@@ -138,31 +141,35 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
 
   let enterpriseRegistryId: string | undefined
   if (args.organizationId && user?.id && skill?.id) {
-    const ent = await canUseEnterpriseSkill(payload, {
-      userId: user.id,
-      organizationId: args.organizationId,
-      skillId: String(skill.id),
-      modelName: model,
-      input,
-      routeMode: mode,
-      byok: !!userApiKey,
-    })
-    if (!ent.ok) {
-      await recordEnterpriseRunAudit(payload, {
+    if (args.enterprisePrivateBenchmark && args.enterpriseRegistryId) {
+      enterpriseRegistryId = args.enterpriseRegistryId
+    } else {
+      const ent = await canUseEnterpriseSkill(payload, {
+        userId: user.id,
         organizationId: args.organizationId,
-        actorId: user.id,
         skillId: String(skill.id),
-        skillVersionId: version?.id ? String(version.id) : undefined,
-        runId,
         modelName: model,
-        modelVersion: args.modelVersion,
-        deniedReason: ent.reason,
-        errorCode: 'ENTERPRISE_POLICY_DENIED',
         input,
-      }).catch((e) => payload.logger?.error(`写入企业审计失败: ${(e as Error).message}`))
-      return { ok: false, runId, errorCode: 'ENTERPRISE_POLICY_DENIED', errors: [ent.reason] }
+        routeMode: mode,
+        byok: !!userApiKey,
+      })
+      if (!ent.ok) {
+        await recordEnterpriseRunAudit(payload, {
+          organizationId: args.organizationId,
+          actorId: user.id,
+          skillId: String(skill.id),
+          skillVersionId: version?.id ? String(version.id) : undefined,
+          runId,
+          modelName: model,
+          modelVersion: args.modelVersion,
+          deniedReason: ent.reason,
+          errorCode: 'ENTERPRISE_POLICY_DENIED',
+          input,
+        }).catch((e) => payload.logger?.error(`写入企业审计失败: ${(e as Error).message}`))
+        return { ok: false, runId, errorCode: 'ENTERPRISE_POLICY_DENIED', errors: [ent.reason] }
+      }
+      enterpriseRegistryId = ent.registryId
     }
-    enterpriseRegistryId = ent.registryId
   }
 
   const selectedModelProfile = await ensureModelProfile(payload, model, args.modelProvider, args.modelVersion).catch(() => undefined)
@@ -513,7 +520,7 @@ export async function runSkill(args: RunSkillArgs): Promise<RunSkillResult> {
     // benchmark(系统评测)：source=benchmark、不排除自跑(平台代作者评测)、不受单用户封顶；否则 online 用户回流
     const reportSource = args.benchmark ? 'benchmark' : 'online'
     // isRealCall=真实尝试（网关已配+有 Key）：成功则 result 非 mock，失败则 result 为 null 但仍是真实尝试
-    if (isRealCall && (args.benchmark || !isSelfRun) && !(result && result.mocked)) {
+    if (isRealCall && !args.skipCompatReport && (args.benchmark || !isSelfRun) && !(result && result.mocked)) {
       try {
         // 抗刷：同一用户对同一 (skill, model) 的 online 报告最多计 3 条（benchmark 无此限，系统可信）
         let allow = true

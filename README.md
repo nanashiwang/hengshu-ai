@@ -23,7 +23,7 @@
 
 - **下载→运行主线**：Skill Spec v1 · 发布快照+checksum · Runner 设备码登录 · 本地安装/离线运行（CLI 六命令）· 安装响应返回“验签→本地跑→脱敏回流→更新”playbook · 兼容报告回流形成兼容分 · 贡献值规则引擎 · 求术悬赏闭环
 - **信任模型**：manifest ed25519 签名 + Runner 验签 + `/v1/keys` 公钥分发 + `/verify` 分数快照公开验签 + `/v1/evidence/verify` 证据快照验签 + `/v1/anchors/verify` 外锚 manifest 验签 + `/v1/skills/[slug]/certificate` 达标证书 + `/v1/certificates/verify` 证书验签（完整响应或裸证书均可）
-- **护城河数据层**：逐模型/版本兼容真值表（时间衰减 + 来源权重 + 置信度，并展示有效样本）· ModelProfile 漂移曲线/输入规模档/任务画像/Skill任务画像表现 · 黄金样例逐条打分 · 在线运行回流喂评测数据 · 失败知识库（`/failures` + 归因看板，含人工归因/审核员批量确认/复验覆盖/证据验签/私人台账复验计划）· 从失败案例生成待评审 Adapter 草稿并直达前台评审看板，批准后自动复验入队 · 企业内 Passport/达标证书 · 企业准入批量重审 · 企业策略包/身份策略骨架 · 企业失败知识库 · 来源分级权重
+- **护城河数据层**：逐模型/版本兼容真值表（时间衰减 + 来源权重 + 置信度，并展示有效样本）· ModelProfile 漂移曲线/输入规模档/任务画像/Skill任务画像表现 · 黄金样例逐条打分 · 在线运行回流喂评测数据 · 失败知识库（`/failures` + 归因看板，含人工归因/审核员批量确认/复验覆盖/证据验签/私人台账复验计划）· 从失败案例生成待评审 Adapter 草稿并直达前台评审看板，批准后自动复验入队 · 企业内 Passport/达标证书 · 企业准入批量重审 · 企业私有评测（不进公开榜/公开 Passport）· 企业策略包/身份策略骨架 · 企业失败知识库 · 来源分级权重
 - **创作者供给**：前台发布 Skill（`/console/skills/new`，引导上传包→Contract→Passport→适配维护，并返回发布后维护 playbook）· AI 合规审核通过自动上架/未通过转人工 · GitHub README / Claude Skill / GPTs 配置导入为待审 Imported Skill · 批量来源导入 worker · 我的作品展示 Contract/Passport/证书预览/失败库入口 · 未发布 Skill 作者可预览
 - **经济闭环（骨架）**：credit 台账 + 贡献值兑换池（`/console/exchange`，默认关闭待接真值）
 - **前台**：首页发现（先跑必备 Skill）· Skill 市场（必备筛选/分类/排序/搜索）· 详情（Passport/Contract diff筛选/兼容矩阵/评论/版本）· 可信榜（公开排序口径，非下载量热榜）· 悬赏区 · 控制台 · Adapter 评审看板/批量评审/自动复验 · 失败归因看板 · 订阅更新通知 · 移动端导航 · SEO(sitemap/robots/metadata)
@@ -122,6 +122,7 @@ curl http://127.0.0.1:8787/health
 | `GET /v1/runs` | 当前用户私人运行台账导出；支持 skillId/model/modelVersion/routeMode/success/formatValid/trustedCompatible/rerunOf 过滤；默认不含输入/输出，返回模型画像、可信兼容标记、失败库排障入口和换模型重跑 playbook，`includeIO=1` 仅本人导出原文并写审计 |
 | `POST /v1/runs/[id]/rerun` | 用私人台账中的历史输入换模型重跑，可携带 modelProvider/modelVersion，写入重跑血缘 |
 | `GET /v1/enterprise/registry/[id]/passport` | 企业内读取已批准/可审 Skill 的 Passport、治理状态、批准时采用基线、基线漂移告警、证书状态摘要、准入治理 checklist、审计/失败库入口和绑定 Contract 的达标证书 |
+| `POST /v1/enterprise/registry/[id]/benchmark` | 企业管理员/审批员用组织内私有样例评测 Registry Skill；校验模型白名单和审计策略，只写 SkillRuns + 企业审计，不进入公开兼容报告、公开可信榜或公开 Passport，响应不回显输入输出 |
 | `GET/POST /v1/enterprise/registry/review-required` | 企业管理员/审批员批量列出需重审的 Registry，并可批量刷新采用基线、标记已复核或接受风险；用于 Contract/版本/Passport/证书漂移后的企业准入治理 |
 | `GET /v1/enterprise/identity/authorize` | 生成企业 OIDC SSO 登录发起包：authorizeUrl、callbackUrl、HMAC state/nonce、IdP 跳转和回调接入指引；callback 先校验 state、还原组织上下文并返回服务端 tokenExchange 请求包，可选校验 ID Token claims、JWKS RS256 签名、邮箱域和 active 成员绑定；校验通过后签发 Payload 登录会话 cookie |
 | `GET /v1/enterprise/audit/export` | 企业审计 CSV 导出，含模型版本治理元数据，不含输入输出原文 |
