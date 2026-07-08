@@ -12,6 +12,7 @@ describe('skillContractPublic — 公开 Skill Contract 摘要', () => {
       inputSchema: { input: { type: 'text' } },
       outputSchema: { result: { type: 'text' } },
       permissions: { network: false },
+      contractStatus: 'breaking_change',
       routePolicy: {
         default: 'balanced',
         rawPrompt: 'secret',
@@ -31,9 +32,35 @@ describe('skillContractPublic — 公开 Skill Contract 摘要', () => {
     expect(row.examplesCount).toBe(2)
     expect(row.changelogHash).toHaveLength(64)
     expect(row.routePolicy).toEqual({ default: 'balanced', fallback: ['qwen-plus'] })
+    expect(row.playbook).toMatchObject({
+      customerValue: expect.stringContaining('可复核能力契约'),
+      decision: 'review_before_upgrade',
+      reviewChecklist: expect.arrayContaining([expect.stringContaining('输入 schema')]),
+      nextActions: expect.arrayContaining([
+        expect.objectContaining({ label: '核对契约 Hash' }),
+        expect.objectContaining({ label: '检查破坏性变更' }),
+      ]),
+    })
     expect(row.routePolicy.dataDriven).toBeUndefined()
     expect(row.systemPrompt).toBeUndefined()
     expect(row.promptTemplate).toBeUndefined()
     expect(row.changelog).toBeUndefined()
+    expect(JSON.stringify(row.playbook)).not.toContain('secret')
+  })
+
+  it('带 slug 时输出证书验签与试跑入口', () => {
+    const row = publicSkillContract({ id: 'v1', version: '1.0.0', contractStatus: 'compatible_change' }, { slug: 'writer' }) as any
+
+    expect(row.playbook.decision).toBe('safe_to_trial')
+    expect(row.playbook.nextActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: '核对契约 Hash', href: '/v1/skills/writer/contract' }),
+        expect.objectContaining({
+          label: '验签达标证书',
+          href: '/verify?certificateUrl=%2Fv1%2Fskills%2Fwriter%2Fcertificate',
+        }),
+        expect.objectContaining({ label: '试跑或重跑', href: '/skills/writer/run' }),
+      ]),
+    )
   })
 })

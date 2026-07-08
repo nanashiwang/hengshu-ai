@@ -27,6 +27,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
 
   return Response.json({
     skill: { id: String(skill.id), slug: String(skill.slug), title: String(skill.title) },
-    contract: publicSkillContract(version),
+    contract: publicSkillContract(version, { slug: skill.slug }),
   })
 }
