@@ -70,6 +70,12 @@ export function ConsoleSidebar({
           >
             举报处置
           </Link>
+          <Link
+            href="/console/adapters/review"
+            className={itemCls(pathname === '/console/adapters/review')}
+          >
+            Adapter 评审
+          </Link>
           {/* 分组为二级标题；组内集合在内容区以横向子标题 Tab 切换 */}
           {ADMIN_GROUPS.map((g) => {
             const href = `/console/admin/${g.items[0].slug}`
