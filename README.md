@@ -105,6 +105,7 @@ curl http://127.0.0.1:8787/health
 | `GET /v1/skills/[slug]/contract` | 公开读取当前未废弃版本的 Skill 能力契约摘要、contractHash、prompt hash、availableBaselines、可选 compareVersion/compareVersionId 基线 diff 和客户复核 playbook；详情页已可视化 diff，不暴露 prompt 正文 |
 | `GET /v1/skills/[slug]/passport` | 公开读取清洗后的 Skill Passport、黄金样例摘要、可信兼容运行计数、证据验签入口、最新证据验签摘要和客户复核 playbook |
 | `GET /v1/skills/[slug]/certificate` | 公开读取 Skill 达标证书，绑定当前未废弃 Contract 摘要、Passport、可信兼容运行计数、黄金样例逐条摘要和证据验签状态，含 `certificateHash`、签名、公开公钥、`statusReasons` 和 Passport 证据验签页面入口 |
+| `GET /v1/skills/[slug]/evidence-package` | 导出公开 Skill 证据包 JSON：Contract/Passport/证书/证据快照验签/外锚复核指引；不内嵌 prompt、examples、输入输出、token 或 Adapter 补丁正文 |
 | `POST /v1/skills/[slug]/run` | 在线试跑 Skill；请求可携带 `modelProvider` / `modelVersion`，运行回流会绑定对应 ModelProfile、FailureCase 和 Adapter 版本链路 |
 | `POST /v1/runner/install` | Runner 安装公开 Skill，返回冻结 manifest、checksum 和“验签→本地运行→脱敏回流→更新”playbook |
 | `POST /v1/runner/check` | Runner 检查本地安装 checksum 是否过期，返回“先更新→重新验签→复验回流”playbook |
@@ -126,6 +127,7 @@ curl http://127.0.0.1:8787/health
 | `POST /v1/enterprise/registry/[id]/benchmark` | 企业管理员/审批员用组织内私有样例评测 Registry Skill；校验模型白名单和审计策略，只写 SkillRuns + 企业审计，不进入公开兼容报告、公开可信榜或公开 Passport，响应不回显输入输出 |
 | `GET/POST /v1/enterprise/registry/review-required` | 企业管理员/审批员批量列出需重审的 Registry，并可批量刷新采用基线、标记已复核或接受风险；用于 Contract/版本/Passport/证书漂移后的企业准入治理 |
 | `GET /v1/enterprise/overview` | 企业治理总览：聚合 Registry 状态、准入待办、SSO/SCIM readiness、成员、审计、失败知识库和导出入口，不暴露输入输出、tokenDigest 或 prompt |
+| `GET /v1/enterprise/registry/[id]/evidence-package` | 导出企业准入证据包 JSON，绑定 Registry、采用基线漂移、Contract、Passport、证书和验签指引，不暴露员工输入输出或 secret |
 | `GET /v1/enterprise/identity/authorize` | 生成企业 OIDC SSO 登录发起包：authorizeUrl、callbackUrl、HMAC state/nonce、IdP 跳转和回调接入指引；callback 先校验 state、还原组织上下文并返回服务端 tokenExchange 请求包，可选校验 ID Token claims、JWKS RS256 签名、邮箱域和 active 成员绑定；校验通过后签发 Payload 登录会话 cookie |
 | `GET /v1/enterprise/audit/export` | 企业审计 CSV 导出，含模型版本治理元数据，不含输入输出原文 |
 | `GET /v1/enterprise/failures` | 从企业审计元数据聚合组织内失败知识库和模型版本分布 |

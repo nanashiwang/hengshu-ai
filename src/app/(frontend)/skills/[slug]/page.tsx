@@ -476,6 +476,14 @@ export default async function SkillDetailPage({
                     Contract
                   </a>
                   <a
+                    href={`/v1/skills/${skill.slug}/evidence-package`}
+                    className="ml-2 text-[var(--accent)] hover:underline"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    证据包
+                  </a>
+                  <a
                     href={`/verify?certificateUrl=${encodeURIComponent(`/v1/skills/${encodeURIComponent(String(skill.slug))}/certificate`)}`}
                     className="ml-2 text-[var(--accent)] hover:underline"
                   >

@@ -72,10 +72,12 @@
 | `/v1/skills/[slug]/contract` | 公开读取 Skill 能力契约摘要、contractHash、prompt hash、availableBaselines、可选 compareVersion/compareVersionId 基线 diff 和客户复核 playbook；详情页同步展示 diff；diff 对 prompt 只给 hash，对 routePolicy 去除 dataDriven，不暴露 prompt 正文。 |
 | `/v1/skills/[slug]/passport` | 公开读取清洗后的 Skill Passport + 黄金样例摘要 + 可信兼容运行计数 + API/页面证据验签入口 + 最新证据验签摘要 + 客户复核 playbook。 |
 | `/v1/skills/[slug]/certificate` | 公开读取 Skill 达标证书：合并 Contract 摘要、Passport、可信兼容运行计数、黄金样例逐条摘要、证据快照验签状态，输出 certificateHash、ed25519 签名、Passport 证据验签页面入口和未达正式达标原因。 |
+| `/v1/skills/[slug]/evidence-package` | 公开 Skill 证据包 JSON；包含 Contract/Passport/证书/证据快照验签摘要、packageHash、可选 packageSignature 和外锚复核指引；不内嵌 prompt、examples、输入输出、token 或 Adapter 补丁正文。 |
 | `/v1/enterprise/audit/export` | 企业审计 CSV 导出，含模型版本治理元数据，不含输入输出原文。 |
 | `/v1/enterprise/failures` | 组织内失败知识库，只从企业审计元数据聚合，含模型版本分布，不暴露输入输出。 |
 | `/v1/enterprise/registry` + `/console/enterprise` | GET 返回内置策略模板；POST 更新准入/白名单/策略包并冻结 Contract/Passport/证书采用基线，返回治理 checklist/playbook；控制台新增治理总览，聚合 Registry 状态、准入待办、身份 readiness、成员、审计、失败知识库和导出入口；也可编辑 Registry 策略模板并直达组织内 Passport/证书状态、审计导出（含模型版本）和企业失败知识库。 |
 | `/v1/enterprise/overview` | 企业治理总览 API；按组织返回 Registry 状态、准入重审摘要、SSO/SCIM readiness、成员分布、近期审计、失败知识库 Top 组和治理入口，不暴露 prompt、输入输出、tokenDigest 或 Adapter 补丁。 |
+| `/v1/enterprise/registry/[id]/evidence-package` | 企业准入证据包 JSON；绑定 Registry、采用基线漂移、Contract、Passport、证书、证据快照和外锚复核指引，不暴露员工输入输出、secret、tokenDigest 或补丁正文。 |
 | `/v1/enterprise/registry/review-required` | 企业准入批量重审入口；按组织列出 Contract、版本、Passport、证书相对 adoptionBaseline 的漂移，支持筛选 reapproval_required / review_recommended / missing_baseline，并可批量刷新基线、标记已复核或接受风险；只返回脱敏摘要，不暴露 prompt、输入输出或 Adapter 补丁。 |
 | `/v1/enterprise/identity` + `/console/enterprise` | 更新组织身份策略：邮箱域白名单、requireSso、OIDC provider/issuer/clientId/discoveryUrl、SCIM baseUrl/tokenDigest；保存时阻断非 HTTPS URL、缺失 OIDC 必填项和非法 tokenDigest；返回身份接入 playbook，串起域名白名单、SSO 测试、SCIM 同步和成员边界复核。 |
 | `/v1/enterprise/identity/authorize` + `/v1/enterprise/identity/callback` | 企业 OIDC SSO 连接器骨架；authorize 返回 IdP 跳转 URL、callbackUrl、HMAC state/nonce 和接入 playbook；callback 校验 state 后还原 organizationId/redirectPath，并返回不含明文授权码的 tokenExchange 请求包；可选 `id_token` 会校验 issuer/audience/exp/nonce/email/email_verified、JWKS RS256 签名、邮箱域白名单和组织 active 成员绑定；通过后签发 Payload 登录 cookie，可用 `json=1` 查看调试响应，否则 303 跳转 redirectPath。 |

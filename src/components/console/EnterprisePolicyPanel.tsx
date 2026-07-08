@@ -223,6 +223,14 @@ export function EnterprisePolicyPanel({
               组织内 Passport / 证书状态
             </a>
             <a
+              href={`/v1/enterprise/registry/${registry.id}/evidence-package`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-[var(--border)] px-3 py-1 text-[var(--accent)] hover:border-[var(--accent)]"
+            >
+              导出证据包
+            </a>
+            <a
               href={`/v1/enterprise/audit/export?organizationId=${encodeURIComponent(registry.organization)}`}
               target="_blank"
               rel="noreferrer"
