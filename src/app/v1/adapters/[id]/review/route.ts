@@ -33,6 +33,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       status: row.status || 'draft',
       reviewStatus: row.reviewStatus || normalized.reviewStatus,
       reviewedAt: row.reviewedAt || null,
+      autoReverify: row.autoReverify || null,
     },
   })
 }

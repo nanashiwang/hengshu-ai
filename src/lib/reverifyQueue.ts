@@ -11,7 +11,7 @@ export interface ReverifyJob {
   candidateRunIds: string[]
   adapterIds: string[]
   enqueuedAt: string
-  reason: 'manual' | 'triage'
+  reason: 'manual' | 'triage' | 'adapter_approved'
   attempts?: number
   lastError?: string
 }
