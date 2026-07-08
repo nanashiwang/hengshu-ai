@@ -1,4 +1,5 @@
 import { readEnterpriseOptionalQuery } from '@/lib/enterpriseRequest'
+import { verifyEnterpriseSsoState } from '@/lib/enterprise'
 
 // GET /v1/enterprise/identity/callback —— OIDC 回调占位：先接住 code/state，后续接 token exchange 与成员绑定。
 export async function GET(request: Request) {
@@ -16,11 +17,16 @@ export async function GET(request: Request) {
   const error = errorParam
   if (error) return Response.json({ ok: false, error, errorDescription: errorDescriptionParam || null }, { status: 400 })
   if (!code || !state) return Response.json({ ok: false, error: '缺少 OIDC code 或 state' }, { status: 400 })
+  const stateCheck = verifyEnterpriseSsoState(state)
+  if (!stateCheck.ok) return Response.json({ ok: false, error: stateCheck.reason }, { status: 400 })
   return Response.json({
     ok: false,
     status: 'callback_received',
     codeReceived: true,
     stateReceived: true,
-    next: '后续在这里完成 state/nonce 校验、code 换 token、邮箱域白名单校验和组织成员绑定。',
+    organizationId: stateCheck.payload.organizationId,
+    redirectPath: stateCheck.payload.redirectPath,
+    nonceReceived: Boolean(stateCheck.payload.nonce),
+    next: '已完成 state 签名校验并还原组织上下文；后续在这里完成 code 换 token、ID Token/nonce 校验、邮箱域白名单校验和组织成员绑定。',
   }, { status: 501 })
 }

@@ -1,5 +1,5 @@
 import type { Payload } from 'payload'
-import { createHash, randomBytes, timingSafeEqual } from 'crypto'
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto'
 import { bucketSize } from './compat'
 import { aggregateFailureKnowledge, type FailureKnowledgeGroup, type FailureKnowledgeReport } from './failureKnowledge'
 import { resolveRuntimeEnv } from './deploymentSettings'
@@ -243,6 +243,49 @@ export function enterpriseIdentityPlaybook(rawPolicy: unknown) {
   }
 }
 
+export type EnterpriseSsoStatePayload = {
+  organizationId: string
+  redirectPath: string
+  nonce: string
+  issuedAt: number
+  expiresAt: number
+}
+
+function b64url(input: string | Buffer) {
+  return Buffer.from(input).toString('base64url')
+}
+
+function hmacState(payload: string, secret = process.env.PAYLOAD_SECRET || 'dev-secret') {
+  return createHmac('sha256', secret).update(payload).digest('base64url')
+}
+
+export function signEnterpriseSsoState(payload: EnterpriseSsoStatePayload, secret?: string) {
+  const body = b64url(JSON.stringify(payload))
+  return `${body}.${hmacState(body, secret)}`
+}
+
+export function verifyEnterpriseSsoState(
+  state: string,
+  options: { secret?: string; now?: number } = {},
+): { ok: true; payload: EnterpriseSsoStatePayload } | { ok: false; reason: string } {
+  const [body, sig] = String(state || '').split('.')
+  if (!body || !sig) return { ok: false, reason: 'SSO state 格式无效' }
+  const expected = hmacState(body, options.secret)
+  const a = Buffer.from(sig)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return { ok: false, reason: 'SSO state 签名无效' }
+  let payload: EnterpriseSsoStatePayload
+  try {
+    payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'))
+  } catch {
+    return { ok: false, reason: 'SSO state 载荷无效' }
+  }
+  const now = options.now ?? Date.now()
+  if (!payload.organizationId || !payload.nonce || !payload.redirectPath) return { ok: false, reason: 'SSO state 缺少组织上下文' }
+  if (!Number.isFinite(payload.expiresAt) || payload.expiresAt < now) return { ok: false, reason: 'SSO state 已过期' }
+  return { ok: true, payload }
+}
+
 export function buildEnterpriseSsoAuthorizeUrl(
   rawPolicy: unknown,
   args: { organizationId: string; baseUrl: string; redirectPath?: string; state?: string; nonce?: string },
@@ -275,8 +318,15 @@ export function buildEnterpriseSsoAuthorizeUrl(
   const redirectPath = String(args.redirectPath || '/console/enterprise').startsWith('/')
     ? String(args.redirectPath || '/console/enterprise').slice(0, 300)
     : '/console/enterprise'
-  const state = args.state || randomBytes(18).toString('base64url')
   const nonce = args.nonce || randomBytes(18).toString('base64url')
+  const issuedAt = Date.now()
+  const state = args.state || signEnterpriseSsoState({
+    organizationId: args.organizationId,
+    redirectPath,
+    nonce,
+    issuedAt,
+    expiresAt: issuedAt + 10 * 60 * 1000,
+  })
   const url = new URL(authorizationEndpoint)
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('client_id', sso.clientId)
@@ -310,7 +360,7 @@ export function buildEnterpriseSsoAuthorizeUrl(
         },
         {
           label: '回调后校验组织身份',
-          description: '后续 callback 会校验 state/nonce、code 换 token、邮箱域白名单和组织成员关系。',
+          description: 'callback 会先校验 HMAC state 并还原组织上下文；后续再补 code 换 token、邮箱域白名单和组织成员关系。',
           href: '/v1/enterprise/identity/callback',
         },
       ],

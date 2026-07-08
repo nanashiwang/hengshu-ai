@@ -11,6 +11,8 @@ import {
   enterpriseScimUserResource,
   enterpriseIdentityPlaybook,
   buildEnterpriseSsoAuthorizeUrl,
+  signEnterpriseSsoState,
+  verifyEnterpriseSsoState,
   deprovisionEnterpriseScimMember,
   evaluateEnterpriseIdentityPolicy,
   enterprisePolicyFromTemplate,
@@ -159,6 +161,47 @@ describe('enterprise — 企业 Registry 授权', () => {
       organizationId: 'org-1',
       baseUrl: 'https://hengshu.example.com',
     })).toMatchObject({ ok: false, reason: expect.stringContaining('OIDC') })
+  })
+
+  it('企业 SSO state 使用 HMAC 签名，callback 可还原组织上下文并拒绝篡改/过期', () => {
+    const payload = {
+      organizationId: 'org-1',
+      redirectPath: '/console/enterprise',
+      nonce: 'nonce-1',
+      issuedAt: 1000,
+      expiresAt: 61_000,
+    }
+    const state = signEnterpriseSsoState(payload, 'test-secret')
+    expect(verifyEnterpriseSsoState(state, { secret: 'test-secret', now: 2_000 })).toEqual({ ok: true, payload })
+    expect(verifyEnterpriseSsoState(`${state}x`, { secret: 'test-secret', now: 2_000 })).toMatchObject({
+      ok: false,
+      reason: 'SSO state 签名无效',
+    })
+    expect(verifyEnterpriseSsoState(state, { secret: 'test-secret', now: 62_000 })).toMatchObject({
+      ok: false,
+      reason: 'SSO state 已过期',
+    })
+
+    const generated = buildEnterpriseSsoAuthorizeUrl({
+      sso: {
+        enabled: true,
+        provider: 'oidc',
+        issuer: 'https://idp.example.com',
+        clientId: 'client-1',
+      },
+    }, {
+      organizationId: 'org-1',
+      baseUrl: 'https://hengshu.example.com/v1/enterprise/identity/authorize',
+      nonce: 'nonce-2',
+    })
+    expect(generated.ok).toBe(true)
+    if (generated.ok) {
+      expect(generated.authorize.state).toContain('.')
+      expect(verifyEnterpriseSsoState(generated.authorize.state)).toMatchObject({
+        ok: true,
+        payload: { organizationId: 'org-1', redirectPath: '/console/enterprise', nonce: 'nonce-2' },
+      })
+    }
   })
 
   it('SCIM token 使用 sha256 digest 校验', () => {
