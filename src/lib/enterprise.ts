@@ -640,6 +640,7 @@ export function publicEnterpriseRegistry(registry: any) {
     usageScope: registry.usageScope || null,
     riskNotes: registry.riskNotes || null,
     auditPolicy: publicSanitize(registry.auditPolicy || null),
+    adoptionBaseline: publicSanitize(registry.adoptionBaseline || null),
     playbook: publicSanitize(enterpriseRegistryPlaybook(registry)),
     createdAt: registry.createdAt || undefined,
     updatedAt: registry.updatedAt || undefined,
@@ -1011,6 +1012,75 @@ export async function canManageOrganization(
   return { ok: false, reason: '你没有组织管理权限' }
 }
 
+
+export async function buildEnterpriseAdoptionBaseline(
+  payload: Payload,
+  args: { skill: any; skillId: string; skillVersionId?: string; passportId?: string; certificateSummary?: any },
+) {
+  const version = args.skillVersionId
+    ? await payload.findByID({ collection: 'skill-versions' as any, id: args.skillVersionId, depth: 0, overrideAccess: true }).catch(() => null)
+    : await resolveCurrentSkillVersionForPublicEvidence(payload, args.skill).catch(() => null)
+  const passport = args.passportId
+    ? await payload.findByID({ collection: 'skill-passports' as any, id: args.passportId, depth: 0, overrideAccess: true }).catch(() => null)
+    : (
+        await payload.find({
+          collection: 'skill-passports' as any,
+          where: { and: [{ skill: { equals: args.skillId } }, { status: { equals: 'current' } }] },
+          sort: '-lastVerifiedAt',
+          limit: 1,
+          depth: 0,
+          overrideAccess: true,
+        }).catch(() => ({ docs: [] as any[] }))
+      ).docs[0]
+
+  const contractSummary = version
+    ? publicSkillContract(version, { slug: args.skill?.slug })
+    : null
+  return publicSanitize({
+    capturedAt: new Date().toISOString(),
+    skill: {
+      id: String(args.skillId),
+      slug: args.skill?.slug || null,
+      title: args.skill?.title || args.skill?.name || null,
+    },
+    contract: contractSummary
+      ? {
+          versionId: String((version as any).id || ''),
+          version: (version as any).version || null,
+          contractHash: contractSummary.contractHash || null,
+          systemPromptHash: contractSummary.systemPromptHash || null,
+          promptTemplateHash: contractSummary.promptTemplateHash || null,
+          minimumRunnerVersion: contractSummary.minRunnerVersion || null,
+          permissions: contractSummary.permissions || [],
+          recommendedModels: contractSummary.recommendedModels || [],
+        }
+      : null,
+    passport: passport
+      ? {
+          id: String((passport as any).id || ''),
+          status: (passport as any).status || null,
+          skillClass: (passport as any).skillClass || null,
+          trustScore: (passport as any).trustScore ?? null,
+          evidenceHash: (passport as any).evidenceHash || null,
+          lastVerifiedAt: (passport as any).lastVerifiedAt || null,
+          trustedCompatibleRunCount: (passport as any).trustedCompatibleRunCount ?? null,
+        }
+      : null,
+    certificate: args.certificateSummary
+      ? {
+          status: args.certificateSummary.status || null,
+          statusReasons: args.certificateSummary.statusReasons || [],
+          certificateHash: args.certificateSummary.certificateHash || null,
+          signed: Boolean(args.certificateSummary.signed),
+        }
+      : null,
+    governance: {
+      value: '企业批准时冻结采用基线；后续 Skill/Contract/Passport 变化时，用该快照判断是否需要重新审批。',
+      reapproveWhen: ['contractHash_changed', 'passport_stale_or_failed', 'certificate_status_worse', 'model_allowlist_changed'],
+    },
+  })
+}
+
 const REGISTRY_STATUSES = new Set(['pending', 'approved', 'restricted', 'disabled', 'deprecated'])
 
 export async function upsertEnterpriseRegistry(
@@ -1107,6 +1177,13 @@ export async function upsertEnterpriseRegistry(
     auditPolicy: mergeEnterprisePolicy(args.policyTemplate, args.auditPolicy),
   }
   if (approvalStatus === 'approved') {
+    data.adoptionBaseline = await buildEnterpriseAdoptionBaseline(payload, {
+      skill,
+      skillId: args.skillId,
+      skillVersionId: args.skillVersionId,
+      passportId: args.passportId,
+      certificateSummary,
+    })
     data.approvedBy = args.actorId
     data.approvedAt = new Date().toISOString()
   }

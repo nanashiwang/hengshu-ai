@@ -12,6 +12,7 @@ import {
   enterpriseIdentityPlaybook,
   buildEnterpriseOidcTokenRequest,
   buildEnterpriseSsoAuthorizeUrl,
+  buildEnterpriseAdoptionBaseline,
   verifyEnterpriseOidcIdTokenClaims,
   signEnterpriseSsoState,
   verifyEnterpriseSsoState,
@@ -680,6 +681,75 @@ describe('enterprise — 企业 Registry 授权', () => {
         auditPolicy: { maxInputChars: 3000, allowedInputBuckets: ['0-100', '100-500', '500-2k'], allowedRouteModes: ['balanced', 'fast'] },
       },
     })
+  })
+
+  it('企业批准时冻结 Contract / Passport / 证书采用基线', async () => {
+    const version = {
+      id: 'ver-1',
+      skill: 'skill-1',
+      version: '1.0.0',
+      contractHash: 'contract-hash-1',
+      systemPrompt: 'system secret',
+      promptTemplate: 'prompt secret',
+      minRunnerVersion: '0.1.0',
+      permissions: [{ name: 'network', description: 'no' }],
+      recommendedModels: ['qwen-plus'],
+      status: 'active',
+    }
+    const payload = {
+      findByID: async (args: any) => {
+        if (args.collection === 'skill-versions') return version
+        return null
+      },
+      find: async (args: any) => {
+        if (args.collection === 'skill-passports') {
+          return {
+            docs: [{
+              id: 'passport-1',
+              skill: 'skill-1',
+              status: 'current',
+              skillClass: 'verified',
+              trustScore: 92,
+              evidenceHash: 'evidence-hash-1',
+              lastVerifiedAt: '2026-07-08T00:00:00.000Z',
+              trustedCompatibleRunCount: 12,
+              rawReports: [{ input: 'secret' }],
+            }],
+          }
+        }
+        return { docs: [] }
+      },
+    }
+
+    const baseline = await buildEnterpriseAdoptionBaseline(payload as any, {
+      skill: { id: 'skill-1', slug: 'demo', title: 'Demo', currentVersion: 'ver-1' },
+      skillId: 'skill-1',
+      certificateSummary: { status: 'passed', statusReasons: [], certificateHash: 'cert-hash-1', signed: true },
+    })
+
+    expect(baseline).toMatchObject({
+      skill: { id: 'skill-1', slug: 'demo', title: 'Demo' },
+      contract: {
+        versionId: 'ver-1',
+        version: '1.0.0',
+        contractHash: 'contract-hash-1',
+        minimumRunnerVersion: '0.1.0',
+        recommendedModels: ['qwen-plus'],
+      },
+      passport: {
+        id: 'passport-1',
+        status: 'current',
+        skillClass: 'verified',
+        trustScore: 92,
+        evidenceHash: 'evidence-hash-1',
+        trustedCompatibleRunCount: 12,
+      },
+      certificate: { status: 'passed', certificateHash: 'cert-hash-1', signed: true },
+      governance: {
+        reapproveWhen: expect.arrayContaining(['contractHash_changed', 'passport_stale_or_failed']),
+      },
+    })
+    expect(JSON.stringify(baseline)).not.toContain('secret')
   })
 
   it('企业批准前会要求确认未达标证书风险', async () => {

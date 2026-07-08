@@ -58,6 +58,12 @@ export const EnterpriseRegistries: CollectionConfig = {
     { name: 'usageScope', type: 'textarea', label: '使用范围' },
     { name: 'riskNotes', type: 'textarea', label: '风险备注' },
     { name: 'auditPolicy', type: 'json', label: '审计策略' },
+    {
+      name: 'adoptionBaseline',
+      type: 'json',
+      label: '企业采用基线',
+      admin: { description: '批准时冻结 Contract/Passport/证书摘要，用于后续版本漂移和重新审批判断。' },
+    },
   ],
   hooks: {
     beforeValidate: [
