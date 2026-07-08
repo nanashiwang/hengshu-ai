@@ -8,6 +8,8 @@ import {
   evaluateTrustedAnchorPublication,
   evaluateExternalTimestampReceipt,
   buildAnchorTimestampRequest,
+  anchorTimestampIssuerFromEnv,
+  issueAnchorTimestamp,
   MAX_ANCHOR_VERIFY_LINES,
   normalizeAnchorLines,
   parseTrustedAnchorPublishers,
@@ -193,6 +195,57 @@ describe('anchorVerify — 公开外锚 bundle 校验', () => {
     })
     expect(evaluateExternalTimestampReceipt({ externalTimestamp: { receiptHash } }, 'tampered')).toMatchObject({
       status: 'mismatch',
+    })
+  })
+
+
+  it('调用已配置 TSA 服务签发真实时间戳回执并生成 manifestPatch', async () => {
+    const manifest = {
+      version: 1,
+      generatedAt: '2026-07-08T00:00:00.000Z',
+      entries: 1,
+      chainHead: 'chain-head',
+      fileHash: 'file-hash',
+    }
+    const calls: any[] = []
+    const result = await issueAnchorTimestamp(manifest, {
+      endpoint: 'https://tsa.example.com/stamp',
+      bearerToken: 'secret-token',
+      provider: 'tsa-example',
+      timeoutMs: 1000,
+    }, async (url, init) => {
+      calls.push({ url, init })
+      return new Response('timestamp receipt', {
+        status: 200,
+        headers: { 'content-type': 'text/plain', 'x-timestamp': '2026-07-08T00:00:01.000Z', 'x-receipt-url': 'https://tsa.example.com/r/1' },
+      })
+    })
+
+    const receiptHash = createHash('sha256').update('timestamp receipt').digest('hex')
+    expect(result).toMatchObject({
+      ok: true,
+      externalTimestamp: {
+        provider: 'tsa-example',
+        timestamp: '2026-07-08T00:00:01.000Z',
+        receiptUrl: 'https://tsa.example.com/r/1',
+        receiptHash,
+      },
+      manifestPatch: { externalTimestamp: { receiptHash } },
+      receipt: { encoding: 'utf8', body: 'timestamp receipt', sha256: receiptHash },
+    })
+    expect(calls[0].url).toBe('https://tsa.example.com/stamp')
+    expect(calls[0].init.headers.Authorization).toBe('Bearer secret-token')
+    expect(JSON.parse(calls[0].init.body).imprint).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('TSA 签发只允许 HTTPS 配置，避免把时间戳服务变成 SSRF 出口', async () => {
+    expect(anchorTimestampIssuerFromEnv({ ANCHOR_TSA_URL: 'https://tsa.example.com', ANCHOR_TSA_PROVIDER: 'digicert' })).toMatchObject({
+      endpoint: 'https://tsa.example.com',
+      provider: 'digicert',
+    })
+    await expect(issueAnchorTimestamp({ version: 1 }, { endpoint: 'http://127.0.0.1:9999' })).resolves.toMatchObject({
+      ok: false,
+      reason: 'ANCHOR_TSA_URL 必须是 HTTPS',
     })
   })
 

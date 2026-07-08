@@ -119,6 +119,110 @@ export function buildAnchorTimestampRequest(manifest: any, provider = 'rfc3161')
   }
 }
 
+
+export type AnchorTimestampIssuerConfig = {
+  endpoint?: string
+  bearerToken?: string
+  provider?: string
+  timeoutMs?: number
+}
+
+function safeTsaProvider(value?: string) {
+  return String(value || 'external_tsa').trim().slice(0, 80) || 'external_tsa'
+}
+
+export function anchorTimestampIssuerFromEnv(env: Record<string, string | undefined> = process.env): AnchorTimestampIssuerConfig {
+  return {
+    endpoint: env.ANCHOR_TSA_URL || env.ANCHOR_TIMESTAMP_URL,
+    bearerToken: env.ANCHOR_TSA_BEARER || env.ANCHOR_TIMESTAMP_BEARER,
+    provider: env.ANCHOR_TSA_PROVIDER || env.ANCHOR_TIMESTAMP_PROVIDER || 'external_tsa',
+    timeoutMs: Number(env.ANCHOR_TSA_TIMEOUT_MS || env.ANCHOR_TIMESTAMP_TIMEOUT_MS || 5000),
+  }
+}
+
+function validateTsaEndpoint(endpoint?: string): { ok: true; url: URL } | { ok: false; reason: string } {
+  if (!endpoint) return { ok: false, reason: '未配置 ANCHOR_TSA_URL' }
+  try {
+    const url = new URL(endpoint)
+    if (url.protocol !== 'https:') return { ok: false, reason: 'ANCHOR_TSA_URL 必须是 HTTPS' }
+    return { ok: true, url }
+  } catch {
+    return { ok: false, reason: 'ANCHOR_TSA_URL 无效' }
+  }
+}
+
+function receiptBodyForResponse(contentType: string, buffer: ArrayBuffer) {
+  const bytes = Buffer.from(buffer)
+  const isText = /^text\//i.test(contentType) || /json|xml|pem|pkcs7|timestamp/i.test(contentType)
+  return {
+    bytes: bytes.length,
+    body: isText ? bytes.toString('utf8') : bytes.toString('base64'),
+    encoding: isText ? 'utf8' : 'base64',
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+  }
+}
+
+export async function issueAnchorTimestamp(
+  manifest: any,
+  config: AnchorTimestampIssuerConfig,
+  fetchImpl: typeof fetch = fetch,
+): Promise<
+  | { ok: true; timestampRequest: ReturnType<typeof buildAnchorTimestampRequest>; externalTimestamp: any; receipt: any; manifestPatch: any }
+  | { ok: false; reason: string; timestampRequest: ReturnType<typeof buildAnchorTimestampRequest> }
+> {
+  const timestampRequest = buildAnchorTimestampRequest(manifest, safeTsaProvider(config.provider))
+  const endpoint = validateTsaEndpoint(config.endpoint)
+  if (!endpoint.ok) return { ok: false, reason: endpoint.reason, timestampRequest }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), Math.min(Math.max(Number(config.timeoutMs || 5000), 1000), 30_000))
+  try {
+    const res = await fetchImpl(endpoint.url.toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, application/timestamp-reply, application/octet-stream, text/plain;q=0.8',
+        ...(config.bearerToken ? { Authorization: `Bearer ${config.bearerToken}` } : {}),
+      },
+      body: JSON.stringify({
+        provider: timestampRequest.provider,
+        hashAlgorithm: timestampRequest.hashAlgorithm,
+        imprint: timestampRequest.imprint,
+        imprintSource: timestampRequest.imprintSource,
+        manifestSummary: timestampRequest.manifestSummary,
+      }),
+      signal: controller.signal,
+    })
+    const contentType = res.headers.get('content-type') || 'application/octet-stream'
+    const receipt = receiptBodyForResponse(contentType, await res.arrayBuffer())
+    if (!res.ok) return { ok: false, reason: `TSA 服务返回 ${res.status}`, timestampRequest }
+    const timestamp = res.headers.get('x-timestamp') || new Date().toISOString()
+    const receiptUrl = res.headers.get('x-receipt-url') || undefined
+    const externalTimestamp = {
+      provider: timestampRequest.provider,
+      timestamp,
+      ...(receiptUrl ? { receiptUrl } : {}),
+      receiptHash: receipt.sha256,
+    }
+    return {
+      ok: true,
+      timestampRequest,
+      externalTimestamp,
+      manifestPatch: { externalTimestamp },
+      receipt: {
+        contentType,
+        bytes: receipt.bytes,
+        encoding: receipt.encoding,
+        body: receipt.body,
+        sha256: receipt.sha256,
+      },
+    }
+  } catch (e) {
+    return { ok: false, reason: `TSA 请求失败：${(e as Error).message}`, timestampRequest }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export type AnchorTrustedPublicationResult =
   | { status: 'not_declared'; reason: string }
   | { status: 'unconfigured'; reason: string }
