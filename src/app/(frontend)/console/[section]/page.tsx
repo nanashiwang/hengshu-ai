@@ -6,6 +6,7 @@ import { formatCost, formatLatency, timeAgo } from '@/lib/format'
 import { Section, Empty } from '@/components/console/ConsoleUI'
 import { Pagination } from '@/components/Pagination'
 import { CopyButton } from '@/components/CopyButton'
+import { BulkRerunPanel } from '@/components/console/BulkRerunPanel'
 import { RerunButton } from '@/components/console/RerunButton'
 import { MarkNotificationsRead } from '@/components/console/MarkNotificationsRead'
 import { RevokeRunnerButton } from '@/components/console/RevokeRunnerButton'
@@ -261,6 +262,19 @@ export default async function ConsoleSection({
       (s, r) => s + (r.savedAmount || 0),
       0,
     )
+    const visibleRunIds = (runs.docs as any[]).map((r) => String(r.id))
+    const visibleRecommendedModels = [
+      ...new Set(
+        (runs.docs as any[]).flatMap((r) =>
+          typeof r.skill === 'object' &&
+          r.skill?.currentVersion &&
+          typeof r.skill.currentVersion === 'object' &&
+          Array.isArray(r.skill.currentVersion?.recommendedModels?.cloud)
+            ? r.skill.currentVersion.recommendedModels.cloud
+            : [],
+        ),
+      ),
+    ].map((m) => String(m))
     body = (
       <div className="space-y-3">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-4 py-3 text-xs text-[var(--muted)]">
@@ -389,6 +403,12 @@ export default async function ConsoleSection({
               （相比默认模型的成本估算，作为台账参考）
             </span>
           </div>
+        )}
+        {runs.docs.length > 0 && (
+          <BulkRerunPanel
+            runIds={visibleRunIds}
+            recommendedModels={visibleRecommendedModels}
+          />
         )}
         {runs.docs.length === 0 ? (
           <Empty>

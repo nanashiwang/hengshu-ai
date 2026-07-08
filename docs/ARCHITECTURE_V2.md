@@ -11,7 +11,7 @@
 | SkillVersion / Skill Contract | `src/collections/SkillVersions.ts`、`src/lib/skillContract.ts`、`src/lib/skillContractPublic.ts` | 已有 prompt、input/output schema、permissions、examples、recommended models、routePolicy；自动生成 `contractHash`，并标记初始/兼容/破坏性变更；公开 Contract 只输出 hash/schema/权限摘要、可选基线 diff 和客户复核 playbook，Skill 详情页可视化并筛选破坏性/兼容字段变化，prompt/examples/changelog 原文按字段权限隐藏。 |
 | Manifest 快照 | `src/collections/SkillArtifacts.ts` | 发布时冻结 manifest/checksum/signature；原始集合仅后台可读，公开下载走 `/v1/skills/[slug]/manifest`；无 manifest 走人工审核。 |
 | Runner | `runner/hengshu.mjs`、`src/lib/runnerInstallPlaybook.ts`、`src/lib/runnerUpdatePlaybook.ts`、`src/app/v1/runner/install/route.ts` | 支持安装、本地运行、验签和兼容报告回流；安装/检查更新响应返回“验签 → 本地运行 → 脱敏回流 → 更新/复验”的客户指引，避免把 Runner 只做成下载器。 |
-| SkillRuns 私人台账 | `src/collections/SkillRuns.ts`、`src/app/v1/runs/route.ts`、`src/app/v1/runs/[id]/rerun/route.ts` | 输入/输出加密；记录模型、成本、延迟、错误；支持多维筛选导出、换模型一键重跑、重跑血缘，并为失败运行输出模型画像/失败库排障入口。 |
+| SkillRuns 私人台账 | `src/collections/SkillRuns.ts`、`src/app/v1/runs/route.ts`、`src/app/v1/runs/[id]/rerun/route.ts`、`src/app/v1/runs/rerun/route.ts`、`src/lib/privateRunRerun.ts` | 输入/输出加密；记录模型、成本、延迟、错误；支持多维筛选导出、单条/批量换模型重跑、`rerunOf` 血缘，并为失败运行输出模型画像/失败库排障入口；批量重跑响应只回脱敏摘要，不回显输入/输出。 |
 | CompatReports 活体数据 | `src/collections/CompatReports.ts`、`src/lib/compat.ts` | 脱敏兼容报告；时间衰减 + 来源权重聚合；优先按 `modelProfile`/版本分组；前台展示有效样本与来源权重摘要。 |
 | SkillPassport | `src/collections/SkillPassports.ts`、`src/lib/passport.ts`、`src/lib/passportRefresh.ts`、`src/lib/passportPublic.ts` | 随 Runner/online/benchmark 回流自动刷新；写入 evidenceHash 和证据快照；原始集合仅后台可读，公开读取走脱敏 Passport API，并返回“看当前性/可信分 → 验签证据/证书 → 查 Contract → 用自己模型试跑”的客户复核 playbook。 |
 | ModelProfile | `src/collections/ModelProfiles.ts`、`src/lib/modelProfile.ts`、`src/lib/modelProfilePublic.ts` | 支持 modelName + modelVersion；刷新 worker；记录 `driftHistory` 漂移曲线、inputBucket 表现和 taskProfile 表现；回归/漂移告警；保留有效样本与来源权重；原始集合仅后台可读，公开读取走脱敏模型画像 API，并返回采用复验 checklist 与私人台账复验入口。 |
@@ -60,8 +60,8 @@
 | `/console` | 个人控制台概览；展示已安装 Skill、Runner、私人台账、兼容贡献，并突出私人运行台账的总运行、成功、格式有效、可信兼容和换模型重跑。 |
 | `/console/skills/new` | 创作者发布页；按“上传包 → 生成 Contract → 刷新 Passport → 适配维护”解释发布闭环，并提示 manifest、schema、示例、权限和推荐模型会影响 Passport/证书质量；提交成功后展示 Contract/Passport/证书/失败库维护 playbook；待审阶段证据入口按作者预览口径展示。 |
 | `/console/skills` | 我的作品；每个 Skill 展示发布状态、可信兼容运行数、Contract 状态、Passport 可信分，并直达 Contract、Passport、证书/预览、失败库/Adapter。 |
-| `/console/runs` | 私人运行台账；页面按 Skill/模型/路由/成功/格式/可信兼容/重跑来源筛选；查看输入/输出；导出账本指标或本人输入/输出并沿用筛选；推荐模型或自定义 OpenAI 兼容模型名重跑；重跑血缘；展示重跑前后成本/延迟/成功结果对比；失败运行可直达模型画像和失败库；顶部解释“历史输入 → 换模型重跑 → 省钱回执 → 失败修复”的切换成本闭环。 |
-| `/v1/runs` | 当前用户私人运行台账导出 API；支持 skillId/model/modelVersion/routeMode/success/formatValid/trustedCompatible/rerunOf 过滤；默认只导出账本指标，同时返回 `modelProfileUrl`、`trustedCompatible`、失败运行的 `failureKnowledgeUrl` 与换模型重跑 playbook；`includeIO=1` 时仅本人导出输入/输出；导出动作写入审计日志。 |
+| `/console/runs` | 私人运行台账；页面按 Skill/模型/路由/成功/格式/可信兼容/重跑来源筛选；查看输入/输出；导出账本指标或本人输入/输出并沿用筛选；推荐模型或自定义 OpenAI 兼容模型名单条重跑，也可批量重跑当前页；重跑血缘；展示重跑前后成本/延迟/成功结果对比；失败运行可直达模型画像和失败库；顶部解释“历史输入 → 换模型重跑 → 省钱回执 → 失败修复”的切换成本闭环。 |
+| `/v1/runs` + `/v1/runs/rerun` | 当前用户私人运行台账导出与批量重跑 API；导出支持 skillId/model/modelVersion/routeMode/success/formatValid/trustedCompatible/rerunOf 过滤，默认只导出账本指标，同时返回 `modelProfileUrl`、`trustedCompatible`、失败运行的 `failureKnowledgeUrl` 与换模型重跑 playbook；`includeIO=1` 时仅本人导出输入/输出；批量重跑逐条校验本人归属并写 `rerunOf`，响应只返回脱敏运行摘要；导出/批量重跑动作写入审计日志。 |
 | `/docs` | 面向用户的模块化功能说明；首页按“找 Skill / 本地 Runner / 发布 / 私人台账 / 公开验签 / 企业 Registry”六条路径直达关键入口。 |
 | `/verify` | 解释分数快照、达标证书、证据快照、外锚包四类证据链和客户复核路径；分数快照验签列表 + 达标证书在线验签表单（支持 certificateUrl 自动加载、展示绑定 Contract 与准入复核指引）+ 证据快照在线验签表单（支持 query 参数直达并展示 targetSummary）+ 外锚包在线校验表单；可粘贴证书、score/evidence JSONL、manifest、可信发布目标和时间戳 receipt，并展示外锚可信等级、复核清单和下一步处理建议。 |
 | `/v1/evidence/verify` | 公开验证已知 Passport/FailureCase/Adapter 证据快照；必须带 `targetType` 和 `targetId`，返回公开脱敏 `targetSummary`、payloadHash 和签名状态，不允许匿名枚举全部证据快照。 |
