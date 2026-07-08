@@ -83,7 +83,7 @@
 | `/v1/adapters` | 公开读取已批准 active Adapter 的 lift 效果摘要、复用/复验 checklist、私人台账复验入口、模型画像入口和 API/页面证据验签入口；支持 skillId/modelName/modelVersion/failureType/failureId/modelProfile 过滤，不暴露 prompt/schema/decoding 补丁正文、未批准草稿或停用补丁。 |
 | `/v1/failures/[id]/triage` | 审核员为失败案例写入人工归因、根因分类和复验覆盖；公开失败库只展示脱敏摘要。 |
 | `/v1/failures/[id]/reverify-plan` | 登录用户基于自己的私人台账生成候选失败运行、rerunUrl、覆盖缺口和已批准 Adapter 复验动作；不返回原始输入输出或补丁正文。 |
-| `/v1/failures/[id]/reverify-queue` + `worker:reverify-queue` | 登录用户把 reverify-plan 放入 Redis 批量复验队列；按 failureCaseId+userId 去重，返回 plan、queued 状态和 jobPreview；worker 消费候选历史运行、沿用私人台账输入重跑、回写 verificationCoverage；未配置 Redis 时显式 503 降级。 |
+| `/v1/failures/[id]/reverify-queue` + `worker:reverify-queue` | 登录用户把 reverify-plan 放入 Redis 批量复验队列；按 failureCaseId+userId 去重，返回 plan、queued 状态和 jobPreview；worker 消费候选历史运行、沿用私人台账输入重跑、失败有限重试并回写 verificationCoverage；未配置 Redis 时显式 503 降级。 |
 | `/console/failures/triage` | 审核员前台失败归因看板；集中查看待归因 FailureCase、模型/版本/输入档、影响范围和复验覆盖，可写入根因分类与脱敏归因备注。 |
 | `/v1/failures/[id]/adapter` | 从失败案例生成 Adapter 待评审草稿；只有审核员通过 `/console/adapters/review` 或后台批准后才能启用 active。 |
 | `/console/adapters/review` + `/v1/adapters/review` | 审核员前台 Adapter 评审看板；集中查看待评审草稿、来源 FailureCase、模型/版本、lift 摘要和私人台账复验入口，可单条或批量批准启用、要求修改或拒绝。 |

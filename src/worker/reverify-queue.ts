@@ -1,11 +1,12 @@
 import 'dotenv/config'
 import { getPayload } from 'payload'
 import config from '../payload.config'
-import { dequeueReverifyJobWithClient, getReverifyRedisClient, releaseReverifyDedupeWithClient } from '../lib/reverifyQueue'
+import { dequeueReverifyJobWithClient, getReverifyRedisClient, releaseReverifyDedupeWithClient, requeueReverifyJobWithClient } from '../lib/reverifyQueue'
 import { processReverifyJob } from '../lib/reverifyWorker'
 
 const DEFAULT_MAX_JOBS = 10
 const DEFAULT_MAX_RUNS_PER_JOB = 5
+const DEFAULT_MAX_RETRIES = 2
 
 async function main() {
   const payload = await getPayload({ config })
@@ -17,6 +18,7 @@ async function main() {
 
   const maxJobs = Math.max(1, Number(process.env.REVERIFY_QUEUE_MAX_JOBS || DEFAULT_MAX_JOBS))
   const maxRuns = Math.max(1, Number(process.env.REVERIFY_MAX_RUNS_PER_JOB || DEFAULT_MAX_RUNS_PER_JOB))
+  const maxRetries = Math.max(0, Number(process.env.REVERIFY_MAX_RETRIES || DEFAULT_MAX_RETRIES))
   let processed = 0
   let skipped = 0
   let failed = 0
@@ -35,8 +37,13 @@ async function main() {
       if (result.attempted === 0) skipped++
     } catch (e) {
       failed++
-      await releaseReverifyDedupeWithClient(client, job).catch(() => undefined)
-      payload.logger.error(`复验队列失败 failure=${job.failureCaseId} user=${job.userId}: ${(e as Error).message}`)
+      const retry = await requeueReverifyJobWithClient(client, job, (e as Error).message, maxRetries).catch(() => ({ requeued: false, attempts: job.attempts || 0, exhausted: true }))
+      if (retry.requeued) {
+        payload.logger.warn(`复验队列失败后重试 failure=${job.failureCaseId} user=${job.userId}: attempt=${retry.attempts}/${maxRetries} error=${(e as Error).message}`)
+      } else {
+        await releaseReverifyDedupeWithClient(client, job).catch(() => undefined)
+        payload.logger.error(`复验队列失败且重试耗尽 failure=${job.failureCaseId} user=${job.userId}: ${(e as Error).message}`)
+      }
     }
   }
 

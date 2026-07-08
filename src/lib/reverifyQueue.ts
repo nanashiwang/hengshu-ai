@@ -12,6 +12,8 @@ export interface ReverifyJob {
   adapterIds: string[]
   enqueuedAt: string
   reason: 'manual' | 'triage'
+  attempts?: number
+  lastError?: string
 }
 
 type RedisClientLike = {
@@ -71,6 +73,7 @@ function cleanIds(values: unknown[]): string[] {
 }
 
 export function normalizeReverifyJob(job: ReverifyJob): ReverifyJob {
+  const attempts = Math.max(0, Number(job.attempts || 0))
   return {
     failureCaseId: String(job.failureCaseId || '').trim(),
     userId: String(job.userId || '').trim(),
@@ -78,6 +81,8 @@ export function normalizeReverifyJob(job: ReverifyJob): ReverifyJob {
     adapterIds: cleanIds(job.adapterIds || []),
     enqueuedAt: job.enqueuedAt || new Date().toISOString(),
     reason: job.reason || 'manual',
+    ...(attempts > 0 ? { attempts } : {}),
+    ...(job.lastError ? { lastError: String(job.lastError).slice(0, 500) } : {}),
   }
 }
 
@@ -107,6 +112,24 @@ export async function dequeueReverifyJobWithClient(client: RedisClientLike): Pro
 
 export async function releaseReverifyDedupeWithClient(client: RedisClientLike, job: Pick<ReverifyJob, 'failureCaseId' | 'userId'>): Promise<void> {
   await client.del(dedupeKey(job))
+}
+
+export async function requeueReverifyJobWithClient(
+  client: RedisClientLike,
+  job: ReverifyJob,
+  error: string,
+  maxRetries: number,
+): Promise<{ requeued: boolean; attempts: number; exhausted: boolean }> {
+  const normalized = normalizeReverifyJob(job)
+  const attempts = normalized.attempts || 0
+  if (attempts >= maxRetries) return { requeued: false, attempts, exhausted: true }
+  const nextJob = normalizeReverifyJob({
+    ...normalized,
+    attempts: attempts + 1,
+    lastError: error,
+  })
+  await client.rPush(QUEUE_KEY, JSON.stringify(nextJob))
+  return { requeued: true, attempts: nextJob.attempts || 0, exhausted: false }
 }
 
 export async function enqueueReverifyJob(

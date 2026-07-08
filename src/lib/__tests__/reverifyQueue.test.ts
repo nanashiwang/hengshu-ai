@@ -4,6 +4,7 @@ import {
   enqueueReverifyJobWithClient,
   normalizeReverifyJob,
   releaseReverifyDedupeWithClient,
+  requeueReverifyJobWithClient,
 } from '@/lib/reverifyQueue'
 
 function fakeRedis() {
@@ -99,5 +100,33 @@ describe('reverifyQueue — 失败库私人台账复验队列', () => {
 
     expect(normalized.candidateRunIds).toHaveLength(100)
     expect(normalized.adapterIds).toHaveLength(100)
+  })
+
+  it('worker 失败会带 attempts/lastError 重新入队，耗尽后不再重试', async () => {
+    const redis = fakeRedis()
+    const job = {
+      failureCaseId: 'failure-1',
+      userId: 'user-1',
+      candidateRunIds: ['run-1'],
+      adapterIds: [],
+      enqueuedAt: '2026-07-08T00:00:00.000Z',
+      reason: 'manual' as const,
+    }
+
+    await expect(requeueReverifyJobWithClient(redis, job, 'gateway timeout', 2)).resolves.toEqual({
+      requeued: true,
+      attempts: 1,
+      exhausted: false,
+    })
+    await expect(dequeueReverifyJobWithClient(redis)).resolves.toMatchObject({
+      failureCaseId: 'failure-1',
+      attempts: 1,
+      lastError: 'gateway timeout',
+    })
+    await expect(requeueReverifyJobWithClient(redis, { ...job, attempts: 2 }, 'still bad', 2)).resolves.toEqual({
+      requeued: false,
+      attempts: 2,
+      exhausted: true,
+    })
   })
 })

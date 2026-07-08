@@ -94,7 +94,7 @@ curl http://127.0.0.1:8787/health
 | `npm run worker:verify-score-anchors` | 校验分数外锚 JSONL + manifest 签名 |
 | `npm run worker:export-evidence-anchors` | 导出证据快照外锚 JSONL + 自签 manifest（可带第三方发布/时间戳声明 env） |
 | `npm run worker:verify-evidence-anchors` | 校验证据快照外锚 JSONL + manifest 签名 + 第三方声明格式；可信发布目标可在部署设置配置，公开 API 可校验命中状态和时间戳 receiptHash |
-| `npm run worker:reverify-queue` | 消费失败库私人台账复验队列，按候选历史运行自动重跑并回写 verificationCoverage |
+| `npm run worker:reverify-queue` | 消费失败库私人台账复验队列，按候选历史运行自动重跑并回写 verificationCoverage；失败按 REVERIFY_MAX_RETRIES 有限重试 |
 | `node runner/hengshu.mjs <cmd>` | 本地 Runner（login/install/run/... ） |
 
 ## 关键 API
