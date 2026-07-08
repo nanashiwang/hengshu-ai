@@ -38,23 +38,36 @@ function modelProfilePlaybook(profile: any) {
         ...(profile?.modelVersion ? { modelVersion: String(profile.modelVersion) } : {}),
       }).toString()
     : ''
+  const ledgerParams = profile?.modelName
+    ? new URLSearchParams({
+        model: String(profile.modelName),
+        ...(profile?.modelVersion ? { modelVersion: String(profile.modelVersion) } : {}),
+      }).toString()
+    : ''
   const alerts = Array.isArray(profile?.regressionAlerts) ? profile.regressionAlerts : []
   const driftSummary =
     profile?.driftSummary && typeof profile.driftSummary === 'object' ? profile.driftSummary : {}
   const capabilities =
     profile?.capabilities && typeof profile.capabilities === 'object' ? profile.capabilities : {}
   const effectiveSamples = Number(capabilities.effectiveSamples ?? capabilities.observedSamples ?? 0)
+  const stable = driftSummary.status === 'stable'
   const decision = alerts.some((alert: any) => alert?.severity === 'critical')
     ? 'avoid'
     : alerts.length > 0 || profile?.profileStatus === 'stale'
       ? 'review'
-      : effectiveSamples >= 5 && driftSummary.status === 'stable'
+      : effectiveSamples >= 5 && stable
         ? 'use'
         : 'trial'
   return {
     customerValue:
       '把模型画像从“排行榜名次”变成可执行判断：看版本、有效样本、漂移、回归告警，再决定试跑、锁版本、换模型或查失败库。',
     decision,
+    adoptionChecklist: [
+      '只把同 modelName + modelVersion 的画像用于准入判断',
+      '有效样本不足 5 时先小流量试跑，不直接迁移生产流量',
+      '出现 warning/critical 回归告警时先锁旧版本或查 Adapter',
+      '采用前用私人台账里的真实输入复验成功率、格式率、成本和延迟',
+    ],
     nextActions: [
       {
         label: '确认模型版本',
@@ -70,9 +83,14 @@ function modelProfilePlaybook(profile: any) {
         label: '处理漂移/回归',
         description: alerts.length
           ? '存在回归告警，建议锁旧版本、换模型或等待 Adapter 修复。'
-          : driftSummary.status === 'stable'
+          : stable
             ? '漂移摘要稳定，可继续观察真实任务回流。'
             : '漂移证据不足，建议用你的 Skill 再跑一次。',
+      },
+      {
+        label: '用私人台账复验',
+        description: '用你自己的历史输入筛出同模型/版本运行，必要时换模型重跑，避免只看全站平均。',
+        href: ledgerParams ? `/console/runs?${ledgerParams}` : '/console/runs',
       },
       {
         label: '查失败库/Adapter',

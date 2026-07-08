@@ -14,7 +14,7 @@
 | SkillRuns 私人台账 | `src/collections/SkillRuns.ts`、`src/app/v1/runs/route.ts`、`src/app/v1/runs/[id]/rerun/route.ts` | 输入/输出加密；记录模型、成本、延迟、错误；支持多维筛选导出、换模型一键重跑、重跑血缘，并为失败运行输出模型画像/失败库排障入口。 |
 | CompatReports 活体数据 | `src/collections/CompatReports.ts`、`src/lib/compat.ts` | 脱敏兼容报告；时间衰减 + 来源权重聚合；优先按 `modelProfile`/版本分组；前台展示有效样本与来源权重摘要。 |
 | SkillPassport | `src/collections/SkillPassports.ts`、`src/lib/passport.ts`、`src/lib/passportRefresh.ts`、`src/lib/passportPublic.ts` | 随 Runner/online/benchmark 回流自动刷新；写入 evidenceHash 和证据快照；原始集合仅后台可读，公开读取走脱敏 Passport API，并返回“看当前性/可信分 → 验签证据/证书 → 查 Contract → 用自己模型试跑”的客户复核 playbook。 |
-| ModelProfile | `src/collections/ModelProfiles.ts`、`src/lib/modelProfile.ts` | 支持 modelName + modelVersion；刷新 worker；记录 `driftHistory` 漂移曲线；回归/漂移告警；保留有效样本与来源权重；原始集合仅后台可读，公开读取走脱敏模型画像 API。 |
+| ModelProfile | `src/collections/ModelProfiles.ts`、`src/lib/modelProfile.ts`、`src/lib/modelProfilePublic.ts` | 支持 modelName + modelVersion；刷新 worker；记录 `driftHistory` 漂移曲线；回归/漂移告警；保留有效样本与来源权重；原始集合仅后台可读，公开读取走脱敏模型画像 API，并返回采用复验 checklist 与私人台账复验入口。 |
 | CompatTestCase | `src/collections/CompatTestCases.ts`、`src/lib/benchmark.ts`、`src/lib/benchmarkScoring.ts` | benchmark 优先读取测试用例，再回退 examples/schema；支持按黄金样例 requiredOutputPaths / expectedTextIncludes 逐条打分，并把 case 分数写回兼容报告；测试输入原文仅作者/审核/管理可读。 |
 | FailureCase | `src/collections/FailureCases.ts`、`src/lib/failureKnowledge.ts`、`src/lib/failureRefresh.ts` | 按 Skill × 输入档 × errorType 聚合任务失败画像；随失败回流自动刷新并写证据快照；原始集合仅后台可读，公开读取走脱敏失败库 API。 |
 | AdapterProfile | `src/collections/AdapterProfiles.ts`、`src/lib/adapterProfile.ts`、`src/app/v1/failures/[id]/adapter/route.ts` | Skill × Model/Profile 的 prompt/schema/decoding/retry 补丁；运行时应用；自动 evidenceHash/快照；刷新 before/after lift；支持从 FailureCase 生成待审核草稿；原始补丁正文仅作者/审核/管理可读。 |
@@ -51,7 +51,7 @@
 | `/v1/runner/check` | Runner 检查本地安装 checksum 是否过期；返回更新复验 playbook，提示过期 Skill 先 update、重新验签，再用同一输入复验并回流。 |
 | `/v1/runner/report` | Runner 本地兼容回流；要求当前 Runner 存在 active install 且 checksum 匹配，只存成功率、格式、延迟、错误类型、输入/输出大小档等指标，不存输入/输出原文。 |
 | `/models` | 中立模型榜；显示 ModelProfile 稳定/回归告警、来源权重、有效样本、客户决策步骤和画像筛选表单；每行可跳转模型画像 API、该模型失败库与 Adapter API，不污染排序。 |
-| `/v1/model-profiles` | 公开读取模型画像、版本漂移、回归告警、有效样本、来源权重和 use/trial/review/avoid 决策 playbook；支持 modelName/modelVersion/provider/status 过滤；返回失败库和 Adapter 排障入口，不暴露平台收益字段。 |
+| `/v1/model-profiles` | 公开读取模型画像、版本漂移、回归告警、有效样本、来源权重和 use/trial/review/avoid 决策 playbook；支持 modelName/modelVersion/provider/status 过滤；返回采用复验 checklist、私人台账复验、失败库和 Adapter 排障入口，不暴露平台收益字段。 |
 | `/failures` | 优先读取 FailureCases；展示“发现失败模式 → 生成 Adapter 草稿 → 复验 lift”的闭环和“客户怎么用”排障步骤；展示 profileKey、主输入档、模型分布、Adapter 建议、Adapter 复用/复验说明、模型画像入口、Adapter API、失败/Adapter 证据验签入口和多维筛选表单；只有 Skill 作者、审核员或管理员可从失败案例生成 Adapter 草稿并直达后台草稿审核。 |
 | `/v1/failures` | 公开读取脱敏 FailureCase 列表、客户排障 playbook、修复/复验建议、模型/来源分布、模型画像/Adapter 排障入口和 API/页面证据验签入口；支持 errorType/modelName/modelVersion/status/skillId/profileKey/inputBucket/source 过滤。 |
 | `/rank` | 可信发现榜；公开说明排序口径，把可信分（skillRank）、成功率、可信兼容运行数和 Passport 可信分放在一起，并提供公开 Passport 证据入口，避免把下载量/普通调用量当成可信度。 |

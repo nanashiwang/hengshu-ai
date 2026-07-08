@@ -78,10 +78,18 @@ describe('modelProfilePublic — 公开模型画像输出', () => {
       playbook: {
         customerValue: expect.stringContaining('可执行判断'),
         decision: 'review',
+        adoptionChecklist: expect.arrayContaining([
+          expect.stringContaining('modelName + modelVersion'),
+          expect.stringContaining('私人台账'),
+        ]),
         nextActions: expect.arrayContaining([
           expect.objectContaining({ label: '确认模型版本' }),
           expect.objectContaining({ label: '看有效样本和来源' }),
           expect.objectContaining({ label: '处理漂移/回归' }),
+          expect.objectContaining({
+            label: '用私人台账复验',
+            href: '/console/runs?model=gpt-4.1-mini&modelVersion=2026-07-01',
+          }),
           expect.objectContaining({
             label: '查失败库/Adapter',
             href: '/failures?modelName=gpt-4.1-mini&modelVersion=2026-07-01',
