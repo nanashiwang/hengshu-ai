@@ -52,16 +52,25 @@ describe('failureCasePublic — 公开失败知识库输出', () => {
       evidenceVerifyUrl: '/v1/evidence/verify?targetType=failure_case&targetId=failure-1',
       evidenceVerifyPageUrl: '/verify?targetType=failure_case&targetId=failure-1',
       modelProfileUrl: '/models?modelName=qwen-plus&modelVersion=2026-07-01',
+      runLedgerFailureUrl: '/console/runs?success=false&skillId=skill-1&model=qwen-plus&modelVersion=2026-07-01',
       adaptersUrl: '/v1/adapters?modelName=qwen-plus&failureId=failure-1&modelVersion=2026-07-01',
       playbook: {
         customerValue: expect.stringContaining('可复用排障线索'),
         safeForPublic: true,
         profileKey: 'skill|500-2k|json_parse_error',
+        triageChecklist: expect.arrayContaining([
+          expect.stringContaining('不需要暴露原始输入输出'),
+          expect.stringContaining('私人台账'),
+        ]),
         nextActions: expect.arrayContaining([
           expect.objectContaining({ label: '确认是否同类失败' }),
           expect.objectContaining({
             label: '查看模型画像',
             href: '/models?modelName=qwen-plus&modelVersion=2026-07-01',
+          }),
+          expect.objectContaining({
+            label: '用私人台账复现',
+            href: '/console/runs?success=false&skillId=skill-1&model=qwen-plus&modelVersion=2026-07-01',
           }),
           expect.objectContaining({
             label: '生成或复用 Adapter',

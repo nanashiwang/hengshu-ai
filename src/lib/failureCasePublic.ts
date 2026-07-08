@@ -86,6 +86,17 @@ function adaptersUrl(row: any) {
   return `/v1/adapters?${params.toString()}`
 }
 
+function runLedgerFailureUrl(row: any) {
+  const params = new URLSearchParams({ success: 'false' })
+  if (row?.skill) {
+    const skillId = typeof row.skill === 'object' ? row.skill.id : row.skill
+    if (skillId) params.set('skillId', String(skillId))
+  }
+  if (row?.modelName) params.set('model', String(row.modelName))
+  if (row?.primaryModelVersion) params.set('modelVersion', String(row.primaryModelVersion))
+  return `/console/runs?${params.toString()}`
+}
+
 function publicFailurePlaybook(row: any) {
   const profileKey =
     row?.profileKey ||
@@ -96,6 +107,12 @@ function publicFailurePlaybook(row: any) {
       '把一次失败沉淀成可复用排障线索：先判断是否命中已知失败模式，再看模型画像，最后由作者生成 Adapter 草稿并复验效果。',
     profileKey,
     safeForPublic: true,
+    triageChecklist: [
+      '只对照错误类型、输入大小档、模型名/版本和症状，不需要暴露原始输入输出',
+      '先确认是否集中在某个模型版本，再判断是模型漂移、Prompt 边界还是 schema 问题',
+      '生成 Adapter 前先用私人台账里的失败输入复现，避免把偶发问题固化成补丁',
+      '修复后至少复验成功率、格式率和同输入重跑结果，再把 lift 当作证据',
+    ],
     nextActions: [
       {
         label: '确认是否同类失败',
@@ -105,6 +122,11 @@ function publicFailurePlaybook(row: any) {
         label: '查看模型画像',
         description: '判断失败是否集中在某个模型或版本，决定换模型、锁版本还是等待适配。',
         href: modelProfileUrl(row?.modelName, row?.primaryModelVersion),
+      },
+      {
+        label: '用私人台账复现',
+        description: '筛出同 Skill/模型/版本的失败运行，用自己的历史输入复现问题，再决定是否需要 Adapter。',
+        href: runLedgerFailureUrl(row),
       },
       {
         label: '生成或复用 Adapter',
@@ -134,6 +156,7 @@ export function publicFailureCase(row: any) {
     modelName: row?.modelName || null,
     primaryModelVersion: row?.primaryModelVersion || null,
     modelProfileUrl: modelProfileUrl(row?.modelName, row?.primaryModelVersion),
+    runLedgerFailureUrl: runLedgerFailureUrl(row),
     adaptersUrl: adaptersUrl(row),
     playbook: publicFailurePlaybook(row),
     skill,
