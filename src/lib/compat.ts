@@ -56,6 +56,15 @@ export type CompatInputBucketSummary = {
   successRate: number
   formatRate: number
 }
+export type CompatTaskProfileSummary = {
+  profileKey: string
+  inputBucket: string
+  errorType: string
+  count: number
+  effectiveSamples: number
+  successRate: number
+  formatRate: number
+}
 
 function summarizeSources(reports: any[]): CompatSourceSummary[] {
   const bySource = new Map<string, { count: number; weight: number }>()
@@ -92,6 +101,34 @@ function summarizeInputBuckets(reports: any[], nowMs: number): CompatInputBucket
       formatRate: row.wSum > 0 ? row.wFormat / row.wSum : 0,
     }))
     .sort((a, b) => b.effectiveSamples - a.effectiveSamples || b.count - a.count || a.inputBucket.localeCompare(b.inputBucket))
+}
+
+function summarizeTaskProfiles(reports: any[], nowMs: number, limit = 8): CompatTaskProfileSummary[] {
+  const byProfile = new Map<string, { inputBucket: string; errorType: string; count: number; wSum: number; wSuccess: number; wFormat: number }>()
+  for (const r of reports) {
+    const inputBucket = String(r.inputSizeBucket || 'unknown').trim() || 'unknown'
+    const errorType = r.success ? 'success' : String(r.errorType || 'unknown_error').trim() || 'unknown_error'
+    const profileKey = `${inputBucket}|${errorType}`
+    const current = byProfile.get(profileKey) || { inputBucket, errorType, count: 0, wSum: 0, wSuccess: 0, wFormat: 0 }
+    const w = r.suppressed ? 0 : decayWeight(r.createdAt, nowMs) * sourceWeight(r.source)
+    current.count++
+    current.wSum += w
+    if (r.success) current.wSuccess += w
+    if (r.formatValid) current.wFormat += w
+    byProfile.set(profileKey, current)
+  }
+  return Array.from(byProfile.entries())
+    .map(([profileKey, row]) => ({
+      profileKey,
+      inputBucket: row.inputBucket,
+      errorType: row.errorType,
+      count: row.count,
+      effectiveSamples: Math.round(row.wSum * 10) / 10,
+      successRate: row.wSum > 0 ? row.wSuccess / row.wSum : 0,
+      formatRate: row.wSum > 0 ? row.wFormat / row.wSum : 0,
+    }))
+    .sort((a, b) => b.effectiveSamples - a.effectiveSamples || b.count - a.count || a.profileKey.localeCompare(b.profileKey))
+    .slice(0, limit)
 }
 
 async function fetchRecentCompatReports(
@@ -337,6 +374,7 @@ export interface GlobalModelStat {
   effectiveSamples?: number
   sourceSummary?: CompatSourceSummary[]
   inputBucketSummary?: CompatInputBucketSummary[]
+  taskProfileSummary?: CompatTaskProfileSummary[]
 }
 export async function aggregateModelsGlobal(
   payload: Payload,
@@ -394,6 +432,7 @@ export async function aggregateModelsGlobal(
       effectiveSamples: Math.round(a.wSum * 10) / 10,
       sourceSummary: summarizeSources(a.reports),
       inputBucketSummary: summarizeInputBuckets(a.reports, now),
+      taskProfileSummary: summarizeTaskProfiles(a.reports, now),
     })
   }
   return out

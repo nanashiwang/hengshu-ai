@@ -68,6 +68,7 @@ describe('modelProfilePublic — 公开模型画像输出', () => {
         effectiveSamples: 7.5,
         sourceSummary: [{ source: 'benchmark', count: 3, weight: 1 }],
         inputBucketSummary: [{ inputBucket: '8k+', count: 2, effectiveSamples: 1.5, successRate: 0.5, formatRate: 1, rawInput: 'secret' }],
+        taskProfileSummary: [{ profileKey: '8k+|schema_error', inputBucket: '8k+', errorType: 'schema_error', count: 2, effectiveSamples: 1.5, successRate: 0, formatRate: 0, rawOutput: 'secret' }],
         platformRevenue: 99,
       },
       driftHistory: [{ successRate: 0.9, rawInput: 'secret' }],
@@ -81,6 +82,7 @@ describe('modelProfilePublic — 公开模型画像输出', () => {
         observedSamples: 10,
         effectiveSamples: 7.5,
         inputBucketSummary: [{ inputBucket: '8k+', count: 2, effectiveSamples: 1.5, successRate: 0.5, formatRate: 1 }],
+        taskProfileSummary: [{ profileKey: '8k+|schema_error', inputBucket: '8k+', errorType: 'schema_error', count: 2, effectiveSamples: 1.5, successRate: 0, formatRate: 0 }],
       },
       driftHistory: [{ successRate: 0.9 }],
       failuresUrl: '/failures?modelName=gpt-4.1-mini&modelVersion=2026-07-01',
@@ -91,6 +93,7 @@ describe('modelProfilePublic — 公开模型画像输出', () => {
         adoptionChecklist: expect.arrayContaining([
           expect.stringContaining('modelName + modelVersion'),
           expect.stringContaining('inputBucket'),
+          expect.stringContaining('taskProfile'),
           expect.stringContaining('私人台账'),
         ]),
         nextActions: expect.arrayContaining([
@@ -113,6 +116,7 @@ describe('modelProfilePublic — 公开模型画像输出', () => {
     expect(row.platformPayAllowed).toBeUndefined()
     expect(row.capabilities.platformRevenue).toBeUndefined()
     expect(JSON.stringify(row.capabilities.inputBucketSummary)).not.toContain('secret')
+    expect(JSON.stringify(row.capabilities.taskProfileSummary)).not.toContain('secret')
     expect(row.regressionAlerts).toEqual([{ reason: 'ok' }])
   })
 

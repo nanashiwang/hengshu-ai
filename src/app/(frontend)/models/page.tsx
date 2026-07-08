@@ -136,6 +136,7 @@ export default async function ModelsPage({
         effectiveSamples: s.effectiveSamples,
         sourceSummary: s.sourceSummary,
         inputBucketSummary: s.inputBucketSummary,
+        taskProfileSummary: s.taskProfileSummary,
         officialInputPrice: price?.inputPrice,
         officialOutputPrice: price?.outputPrice,
       }
@@ -293,6 +294,7 @@ export default async function ModelsPage({
                 <th className="px-3 py-2 text-right font-medium">样本</th>
                 <th className="px-3 py-2 font-medium">来源权重</th>
                 <th className="px-3 py-2 font-medium">输入档</th>
+                <th className="px-3 py-2 font-medium">任务画像</th>
                 <th className="px-3 py-2 font-medium">行动</th>
               </tr>
             </thead>
@@ -421,6 +423,14 @@ export default async function ModelsPage({
                               (b: any) =>
                                 `${b.inputBucket}:${formatPercent(b.successRate)}(${b.count})`,
                             )
+                            .join(' / ')
+                        : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-[var(--muted)]">
+                      {m.taskProfileSummary?.length
+                        ? m.taskProfileSummary
+                            .slice(0, 2)
+                            .map((p: any) => `${p.inputBucket}/${p.errorType}:${p.count}`)
                             .join(' / ')
                         : '—'}
                     </td>

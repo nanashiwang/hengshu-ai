@@ -138,5 +138,10 @@ describe('compat — 活体数据窗口', () => {
       { inputBucket: '0-100', count: 2, effectiveSamples: 2, successRate: 0.5, formatRate: 1 },
       { inputBucket: '8k+', count: 1, effectiveSamples: 0.5, successRate: 0, formatRate: 0 },
     ])
+    expect(row.taskProfileSummary).toEqual([
+      { profileKey: '0-100|success', inputBucket: '0-100', errorType: 'success', count: 1, effectiveSamples: 1, successRate: 1, formatRate: 1 },
+      { profileKey: '0-100|unknown_error', inputBucket: '0-100', errorType: 'unknown_error', count: 1, effectiveSamples: 1, successRate: 0, formatRate: 1 },
+      { profileKey: '8k+|unknown_error', inputBucket: '8k+', errorType: 'unknown_error', count: 1, effectiveSamples: 0.5, successRate: 0, formatRate: 0 },
+    ])
   })
 })

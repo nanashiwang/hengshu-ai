@@ -65,6 +65,7 @@ function modelProfilePlaybook(profile: any) {
     adoptionChecklist: [
       '只把同 modelName + modelVersion 的画像用于准入判断',
       '按 inputBucket 看成功率和格式率，长输入/短输入不要混用同一结论',
+      '按 taskProfile 看输入档 × 错误类型，确认是否命中你的任务失败画像',
       '有效样本不足 5 时先小流量试跑，不直接迁移生产流量',
       '出现 warning/critical 回归告警时先锁旧版本或查 Adapter',
       '采用前用私人台账里的真实输入复验成功率、格式率、成本和延迟',
@@ -135,6 +136,7 @@ export function publicModelProfile(profile: any) {
       effectiveSamples: capabilities.effectiveSamples ?? capabilities.observedSamples ?? 0,
       sourceSummary: Array.isArray(capabilities.sourceSummary) ? capabilities.sourceSummary : [],
       inputBucketSummary: Array.isArray(capabilities.inputBucketSummary) ? capabilities.inputBucketSummary : [],
+      taskProfileSummary: Array.isArray(capabilities.taskProfileSummary) ? capabilities.taskProfileSummary : [],
     },
     regressionAlerts: publicSanitize(Array.isArray(profile?.regressionAlerts) ? profile.regressionAlerts : []),
     driftSummary: publicSanitize(profile?.driftSummary && typeof profile.driftSummary === 'object' ? profile.driftSummary : null),
