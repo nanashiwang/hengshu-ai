@@ -10,7 +10,7 @@
 | Skill | `src/collections/Skills.ts` | Skill 市场、状态、可见性、作者、指标；`isEssential` + `essentialReason` 支撑必备 Skill onboarding。 |
 | SkillVersion / Skill Contract | `src/collections/SkillVersions.ts`、`src/lib/skillContract.ts`、`src/lib/skillContractPublic.ts` | 已有 prompt、input/output schema、permissions、examples、recommended models、routePolicy；自动生成 `contractHash`，并标记初始/兼容/破坏性变更；公开 Contract 只输出 hash/schema/权限摘要和客户复核 playbook，prompt/examples/changelog 原文按字段权限隐藏。 |
 | Manifest 快照 | `src/collections/SkillArtifacts.ts` | 发布时冻结 manifest/checksum/signature；原始集合仅后台可读，公开下载走 `/v1/skills/[slug]/manifest`；无 manifest 走人工审核。 |
-| Runner | `runner/hengshu.mjs`、`src/lib/runnerInstallPlaybook.ts`、`src/app/v1/runner/install/route.ts` | 支持安装、本地运行、验签和兼容报告回流；安装响应返回“验签 → 本地运行 → 脱敏回流 → 更新”的客户指引，避免把 Runner 只做成下载器。 |
+| Runner | `runner/hengshu.mjs`、`src/lib/runnerInstallPlaybook.ts`、`src/lib/runnerUpdatePlaybook.ts`、`src/app/v1/runner/install/route.ts` | 支持安装、本地运行、验签和兼容报告回流；安装/检查更新响应返回“验签 → 本地运行 → 脱敏回流 → 更新/复验”的客户指引，避免把 Runner 只做成下载器。 |
 | SkillRuns 私人台账 | `src/collections/SkillRuns.ts`、`src/app/v1/runs/route.ts`、`src/app/v1/runs/[id]/rerun/route.ts` | 输入/输出加密；记录模型、成本、延迟、错误；支持多维筛选导出、换模型一键重跑、重跑血缘，并为失败运行输出模型画像/失败库排障入口。 |
 | CompatReports 活体数据 | `src/collections/CompatReports.ts`、`src/lib/compat.ts` | 脱敏兼容报告；时间衰减 + 来源权重聚合；优先按 `modelProfile`/版本分组；前台展示有效样本与来源权重摘要。 |
 | SkillPassport | `src/collections/SkillPassports.ts`、`src/lib/passport.ts`、`src/lib/passportRefresh.ts` | 随 Runner/online/benchmark 回流自动刷新；写入 evidenceHash 和证据快照；原始集合仅后台可读，公开读取走脱敏 Passport API。 |
@@ -48,6 +48,7 @@
 | `/skills/[slug]` | Passport 区块、证据快照摘要、黄金样例基准分、公开 Contract/Passport API、达标证书可视化验签入口、证据验签入口、兼容矩阵；兼容矩阵可跳转模型画像、该 Skill×模型失败库与 Adapter API。 |
 | `/skills/[slug]/run` | 在线试跑页；运行前展示 Passport 可信分，并提供 Passport、Contract、达标证书和证据验签入口；运行请求可携带 modelProvider/modelVersion，结果进入私人台账并按模型版本回流兼容证据。 |
 | `/v1/runner/install` | Runner 登录后安装公开 Skill；返回冻结 manifest、checksum、版本和安装 playbook，提示先验签、再绑定本地/自有网关运行、只回传脱敏兼容报告，并在 checksum 变化时先更新。 |
+| `/v1/runner/check` | Runner 检查本地安装 checksum 是否过期；返回更新复验 playbook，提示过期 Skill 先 update、重新验签，再用同一输入复验并回流。 |
 | `/v1/runner/report` | Runner 本地兼容回流；要求当前 Runner 存在 active install 且 checksum 匹配，只存成功率、格式、延迟、错误类型、输入/输出大小档等指标，不存输入/输出原文。 |
 | `/models` | 中立模型榜；显示 ModelProfile 稳定/回归告警、来源权重、有效样本、客户决策步骤和画像筛选表单；每行可跳转模型画像 API、该模型失败库与 Adapter API，不污染排序。 |
 | `/v1/model-profiles` | 公开读取模型画像、版本漂移、回归告警、有效样本、来源权重和 use/trial/review/avoid 决策 playbook；支持 modelName/modelVersion/provider/status 过滤；返回失败库和 Adapter 排障入口，不暴露平台收益字段。 |

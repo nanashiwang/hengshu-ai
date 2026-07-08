@@ -5,6 +5,7 @@ import { ensureArtifact } from '@/lib/artifacts'
 import { resolvePublishedSkill } from '@/lib/installs'
 import { readJsonBodyWithLimit } from '@/lib/requestBody'
 import { isRunnerCommandError, MAX_RUNNER_COMMAND_REQUEST_BYTES, normalizeRunnerCheckItems } from '@/lib/runnerCommandRequest'
+import { runnerUpdatePlaybook } from '@/lib/runnerUpdatePlaybook'
 
 // POST /v1/runner/check  { items: [{slug, checksum}] }  (Bearer)
 // 比对各 Skill 当前 checksum，返回是否有更新（不计下载数）
@@ -35,5 +36,5 @@ export async function POST(request: Request) {
     })
   }
 
-  return Response.json({ updates })
+  return Response.json({ updates, playbook: runnerUpdatePlaybook(updates) })
 }

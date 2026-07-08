@@ -106,6 +106,7 @@ curl http://127.0.0.1:8787/health
 | `GET /v1/skills/[slug]/certificate` | 公开读取 Skill 达标证书，绑定当前未废弃 Contract 摘要、Passport、可信兼容运行计数、黄金样例逐条摘要和证据验签状态，含 `certificateHash`、签名、公开公钥、`statusReasons` 和 Passport 证据验签页面入口 |
 | `POST /v1/skills/[slug]/run` | 在线试跑 Skill；请求可携带 `modelProvider` / `modelVersion`，运行回流会绑定对应 ModelProfile、FailureCase 和 Adapter 版本链路 |
 | `POST /v1/runner/install` | Runner 安装公开 Skill，返回冻结 manifest、checksum 和“验签→本地运行→脱敏回流→更新”playbook |
+| `POST /v1/runner/check` | Runner 检查本地安装 checksum 是否过期，返回“先更新→重新验签→复验回流”playbook |
 | `POST /v1/runner/report` | Runner 回流本地兼容报告；只接收指标，不接收输入/输出原文，且要求当前安装版本与 checksum 匹配 |
 | `POST /v1/certificates/verify` | 校验完整证书响应或裸 certificate 的 hash 与 ed25519 签名，并返回绑定的 Contract/Passport/基准摘要、客户复核指引和未达正式达标原因；前台 `/verify?certificateUrl=...` 可自动加载证书并验签 |
 | `GET /v1/model-profiles` | 公开读取模型画像、版本漂移、回归告警、有效样本、来源权重和客户决策 playbook；支持 modelName/modelVersion/provider/status 过滤，并返回失败库/Adapter 排障入口 |

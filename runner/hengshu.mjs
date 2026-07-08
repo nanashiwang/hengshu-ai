@@ -287,7 +287,17 @@ async function checkUpdates(hub, token, items) {
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || '检查更新失败')
-  return data.updates || []
+  const updates = data.updates || []
+  updates._playbook = data.playbook
+  return updates
+}
+function printUpdatePlaybook(updates) {
+  const playbook = updates?._playbook
+  if (!playbook?.nextActions?.length) return
+  console.log('下一步：')
+  for (const action of playbook.nextActions.slice(0, 3)) {
+    console.log(`  · ${action.label}：${action.description}`)
+  }
 }
 async function cmdOutdated(args) {
   const { hub, token } = requireAuth(args)
@@ -295,9 +305,14 @@ async function cmdOutdated(args) {
   if (installed.length === 0) return console.log('（暂无已安装 Skill）')
   const updates = await checkUpdates(hub, token, installed.map((m) => ({ slug: m.slug, checksum: m.checksum })))
   const out = updates.filter((u) => u.outdated)
-  if (out.length === 0) return console.log('✅ 全部为最新')
+  if (out.length === 0) {
+    console.log('✅ 全部为最新')
+    printUpdatePlaybook(updates)
+    return
+  }
   console.log('有更新：')
   for (const u of out) console.log(`  · ${u.slug}  → v${u.version}`)
+  printUpdatePlaybook(updates)
 }
 async function cmdUpdate(args) {
   const { hub, token } = requireAuth(args)

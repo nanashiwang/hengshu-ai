@@ -19,6 +19,9 @@ node runner/hengshu.mjs rotate-token
 # 安装 Skill：下载冻结 manifest，校验 checksum + ed25519 签名，并打印后续回流指引
 node runner/hengshu.mjs install xhs-title-generator --hub http://localhost:3000
 
+# 检查本地安装是否过期；过期时先 update，再 run --report
+node runner/hengshu.mjs outdated
+
 # 运行（默认连本地 Ollama）
 node runner/hengshu.mjs run xhs-title-generator \
   --hub http://localhost:3000 \
@@ -59,3 +62,5 @@ node runner/hengshu.mjs run ./xhs-title-generator-1.0.0.yaml \
 2. 本地运行：绑定 Ollama、LM Studio、vLLM 或自有 OpenAI 兼容网关。
 3. 脱敏回流：`run --report` 只上传成功率、格式、延迟、错误类型等指标，不上传输入/输出原文。
 4. 保持新鲜：`outdated` / `update` 先更新 checksum；过期安装提交报告会被 Hub 拒绝。
+
+`outdated` 也会读取 Hub 返回的更新复验 playbook：如果 checksum 过期，先 `update` 重新验签，再用同一输入复验并回传。
