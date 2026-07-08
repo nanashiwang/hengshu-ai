@@ -12,6 +12,7 @@ import { findStoredSkillPackage } from '@/lib/skillPackage'
 import { getSkillBenchmarkEvidence } from '@/lib/benchmarkEvidence'
 import { canReadSkillEvidence, skillPassportEvidenceWhere } from '@/lib/skillEvidenceAccess'
 import { resolveCurrentSkillVersionForPublicEvidence } from '@/lib/skillVersionPublic'
+import { publicSkillContract } from '@/lib/skillContractPublic'
 import {
   formatCost,
   formatLatency,
@@ -85,7 +86,13 @@ async function getSkill(slug: string, viewer: any) {
     where: { skill: { equals: skill.id } },
     sort: '-createdAt',
     limit: 10,
+    depth: 0,
+    overrideAccess: true,
   })
+  const previousVersion = (versions.docs as any[]).find((candidate: any) => (
+    String(candidate.id) !== String(version?.id || '') && candidate.status !== 'deprecated'
+  ))
+  const contract = version ? publicSkillContract(version, { slug: String(skill.slug), previousVersion }) : null
   let checksum: string | null = null
   let signed = false
   let packageAvailable = false
@@ -152,6 +159,7 @@ async function getSkill(slug: string, viewer: any) {
     version,
     reviews: reviews.docs,
     versions: versions.docs,
+    contract,
     checksum,
     signed,
     compat,
@@ -183,6 +191,7 @@ export default async function SkillDetailPage({
     passport,
     evidenceSnapshot,
     benchmarkEvidence,
+    contract,
   } = data
 
   // 收藏态
@@ -261,6 +270,11 @@ export default async function SkillDetailPage({
   const evidenceVerifyHref = passport?.id
     ? `/verify?targetType=skill_passport&targetId=${encodeURIComponent(String(passport.id))}`
     : ''
+  const contractDiff = (contract as any)?.diff || null
+  const changedFields = Array.isArray(contractDiff?.changedFields) ? contractDiff.changedFields : []
+  const breakingFields = Array.isArray(contractDiff?.breakingFields) ? contractDiff.breakingFields : []
+  const compatibleFields = Array.isArray(contractDiff?.compatibleFields) ? contractDiff.compatibleFields : []
+  const contractDecision = String(contractDiff?.decision || 'baseline')
 
   return (
     <div className="space-y-6">
@@ -467,6 +481,76 @@ export default async function SkillDetailPage({
                 </>
               ) : null}
             </p>
+          </Section>
+
+          <Section title="Contract 变更复核">
+            {!contract ? (
+              <Empty>等待当前版本 Contract。</Empty>
+            ) : (
+              <div className="space-y-4 text-sm">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <PassportItem label="当前版本" value={`v${contract.version || version?.version || '—'}`} />
+                  <PassportItem label="复核结论" value={contractDecisionLabel(contractDecision)} />
+                  <PassportItem label="破坏性字段" value={breakingFields.length ? breakingFields.map(contractFieldLabel).join(' / ') : '无'} />
+                  <PassportItem label="兼容字段" value={compatibleFields.length ? compatibleFields.map(contractFieldLabel).join(' / ') : '无'} />
+                </div>
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3 text-xs">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="font-semibold text-[var(--text)]">Contract Hash</div>
+                      <div className="mt-1 font-mono text-[var(--muted)]">
+                        {contract.contractHash ? `${String(contract.contractHash).slice(0, 20)}…` : '—'}
+                      </div>
+                    </div>
+                    {contractDiff?.comparedWith ? (
+                      <div className="text-[var(--muted)]">
+                        对比上一版 v{contractDiff.comparedWith.version || '—'} ·{' '}
+                        <span className="font-mono">{String(contractDiff.comparedWith.contractHash || '').slice(0, 12)}…</span>
+                      </div>
+                    ) : (
+                      <div className="text-[var(--muted)]">首版基线，暂无上一版 diff。</div>
+                    )}
+                  </div>
+                </div>
+                {changedFields.length ? (
+                  <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+                    <table className="w-full min-w-[680px] text-xs">
+                      <thead>
+                        <tr className="border-b border-[var(--border)] bg-[var(--panel-2)] text-left text-[var(--muted)]">
+                          <th className="px-3 py-2 font-medium">字段</th>
+                          <th className="px-3 py-2 font-medium">影响</th>
+                          <th className="px-3 py-2 font-medium">Before Hash</th>
+                          <th className="px-3 py-2 font-medium">After Hash</th>
+                          <th className="px-3 py-2 font-medium">可见摘要</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {changedFields.map((field: any) => (
+                          <tr key={field.field} className="border-b border-[var(--border)] last:border-0">
+                            <td className="px-3 py-2 font-medium">{contractFieldLabel(String(field.field || ''))}</td>
+                            <td className={field.severity === 'breaking' ? 'px-3 py-2 text-red-300' : 'px-3 py-2 text-emerald-300'}>
+                              {field.severity === 'breaking' ? '需升级前复核' : '可试跑验证'}
+                            </td>
+                            <td className="px-3 py-2 font-mono text-[var(--muted)]">{String(field.beforeHash || '').slice(0, 12)}…</td>
+                            <td className="px-3 py-2 font-mono text-[var(--muted)]">{String(field.afterHash || '').slice(0, 12)}…</td>
+                            <td className="px-3 py-2 text-[var(--muted)]">{contractDiffSummary(field)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <Empty>当前版本与上一可用版本无 Contract 字段变化。</Empty>
+                )}
+                <p className="text-xs text-[var(--muted)]">
+                  页面只展示 hash 和脱敏摘要；prompt/template 原文不公开。完整机器可读摘要见{' '}
+                  <a href={`/v1/skills/${skill.slug}/contract`} className="text-[var(--accent)] hover:underline" target="_blank" rel="noreferrer">
+                    Contract API
+                  </a>
+                  。
+                </p>
+              </div>
+            )}
           </Section>
 
           {/* 4. 使用说明 */}
@@ -772,7 +856,7 @@ export default async function SkillDetailPage({
                 >
                   <span className="font-medium">v{v.version}</span>
                   <span className="text-right text-xs text-[var(--muted)]">
-                    {v.changelog || '—'}
+                    {contractStatusLabel(String(v.contractStatus || 'initial'))}
                     <br />
                     {timeAgo(v.createdAt)}
                   </span>
@@ -784,6 +868,47 @@ export default async function SkillDetailPage({
       </div>
     </div>
   )
+}
+
+function contractDecisionLabel(decision: string) {
+  const labels: Record<string, string> = {
+    baseline: '首版基线',
+    no_change: '无变化',
+    safe_to_trial: '可试跑验证',
+    review_before_upgrade: '升级前复核',
+  }
+  return labels[decision] || decision
+}
+
+function contractStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    initial: '初始 Contract',
+    compatible_change: '兼容变更',
+    breaking_change: '破坏性变更',
+  }
+  return labels[status] || status
+}
+
+function contractFieldLabel(field: string) {
+  const labels: Record<string, string> = {
+    systemPrompt: 'System Prompt',
+    promptTemplate: 'User 模板',
+    inputSchema: '输入 schema',
+    outputSchema: '输出 schema',
+    recommendedModels: '推荐模型',
+    routePolicy: '路由策略',
+    permissions: '权限',
+    minRunnerVersion: '最低 Runner',
+  }
+  return labels[field] || field
+}
+
+function contractDiffSummary(field: any) {
+  if (['systemPrompt', 'promptTemplate'].includes(String(field?.field || ''))) return '仅公开 hash，不暴露 prompt 正文'
+  const before = field?.before == null ? '—' : JSON.stringify(field.before)
+  const after = field?.after == null ? '—' : JSON.stringify(field.after)
+  const text = `${before} → ${after}`
+  return text.length > 96 ? `${text.slice(0, 96)}…` : text
 }
 
 function Stat({
