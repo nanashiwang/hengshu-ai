@@ -65,3 +65,38 @@ export function trustedCompatibleEvidenceScore(count?: number | null): number {
   if (!Number.isFinite(n) || n <= 0) return 0
   return Math.min(1, Math.log10(1 + n) / Math.log10(101))
 }
+
+export function publicSkillRankBasis(skill: any, passport?: any) {
+  const trustedCompatibleRunCount = Number(
+    passport?.reliabilitySummary?.trustedCompatibleRunCount ??
+      passport?.evidenceSummary?.trustedCompatibleRunCount ??
+      skill?.trustedCompatibleRunCount ??
+      0,
+  )
+  const safeTrustedCount = Number.isFinite(trustedCompatibleRunCount)
+    ? Math.max(0, Math.floor(trustedCompatibleRunCount))
+    : 0
+  return {
+    label: '可信发现排序',
+    score: Math.round(Number(skill?.skillRank || 0)),
+    factors: {
+      successRate: skill?.successRate ?? null,
+      formatSuccessRate: skill?.formatSuccessRate ?? null,
+      avgCost: skill?.avgCost ?? null,
+      avgLatencyMs: skill?.avgLatencyMs ?? null,
+      passportTrustScore:
+        typeof passport?.trustScore === 'number'
+          ? Math.round(passport.trustScore)
+          : null,
+      trustedCompatibleRunCount: safeTrustedCount,
+      trustedCompatibleEvidenceWeight:
+        Math.round(trustedCompatibleEvidenceScore(safeTrustedCount) * 100) / 100,
+    },
+    guardrails: [
+      '不按下载量排序',
+      '普通调用量不直接加分',
+      '可信兼容样本采用对数饱和，避免刷量支配',
+      '样本少的 Skill 只建议试用，不建议直接采购',
+    ],
+  }
+}

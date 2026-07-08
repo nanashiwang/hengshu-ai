@@ -36,6 +36,19 @@ describe('skillPublic — 公开 Skill 列表输出', () => {
       isEssential: true,
       essentialReason: '第一跑推荐理由',
       skillRank: 87,
+      rankBasis: {
+        label: '可信发现排序',
+        score: 87,
+        factors: {
+          passportTrustScore: 92,
+          trustedCompatibleRunCount: 7,
+        },
+        guardrails: expect.arrayContaining([
+          '不按下载量排序',
+          '普通调用量不直接加分',
+          '可信兼容样本采用对数饱和，避免刷量支配',
+        ]),
+      },
       trustedCompatibleRunCount: 7,
       passport: {
         status: 'current',

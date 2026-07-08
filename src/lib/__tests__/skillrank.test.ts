@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { skillRankFromAggregates, trustedCompatibleEvidenceScore } from '@/lib/skillrank'
+import {
+  publicSkillRankBasis,
+  skillRankFromAggregates,
+  trustedCompatibleEvidenceScore,
+} from '@/lib/skillrank'
 
 describe('skillrank — 可信分', () => {
   it('无可信兼容计数时保持旧聚合指标口径', () => {
@@ -30,5 +34,31 @@ describe('skillrank — 可信分', () => {
     expect(proven - noEvidence).toBeLessThanOrEqual(15)
     expect(trustedCompatibleEvidenceScore(0)).toBe(0)
     expect(trustedCompatibleEvidenceScore(100)).toBe(1)
+  })
+
+  it('公开排名依据说明可信榜不是下载量/调用量榜', () => {
+    const basis = publicSkillRankBasis(
+      {
+        skillRank: 81.6,
+        successRate: 0.9,
+        formatSuccessRate: 0.85,
+        avgCost: 0.02,
+        avgLatencyMs: 1200,
+        runCount: 9999,
+        downloadCount: 9999,
+      },
+      {
+        trustScore: 88.4,
+        reliabilitySummary: { trustedCompatibleRunCount: 9 },
+      },
+    )
+
+    expect(basis.score).toBe(82)
+    expect(basis.factors.passportTrustScore).toBe(88)
+    expect(basis.factors.trustedCompatibleRunCount).toBe(9)
+    expect(basis.guardrails).toEqual(
+      expect.arrayContaining(['不按下载量排序', '普通调用量不直接加分']),
+    )
+    expect(JSON.stringify(basis)).not.toContain('9999')
   })
 })

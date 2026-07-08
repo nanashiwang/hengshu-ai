@@ -73,6 +73,32 @@ export default async function RankPage({
           可信档案放在一起，帮助用户先试更可靠的 Skill。
         </p>
       </div>
+      <section className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4 text-sm md:grid-cols-4">
+        <div>
+          <div className="font-medium text-[var(--text)]">看可信分</div>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            综合成功率、格式成功率、成本、延迟、维护和反馈。
+          </p>
+        </div>
+        <div>
+          <div className="font-medium text-[var(--text)]">看证据强度</div>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            可信兼容运行会加权，但采用对数饱和，避免刷样本支配排序。
+          </p>
+        </div>
+        <div>
+          <div className="font-medium text-[var(--text)]">看 Passport</div>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            有 Passport 的条目可打开公开 API，复核身份、基准和证据链。
+          </p>
+        </div>
+        <div>
+          <div className="font-medium text-[var(--text)]">不看虚火</div>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            下载量和普通调用量不是排序依据，样本少只建议先试跑。
+          </p>
+        </div>
+      </section>
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-5">
           <h2 className="mb-1 text-sm font-semibold">Skill 可信榜</h2>

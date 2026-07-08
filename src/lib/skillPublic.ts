@@ -1,4 +1,5 @@
 import { certificateVerifyPageUrl, evidenceVerifyApiUrl, evidenceVerifyPageUrl } from './evidenceLinks'
+import { publicSkillRankBasis } from './skillrank'
 
 function relationSummary(value: any) {
   if (!value) return null
@@ -72,6 +73,7 @@ export function publicSkillSummary(skill: any, passport?: any) {
     essentialReason: skill?.essentialReason || null,
     isFeatured: Boolean(skill?.isFeatured),
     skillRank: Math.round(Number(skill?.skillRank || 0)),
+    rankBasis: publicSkillRankBasis(skill, passport),
     localScore: Math.round(Number(skill?.localScore || 0)),
     successRate: skill?.successRate ?? null,
     trustedCompatibleRunCount: passportInfo.trustedCompatibleRunCount,
