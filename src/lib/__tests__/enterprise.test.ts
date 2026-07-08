@@ -9,6 +9,7 @@ import {
   enterpriseScimListResponse,
   enterpriseScimTokenDigest,
   enterpriseScimUserResource,
+  enterpriseIdentityPlaybook,
   deprovisionEnterpriseScimMember,
   evaluateEnterpriseIdentityPolicy,
   enterprisePolicyFromTemplate,
@@ -81,6 +82,38 @@ describe('enterprise — 企业 Registry 授权', () => {
       sso: { enabled: true, provider: 'oidc', issuer: 'https://idp.example.com', clientId: 'client-1' },
       scim: { enabled: true, baseUrl: 'https://api.example.com/scim', tokenDigest: enterpriseScimTokenDigest('secret') },
     }).filter((issue) => issue.level === 'blocker')).toHaveLength(0)
+  })
+
+  it('企业身份策略 playbook 给出 SSO/SCIM 接入动作且不泄漏 token', () => {
+    const digest = enterpriseScimTokenDigest('secret-token')
+    const playbook = enterpriseIdentityPlaybook({
+      requireSso: true,
+      domainAllowlist: ['example.com'],
+      sso: { enabled: true, provider: 'oidc', issuer: 'https://idp.example.com', clientId: 'client-1' },
+      scim: { enabled: true, baseUrl: 'https://api.example.com/scim', tokenDigest: digest },
+    })
+
+    expect(playbook).toMatchObject({
+      customerValue: expect.stringContaining('可审计准入'),
+      decision: 'enforce',
+      readiness: {
+        domainAllowlistConfigured: true,
+        requireSso: true,
+        ssoEnabled: true,
+        scimEnabled: true,
+        blockers: 0,
+      },
+      checklist: expect.arrayContaining([expect.stringContaining('sha256 tokenDigest')]),
+      nextActions: expect.arrayContaining([
+        expect.objectContaining({ label: '保存身份策略', href: '/console/enterprise' }),
+        expect.objectContaining({ label: '测试 SCIM 同步', href: '/v1/enterprise/scim/users' }),
+      ]),
+    })
+    expect(JSON.stringify(playbook)).not.toContain(digest)
+    expect(JSON.stringify(playbook)).not.toContain('secret-token')
+
+    expect(enterpriseIdentityPlaybook({ requireSso: true }).decision).toBe('fix_config')
+    expect(enterpriseIdentityPlaybook({ sso: { enabled: true, provider: 'oidc', issuer: 'https://idp.example.com', clientId: 'c' } }).decision).toBe('provision_scim')
   })
 
   it('SCIM token 使用 sha256 digest 校验', () => {
@@ -174,6 +207,7 @@ describe('enterprise — 企业 Registry 授权', () => {
       modelAllowlist: { models: ['qwen-plus'] },
       policy: { requireByok: true },
       identityPolicy: { scim: { tokenDigest: 'configured' } },
+      identityPlaybook: { decision: 'configure' },
     })
 
     const calls: any[] = []

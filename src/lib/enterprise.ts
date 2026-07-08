@@ -178,6 +178,71 @@ export function publicEnterpriseIdentityPolicy(rawPolicy: unknown): EnterpriseId
   return safe
 }
 
+export function enterpriseIdentityPlaybook(rawPolicy: unknown) {
+  const policy = normalizeEnterpriseIdentityPolicy(rawPolicy)
+  const issues = validateEnterpriseIdentityPolicy(policy)
+  const blockers = issues.filter((issue) => issue.level === 'blocker')
+  const warnings = issues.filter((issue) => issue.level === 'warning')
+  const ssoEnabled = policy?.sso?.enabled === true
+  const scimEnabled = policy?.scim?.enabled === true
+  const decision = blockers.length
+    ? 'fix_config'
+    : policy?.requireSso && ssoEnabled && scimEnabled
+      ? 'enforce'
+      : ssoEnabled && !scimEnabled
+        ? 'provision_scim'
+        : 'configure'
+
+  return {
+    customerValue:
+      '把企业身份治理从“手工加人”变成可审计准入：先限制邮箱域，再接 SSO，最后用 SCIM 自动同步成员并保留最小权限边界。',
+    decision,
+    issues: issues.map((issue) => ({ level: issue.level, code: issue.code, message: issue.message })),
+    readiness: {
+      domainAllowlistConfigured: Boolean(policy?.domainAllowlist?.length),
+      requireSso: policy?.requireSso === true,
+      ssoEnabled,
+      scimEnabled,
+      blockers: blockers.length,
+      warnings: warnings.length,
+    },
+    checklist: [
+      '域名白名单只写企业实际邮箱域，避免个人邮箱进入组织',
+      'SSO URL 必须为 HTTPS，OIDC 至少配置 provider、issuer 和 clientId',
+      'SCIM 只保存 sha256 tokenDigest，不保存明文 token',
+      '启用 requireSso 前，先确认管理员可通过 SSO/SCIM 保留组织访问权',
+    ],
+    nextActions: [
+      {
+        label: blockers.length ? '修复阻断项' : '保存身份策略',
+        description: blockers.length
+          ? '当前配置存在 blocker，保存或启用前必须先修复。'
+          : '当前身份策略已通过格式校验，可在企业控制台保存并纳入成员准入。',
+        href: '/console/enterprise',
+      },
+      {
+        label: '测试 SSO 准入',
+        description: ssoEnabled
+          ? '用白名单域账号测试 SSO 登录；requireSso 启用后，password 登录会被组织策略拒绝。'
+          : '尚未启用 SSO；可先配置 OIDC/SAML provider、issuer、clientId 和 discovery URL。',
+        href: '/console/enterprise',
+      },
+      {
+        label: '测试 SCIM 同步',
+        description: scimEnabled
+          ? '用 Bearer token 调用 SCIM users 端点创建/停用成员，确认只返回标准 User/ListResponse。'
+          : '尚未启用 SCIM；配置 baseUrl 和 sha256 tokenDigest 后再接 IdP provision。',
+        href: '/v1/enterprise/scim/users',
+      },
+      {
+        label: '复核成员边界',
+        description: '添加 active 成员时会执行邮箱域和 SSO 策略；不符合策略的成员不得进入组织。',
+        href: '/v1/enterprise/members',
+      },
+    ],
+  }
+}
+
 export function publicEnterpriseOrganization(org: any) {
   if (!org) return null
   return {
@@ -190,6 +255,7 @@ export function publicEnterpriseOrganization(org: any) {
     modelAllowlist: publicSanitize(org.modelAllowlist || null),
     policy: publicSanitize(org.policy || null),
     identityPolicy: publicEnterpriseIdentityPolicy(org.identityPolicy) || null,
+    identityPlaybook: publicSanitize(enterpriseIdentityPlaybook(org.identityPolicy)),
     createdAt: org.createdAt || undefined,
     updatedAt: org.updatedAt || undefined,
   }

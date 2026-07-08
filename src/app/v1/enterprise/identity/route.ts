@@ -1,7 +1,7 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { headers as nextHeaders } from 'next/headers'
-import { publicEnterpriseOrganization, updateEnterpriseIdentityPolicy } from '@/lib/enterprise'
+import { enterpriseIdentityPlaybook, publicEnterpriseOrganization, updateEnterpriseIdentityPolicy } from '@/lib/enterprise'
 import { MAX_ENTERPRISE_REQUEST_BYTES, requireEnterpriseIds } from '@/lib/enterpriseRequest'
 import { readJsonBodyWithLimit } from '@/lib/requestBody'
 
@@ -32,5 +32,6 @@ export async function POST(request: Request) {
     ok: true,
     organization: publicEnterpriseOrganization(result.organization),
     identityPolicy: result.identityPolicy,
+    identityPlaybook: enterpriseIdentityPlaybook(result.identityPolicy),
   })
 }

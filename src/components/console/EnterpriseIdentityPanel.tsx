@@ -8,6 +8,7 @@ type Org = {
   name: string
   slug?: string
   identityPolicy?: any
+  identityPlaybook?: any
 }
 
 export function EnterpriseIdentityPanel({ organizations }: { organizations: Org[] }) {
@@ -70,7 +71,7 @@ export function EnterpriseIdentityPanel({ organizations }: { organizations: Org[
         setMsg({ type: 'err', text: data.error || '保存失败' })
         return
       }
-      setRows((prev) => prev.map((row) => (row.id === org.id ? { ...row, identityPolicy: data.identityPolicy } : row)))
+      setRows((prev) => prev.map((row) => (row.id === org.id ? { ...row, identityPolicy: data.identityPolicy, identityPlaybook: data.identityPlaybook } : row)))
       setMsg({ type: 'ok', text: '身份策略已保存；SSO/SCIM 配置已通过格式校验。' })
       router.refresh()
     } catch (e: any) {
@@ -181,6 +182,21 @@ export function EnterpriseIdentityPanel({ organizations }: { organizations: Org[
           <summary className="cursor-pointer text-[var(--muted)]">当前身份策略 JSON</summary>
           <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap break-words">{JSON.stringify(org.identityPolicy, null, 2)}</pre>
         </details>
+      )}
+
+      {org?.identityPlaybook && (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3 text-xs">
+          <div className="font-medium text-[var(--text)]">身份接入指引 · {org.identityPlaybook.decision}</div>
+          <p className="mt-1 text-[var(--muted)]">{org.identityPlaybook.customerValue}</p>
+          <div className="mt-2 grid gap-2 md:grid-cols-2">
+            {(org.identityPlaybook.nextActions || []).slice(0, 4).map((action: any) => (
+              <div key={action.label} className="rounded-md border border-[var(--border)] bg-[var(--panel)] p-2">
+                <div className="font-medium text-[var(--text)]">{action.label}</div>
+                <div className="mt-1 text-[var(--muted)]">{action.description}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <button onClick={save} disabled={saving || !org} className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">

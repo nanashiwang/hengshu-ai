@@ -119,6 +119,7 @@ curl http://127.0.0.1:8787/health
 | `GET /v1/enterprise/registry/[id]/passport` | 企业内读取已批准/可审 Skill 的 Passport、治理状态、证书状态摘要、准入治理 checklist、审计/失败库入口和绑定 Contract 的达标证书 |
 | `GET /v1/enterprise/audit/export` | 企业审计 CSV 导出，含模型版本治理元数据，不含输入输出原文 |
 | `GET /v1/enterprise/failures` | 从企业审计元数据聚合组织内失败知识库和模型版本分布 |
+| `POST /v1/enterprise/identity` | 企业身份策略保存：域名白名单、requireSso、OIDC/SCIM 格式校验，并返回 SSO/SCIM 接入 playbook |
 | `POST/GET/PATCH/DELETE /v1/enterprise/scim/users` | 企业 SCIM 成员 provision：Bearer digest 校验、ListResponse 列表、基础 filter、PATCH active、创建/绑定/停用成员 |
 
 ## 目录结构
