@@ -15,6 +15,67 @@ export function publicRoutePolicy(routePolicy: any) {
 
 export type PublicSkillContractOptions = {
   slug?: string | null
+  previousVersion?: any
+}
+
+const CONTRACT_DIFF_FIELDS = [
+  'systemPrompt',
+  'promptTemplate',
+  'inputSchema',
+  'outputSchema',
+  'recommendedModels',
+  'routePolicy',
+  'permissions',
+  'minRunnerVersion',
+] as const
+
+const BREAKING_DIFF_FIELDS = new Set(['inputSchema', 'outputSchema', 'permissions', 'minRunnerVersion'])
+const HASH_ONLY_DIFF_FIELDS = new Set(['systemPrompt', 'promptTemplate'])
+
+function publicContractFieldValue(field: string, value: unknown) {
+  if (HASH_ONLY_DIFF_FIELDS.has(field)) return undefined
+  if (field === 'routePolicy') return publicRoutePolicy(value)
+  return publicSanitize(value ?? null)
+}
+
+export function contractDiffSummary(current: any, previous?: any) {
+  if (!previous) {
+    return {
+      comparedWith: null,
+      decision: 'baseline' as const,
+      changedFields: [],
+      breakingFields: [],
+      compatibleFields: [],
+    }
+  }
+
+  const changedFields = CONTRACT_DIFF_FIELDS.flatMap((field) => {
+    const beforeHash = evidenceHash(previous?.[field] ?? null)
+    const afterHash = evidenceHash(current?.[field] ?? null)
+    if (beforeHash === afterHash) return []
+    const severity = BREAKING_DIFF_FIELDS.has(field) ? 'breaking' : 'compatible'
+    return [{
+      field,
+      severity,
+      beforeHash,
+      afterHash,
+      before: publicContractFieldValue(field, previous?.[field]),
+      after: publicContractFieldValue(field, current?.[field]),
+    }]
+  })
+  const breakingFields = changedFields.filter((item) => item.severity === 'breaking').map((item) => item.field)
+  const compatibleFields = changedFields.filter((item) => item.severity === 'compatible').map((item) => item.field)
+  return {
+    comparedWith: {
+      id: String(previous?.id || ''),
+      version: previous?.version || null,
+      contractHash: previous?.contractHash || skillContractHash(previous),
+    },
+    decision: breakingFields.length ? 'review_before_upgrade' as const : changedFields.length ? 'safe_to_trial' as const : 'no_change' as const,
+    changedFields,
+    breakingFields,
+    compatibleFields,
+  }
 }
 
 function contractReviewPlaybook(version: any, opts: PublicSkillContractOptions = {}) {
@@ -68,6 +129,7 @@ function contractReviewPlaybook(version: any, opts: PublicSkillContractOptions =
 }
 
 export function publicSkillContract(version: any, opts: PublicSkillContractOptions = {}) {
+  const diff = contractDiffSummary(version, opts.previousVersion)
   return {
     id: String(version?.id || ''),
     skill: relationId(version?.skill),
@@ -84,6 +146,7 @@ export function publicSkillContract(version: any, opts: PublicSkillContractOptio
     minRunnerVersion: version?.minRunnerVersion || null,
     examplesCount: Array.isArray(version?.examples) ? version.examples.length : 0,
     changelogHash: version?.changelog ? evidenceHash(version.changelog) : null,
+    diff,
     updatedAt: version?.updatedAt || null,
     playbook: contractReviewPlaybook(version, opts),
   }

@@ -25,8 +25,20 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   const version = await resolveCurrentSkillVersionForPublicEvidence(payload, skill)
   if (!version) return Response.json({ error: 'Skill 尚无可公开版本' }, { status: 404 })
 
+  const versions = await payload.find({
+    collection: 'skill-versions',
+    where: { skill: { equals: String(skill.id) } },
+    sort: '-createdAt',
+    depth: 0,
+    limit: 10,
+    overrideAccess: true,
+  })
+  const previousVersion = versions.docs.find((candidate: any) => (
+    String(candidate.id) !== String(version.id) && candidate.status !== 'deprecated'
+  ))
+
   return Response.json({
     skill: { id: String(skill.id), slug: String(skill.slug), title: String(skill.title) },
-    contract: publicSkillContract(version, { slug: skill.slug }),
+    contract: publicSkillContract(version, { slug: skill.slug, previousVersion }),
   })
 }

@@ -8,7 +8,7 @@
 | v2 对象/能力 | 当前实现 | 说明 |
 |---|---|---|
 | Skill | `src/collections/Skills.ts` | Skill 市场、状态、可见性、作者、指标；`isEssential` + `essentialReason` 支撑必备 Skill onboarding。 |
-| SkillVersion / Skill Contract | `src/collections/SkillVersions.ts`、`src/lib/skillContract.ts`、`src/lib/skillContractPublic.ts` | 已有 prompt、input/output schema、permissions、examples、recommended models、routePolicy；自动生成 `contractHash`，并标记初始/兼容/破坏性变更；公开 Contract 只输出 hash/schema/权限摘要和客户复核 playbook，prompt/examples/changelog 原文按字段权限隐藏。 |
+| SkillVersion / Skill Contract | `src/collections/SkillVersions.ts`、`src/lib/skillContract.ts`、`src/lib/skillContractPublic.ts` | 已有 prompt、input/output schema、permissions、examples、recommended models、routePolicy；自动生成 `contractHash`，并标记初始/兼容/破坏性变更；公开 Contract 只输出 hash/schema/权限摘要、上一版本 diff 和客户复核 playbook，prompt/examples/changelog 原文按字段权限隐藏。 |
 | Manifest 快照 | `src/collections/SkillArtifacts.ts` | 发布时冻结 manifest/checksum/signature；原始集合仅后台可读，公开下载走 `/v1/skills/[slug]/manifest`；无 manifest 走人工审核。 |
 | Runner | `runner/hengshu.mjs`、`src/lib/runnerInstallPlaybook.ts`、`src/lib/runnerUpdatePlaybook.ts`、`src/app/v1/runner/install/route.ts` | 支持安装、本地运行、验签和兼容报告回流；安装/检查更新响应返回“验签 → 本地运行 → 脱敏回流 → 更新/复验”的客户指引，避免把 Runner 只做成下载器。 |
 | SkillRuns 私人台账 | `src/collections/SkillRuns.ts`、`src/app/v1/runs/route.ts`、`src/app/v1/runs/[id]/rerun/route.ts` | 输入/输出加密；记录模型、成本、延迟、错误；支持多维筛选导出、换模型一键重跑、重跑血缘，并为失败运行输出模型画像/失败库排障入口。 |
@@ -68,7 +68,7 @@
 | `/v1/certificates/verify` | 公开校验绑定 Contract 摘要的 Skill 达标证书 certificateHash 与 ed25519 签名；支持完整证书响应或裸 certificate 对象，返回 valid/unsigned/hash_mismatch/key_unavailable/signature_invalid，并带证书绑定的 Contract/Passport/基准摘要、`statusReasons` 和 accept/review/reject 客户复核 playbook 供页面、采购或企业 Registry 准入使用。 |
 | `worker:preflight-private` | NAS/私有部署 readiness：允许内网 HTTP，但阻断默认密钥/弱数据库密码/URL 不同源/非法端口，并提示备份与媒体持久化。 |
 | `worker:preflight-production` | 生产上线前检查可信发布目标格式；缺失只警告，非法 URL / 空目标阻断。 |
-| `/v1/skills/[slug]/contract` | 公开读取 Skill 能力契约摘要、contractHash、prompt hash 和客户复核 playbook，不暴露 prompt 正文。 |
+| `/v1/skills/[slug]/contract` | 公开读取 Skill 能力契约摘要、contractHash、prompt hash、上一版本 diff 和客户复核 playbook；diff 对 prompt 只给 hash，对 routePolicy 去除 dataDriven，不暴露 prompt 正文。 |
 | `/v1/skills/[slug]/passport` | 公开读取清洗后的 Skill Passport + 黄金样例摘要 + 可信兼容运行计数 + API/页面证据验签入口 + 最新证据验签摘要 + 客户复核 playbook。 |
 | `/v1/skills/[slug]/certificate` | 公开读取 Skill 达标证书：合并 Contract 摘要、Passport、可信兼容运行计数、黄金样例逐条摘要、证据快照验签状态，输出 certificateHash、ed25519 签名、Passport 证据验签页面入口和未达正式达标原因。 |
 | `/v1/enterprise/audit/export` | 企业审计 CSV 导出，含模型版本治理元数据，不含输入输出原文。 |

@@ -32,6 +32,7 @@ describe('skillContractPublic — 公开 Skill Contract 摘要', () => {
     expect(row.examplesCount).toBe(2)
     expect(row.changelogHash).toHaveLength(64)
     expect(row.routePolicy).toEqual({ default: 'balanced', fallback: ['qwen-plus'] })
+    expect(row.diff).toMatchObject({ decision: 'baseline', changedFields: [] })
     expect(row.playbook).toMatchObject({
       customerValue: expect.stringContaining('可复核能力契约'),
       decision: 'review_before_upgrade',
@@ -62,5 +63,47 @@ describe('skillContractPublic — 公开 Skill Contract 摘要', () => {
         expect.objectContaining({ label: '试跑或重跑', href: '/skills/writer/run' }),
       ]),
     )
+  })
+
+  it('输出版本契约 diff，敏感 prompt 只给 hash 不给正文', () => {
+    const row = publicSkillContract({
+      id: 'v2',
+      version: '2.0.0',
+      systemPrompt: 'new secret system',
+      promptTemplate: 'new secret template',
+      inputSchema: { topic: { type: 'string' }, tone: { type: 'string' } },
+      outputSchema: { result: { type: 'text' } },
+      permissions: { network: true, shell: false },
+      minRunnerVersion: '0.3.0',
+      routePolicy: { default: 'quality', dataDriven: { cheap: ['hidden'] }, rawPrompt: 'secret route prompt' },
+    }, {
+      previousVersion: {
+        id: 'v1',
+        version: '1.0.0',
+        systemPrompt: 'old secret system',
+        promptTemplate: 'old secret template',
+        inputSchema: { topic: { type: 'string' } },
+        outputSchema: { result: { type: 'text' } },
+        permissions: { network: false, shell: false },
+        minRunnerVersion: '0.2.0',
+        routePolicy: { default: 'balanced' },
+      },
+    }) as any
+
+    expect(row.diff.decision).toBe('review_before_upgrade')
+    expect(row.diff.comparedWith).toMatchObject({ id: 'v1', version: '1.0.0' })
+    expect(row.diff.breakingFields).toEqual(expect.arrayContaining(['inputSchema', 'permissions', 'minRunnerVersion']))
+    expect(row.diff.compatibleFields).toEqual(expect.arrayContaining(['systemPrompt', 'promptTemplate', 'routePolicy']))
+    expect(row.diff.changedFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'systemPrompt', beforeHash: expect.any(String), afterHash: expect.any(String) }),
+        expect.objectContaining({ field: 'routePolicy', after: { default: 'quality' } }),
+      ]),
+    )
+    const text = JSON.stringify(row.diff)
+    expect(text).not.toContain('new secret')
+    expect(text).not.toContain('old secret')
+    expect(text).not.toContain('hidden')
+    expect(text).not.toContain('secret route prompt')
   })
 })
