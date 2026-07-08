@@ -73,12 +73,24 @@ describe('adapterProfilePublic — 公开 Adapter 效果摘要', () => {
       playbook: {
         customerValue: expect.stringContaining('可复用修复证据'),
         decision: 'reuse',
+        reuseChecklist: expect.arrayContaining([
+          expect.stringContaining('modelName/modelVersion'),
+          expect.stringContaining('私人台账'),
+        ]),
         nextActions: expect.arrayContaining([
           expect.objectContaining({ label: '确认适用范围' }),
           expect.objectContaining({ label: '看 lift 和样本' }),
           expect.objectContaining({
+            label: '用私人台账复验',
+            href: '/console/runs?model=qwen-plus&modelVersion=2026-07-01&success=false',
+          }),
+          expect.objectContaining({
             label: '验签修复证据',
             href: '/verify?targetType=adapter_profile&targetId=adapter-1',
+          }),
+          expect.objectContaining({
+            label: '查看模型画像',
+            href: '/models?modelName=qwen-plus&modelVersion=2026-07-01',
           }),
           expect.objectContaining({
             label: '回到失败库',

@@ -60,6 +60,23 @@ function adapterPlaybook(adapter: any) {
   const beforeSamples = Number(before.samples || 0)
   const afterSamples = Number(after.samples || 0)
   const liftScore = Number(adapter?.liftScore || 0)
+  const modelParams = adapter?.modelName
+    ? new URLSearchParams({
+        modelName: String(adapter.modelName),
+        ...(adapter?.modelVersion ? { modelVersion: String(adapter.modelVersion) } : {}),
+      }).toString()
+    : ''
+  const ledgerParams = adapter?.modelName
+    ? new URLSearchParams({
+        model: String(adapter.modelName),
+        ...(adapter?.modelVersion ? { modelVersion: String(adapter.modelVersion) } : {}),
+        success: 'false',
+      }).toString()
+    : ''
+  const failureType =
+    Array.isArray(adapter?.failureTypes) && adapter.failureTypes[0]
+      ? String(adapter.failureTypes[0])
+      : ''
   const decision =
     liftScore > 0 && afterSamples >= 3
       ? 'reuse'
@@ -70,6 +87,12 @@ function adapterPlaybook(adapter: any) {
     customerValue:
       'Adapter 把失败库里的已知问题变成可复用修复证据：看适用模型、失败类型、前后样本和 lift，再决定复用、复验或继续观察。',
     decision,
+    reuseChecklist: [
+      '确认 Skill、modelName/modelVersion 与你的运行环境一致',
+      '确认失败类型和输入档与来源 FailureCase 一致',
+      'after 样本不足 3 时先用私人台账复验，不直接大规模启用',
+      '只信公开效果摘要和 evidenceHash，补丁正文仍需作者/审核员权限复核',
+    ],
     nextActions: [
       {
         label: '确认适用范围',
@@ -80,19 +103,29 @@ function adapterPlaybook(adapter: any) {
         description: `lift ${Number.isFinite(liftScore) ? liftScore : 0}；前 ${beforeSamples} / 后 ${afterSamples}。样本少时先复验，不要直接大规模启用。`,
       },
       {
+        label: '用私人台账复验',
+        description: '筛出同模型/版本的失败运行，用相同输入复验 Adapter 是否真的提升成功率和格式率。',
+        href: ledgerParams ? `/console/runs?${ledgerParams}` : '/console/runs?success=false',
+      },
+      {
         label: '验签修复证据',
         description: '公开只展示效果摘要，不暴露 prompt/schema/decoding 补丁正文；可验签 evidenceHash。',
         href: evidenceVerifyPageUrl('adapter_profile', adapter?.id),
       },
       {
+        label: '查看模型画像',
+        description: '确认该模型版本是否有漂移/回归告警，避免把模型升级问题误当成 Skill 问题。',
+        href: modelParams ? `/models?${modelParams}` : null,
+      },
+      {
         label: '回到失败库',
         description: '查看来源失败画像，确认症状、模型版本和输入档是否与你的任务一致。',
-        href: adapter?.modelName
+        href: modelParams
           ? `/failures?${new URLSearchParams({
               modelName: String(adapter.modelName),
               ...(adapter?.modelVersion ? { modelVersion: String(adapter.modelVersion) } : {}),
-              ...(Array.isArray(adapter?.failureTypes) && adapter.failureTypes[0]
-                ? { errorType: String(adapter.failureTypes[0]) }
+              ...(failureType
+                ? { errorType: failureType }
                 : {}),
             }).toString()}`
           : null,
