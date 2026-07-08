@@ -86,6 +86,10 @@ function adaptersUrl(row: any) {
   return `/v1/adapters?${params.toString()}`
 }
 
+function reverifyPlanUrl(row: any) {
+  return row?.id ? `/v1/failures/${encodeURIComponent(String(row.id))}/reverify-plan` : null
+}
+
 function runLedgerFailureUrl(row: any) {
   const params = new URLSearchParams({ success: 'false' })
   if (row?.skill) {
@@ -133,6 +137,11 @@ function publicFailurePlaybook(row: any) {
         label: '生成或复用 Adapter',
         description: '作者/审核员可从失败案例生成补丁草稿；公开用户只能看是否已有验证过的 Adapter 效果。',
         href: adaptersUrl(row),
+      },
+      {
+        label: '生成复验计划',
+        description: '登录后按自己的失败台账生成候选重跑清单，复验 Adapter 是否真的提升成功率和格式率。',
+        href: reverifyPlanUrl(row),
       },
       {
         label: '验签证据',
@@ -187,6 +196,7 @@ export function publicFailureCase(row: any) {
     modelProfileUrl: modelProfileUrl(row?.modelName, row?.primaryModelVersion),
     runLedgerFailureUrl: runLedgerFailureUrl(row),
     adaptersUrl: adaptersUrl(row),
+    reverifyPlanUrl: reverifyPlanUrl(row),
     playbook: publicFailurePlaybook(row),
     skill,
     symptom: row?.symptom || null,

@@ -425,6 +425,16 @@ export default async function FailuresPage({
                   >
                     证据验签
                   </Link>
+                  {user ? (
+                    <a
+                      href={`/v1/failures/${encodeURIComponent(String(c.id))}/reverify-plan`}
+                      className="text-[var(--accent)] hover:underline"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      复验计划
+                    </a>
+                  ) : null}
                 </div>
 
                 {adapters.length > 0 && (
