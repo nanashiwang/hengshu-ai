@@ -172,10 +172,13 @@ async function getSkill(slug: string, viewer: any) {
 
 export default async function SkillDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>
+  searchParams: Promise<Record<string, string | undefined>>
 }) {
   const { slug } = await params
+  const sp = await searchParams
   const user = await getCurrentUser()
   const data = await getSkill(slug, user)
   if (!data) notFound()
@@ -272,6 +275,12 @@ export default async function SkillDetailPage({
     : ''
   const contractDiff = (contract as any)?.diff || null
   const changedFields = Array.isArray(contractDiff?.changedFields) ? contractDiff.changedFields : []
+  const contractDiffFilter = ['breaking', 'compatible'].includes(String(sp.contractDiff || ''))
+    ? String(sp.contractDiff)
+    : 'all'
+  const visibleChangedFields = contractDiffFilter === 'all'
+    ? changedFields
+    : changedFields.filter((field: any) => field?.severity === contractDiffFilter)
   const breakingFields = Array.isArray(contractDiff?.breakingFields) ? contractDiff.breakingFields : []
   const compatibleFields = Array.isArray(contractDiff?.compatibleFields) ? contractDiff.compatibleFields : []
   const contractDecision = String(contractDiff?.decision || 'baseline')
@@ -513,32 +522,53 @@ export default async function SkillDetailPage({
                   </div>
                 </div>
                 {changedFields.length ? (
-                  <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-                    <table className="w-full min-w-[680px] text-xs">
-                      <thead>
-                        <tr className="border-b border-[var(--border)] bg-[var(--panel-2)] text-left text-[var(--muted)]">
-                          <th className="px-3 py-2 font-medium">字段</th>
-                          <th className="px-3 py-2 font-medium">影响</th>
-                          <th className="px-3 py-2 font-medium">Before Hash</th>
-                          <th className="px-3 py-2 font-medium">After Hash</th>
-                          <th className="px-3 py-2 font-medium">可见摘要</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {changedFields.map((field: any) => (
-                          <tr key={field.field} className="border-b border-[var(--border)] last:border-0">
-                            <td className="px-3 py-2 font-medium">{contractFieldLabel(String(field.field || ''))}</td>
-                            <td className={field.severity === 'breaking' ? 'px-3 py-2 text-red-300' : 'px-3 py-2 text-emerald-300'}>
-                              {field.severity === 'breaking' ? '需升级前复核' : '可试跑验证'}
-                            </td>
-                            <td className="px-3 py-2 font-mono text-[var(--muted)]">{String(field.beforeHash || '').slice(0, 12)}…</td>
-                            <td className="px-3 py-2 font-mono text-[var(--muted)]">{String(field.afterHash || '').slice(0, 12)}…</td>
-                            <td className="px-3 py-2 text-[var(--muted)]">{contractDiffSummary(field)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {[
+                        { key: 'all', label: `全部 ${changedFields.length}` },
+                        { key: 'breaking', label: `破坏性 ${breakingFields.length}` },
+                        { key: 'compatible', label: `兼容 ${compatibleFields.length}` },
+                      ].map((item) => (
+                        <Link
+                          key={item.key}
+                          href={skillContractDiffHref(String(skill.slug), item.key)}
+                          className={`rounded-full border px-3 py-1 ${contractDiffFilter === item.key ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'}`}
+                        >
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
+                    {visibleChangedFields.length ? (
+                      <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+                        <table className="w-full min-w-[680px] text-xs">
+                          <thead>
+                            <tr className="border-b border-[var(--border)] bg-[var(--panel-2)] text-left text-[var(--muted)]">
+                              <th className="px-3 py-2 font-medium">字段</th>
+                              <th className="px-3 py-2 font-medium">影响</th>
+                              <th className="px-3 py-2 font-medium">Before Hash</th>
+                              <th className="px-3 py-2 font-medium">After Hash</th>
+                              <th className="px-3 py-2 font-medium">可见摘要</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {visibleChangedFields.map((field: any) => (
+                              <tr key={field.field} className="border-b border-[var(--border)] last:border-0">
+                                <td className="px-3 py-2 font-medium">{contractFieldLabel(String(field.field || ''))}</td>
+                                <td className={field.severity === 'breaking' ? 'px-3 py-2 text-red-300' : 'px-3 py-2 text-emerald-300'}>
+                                  {field.severity === 'breaking' ? '需升级前复核' : '可试跑验证'}
+                                </td>
+                                <td className="px-3 py-2 font-mono text-[var(--muted)]">{String(field.beforeHash || '').slice(0, 12)}…</td>
+                                <td className="px-3 py-2 font-mono text-[var(--muted)]">{String(field.afterHash || '').slice(0, 12)}…</td>
+                                <td className="px-3 py-2 text-[var(--muted)]">{contractDiffSummary(field)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <Empty>当前筛选下没有 Contract 字段变化。</Empty>
+                    )}
+                  </>
                 ) : (
                   <Empty>当前版本与上一可用版本无 Contract 字段变化。</Empty>
                 )}
@@ -878,6 +908,12 @@ function contractDecisionLabel(decision: string) {
     review_before_upgrade: '升级前复核',
   }
   return labels[decision] || decision
+}
+
+function skillContractDiffHref(slug: string, filter: string) {
+  return filter === 'all'
+    ? `/skills/${encodeURIComponent(slug)}`
+    : `/skills/${encodeURIComponent(slug)}?contractDiff=${encodeURIComponent(filter)}`
 }
 
 function contractStatusLabel(status: string) {
