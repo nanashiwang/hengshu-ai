@@ -21,6 +21,8 @@ from relay_detector.protocols.openai.client import (
 )
 from relay_detector.protocols.openai.detectors.basic_request import BasicRequestDetector
 from relay_detector.protocols.openai.detectors.integrity import (
+    EXPECTED_TEXT,
+    IntegrityDetector,
     _usage_close as _openai_stream_usage_close,
 )
 from relay_detector.protocols.openai.detectors.protocol import ProtocolDetector
@@ -93,8 +95,8 @@ class FakeOpenAIBaseClient:
                 content='{"ok":true,"nonce":"openai-detector"}',
                 usage=usage,
             )
-        elif "stream check" in prompt:
-            response = _chat_payload(model=model, content="xiance stream check", usage=usage)
+        elif "XIANCE_STREAM_CHECK" in prompt:
+            response = _chat_payload(model=model, content=EXPECTED_TEXT, usage=usage)
         elif "HTTP status 418" in prompt:
             response = _chat_payload(
                 model=model,
@@ -107,19 +109,20 @@ class FakeOpenAIBaseClient:
 
     async def chat_completions_stream(self, **body: Any):
         _ = body
+        midpoint = len(EXPECTED_TEXT) // 2
         yield {
             "id": "chatcmpl-test",
             "object": "chat.completion.chunk",
             "created": 1741569952,
             "model": body["model"],
-            "choices": [{"index": 0, "delta": {"content": "xiance "}}],
+            "choices": [{"index": 0, "delta": {"content": EXPECTED_TEXT[:midpoint]}}],
         }, 5
         yield {
             "id": "chatcmpl-test",
             "object": "chat.completion.chunk",
             "created": 1741569952,
             "model": body["model"],
-            "choices": [{"index": 0, "delta": {"content": "stream check"}}],
+            "choices": [{"index": 0, "delta": {"content": EXPECTED_TEXT[midpoint:]}}],
         }, 7
         yield {
             "id": "chatcmpl-test",
@@ -153,6 +156,44 @@ class ReasoningOnlyBasicClient:
             httpx.Headers(),
             12,
         )
+
+
+class IntegrityResponseClient:
+    def __init__(self, non_stream_text: str, stream_text: str):
+        self.non_stream_text = non_stream_text
+        self.stream_text = stream_text
+
+    async def chat_completions_create(self, **body: Any):
+        return (
+            body,
+            _chat_payload(model=body["model"], content=self.non_stream_text),
+            httpx.Headers(),
+            5,
+        )
+
+    async def chat_completions_stream(self, **body: Any):
+        if self.stream_text:
+            yield {
+                "id": "chatcmpl-integrity",
+                "object": "chat.completion.chunk",
+                "created": 1741569952,
+                "model": body["model"],
+                "choices": [
+                    {"index": 0, "delta": {"content": self.stream_text}}
+                ],
+            }, 5
+        yield {
+            "id": "chatcmpl-integrity",
+            "object": "chat.completion.chunk",
+            "created": 1741569952,
+            "model": body["model"],
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 2,
+                "total_tokens": 12,
+            },
+        }, 9
 
 
 def test_openai_base_url_normalization_handles_v1_suffix():
@@ -308,3 +349,88 @@ def test_openai_integrity_accepts_lower_stream_completion_tokens():
     non_stream = {"prompt_tokens": 15, "completion_tokens": 19, "total_tokens": 34}
     stream = {"prompt_tokens": 15, "completion_tokens": 8, "total_tokens": 23}
     assert _openai_stream_usage_close(non_stream, stream) is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    (
+        "non_stream_text",
+        "stream_text",
+        "expected_score",
+        "expected_status",
+        "non_target_match",
+        "stream_target_match",
+        "text_match",
+    ),
+    [
+        (EXPECTED_TEXT, EXPECTED_TEXT, 100.0, "pass", True, True, True),
+        ("SAME_WRONG_TOKEN", "SAME_WRONG_TOKEN", 60.0, "fail", False, False, True),
+        (EXPECTED_TEXT, "WRONG_TOKEN", 75.0, "fail", True, False, False),
+        ("WRONG_A", "WRONG_B", 55.0, "fail", False, False, False),
+        (EXPECTED_TEXT, "", 65.0, "fail", True, False, False),
+    ],
+)
+async def test_openai_integrity_requires_each_response_to_match_target(
+    non_stream_text: str,
+    stream_text: str,
+    expected_score: float,
+    expected_status: str,
+    non_target_match: bool,
+    stream_target_match: bool,
+    text_match: bool,
+):
+    result = await IntegrityDetector().run(
+        IntegrityResponseClient(non_stream_text, stream_text),
+        "gpt-5.6-sol",
+    )
+
+    assert result.score == expected_score
+    assert result.status == expected_status
+    assert result.details["expected_text"] == EXPECTED_TEXT
+    assert result.details["non_stream_target_match"] is non_target_match
+    assert result.details["stream_target_match"] is stream_target_match
+    assert result.details["text_match"] is text_match
+
+
+def test_openai_integrity_target_failure_is_explained_without_affecting_gemini():
+    from web.image_report import _gemini_jpg_note, _openai_jpg_note
+    from web.server import _report_notes
+
+    openai_report = {
+        "protocol": "openai",
+        "results": [
+            {"name": "structured_output", "status": "pass"},
+            {"name": "token_billing", "status": "pass"},
+            {"name": "protocol", "status": "pass", "details": {}},
+            {
+                "name": "integrity",
+                "status": "fail",
+                "details": {
+                    "non_stream_target_match": False,
+                    "stream_target_match": False,
+                },
+            }
+        ],
+    }
+    notes = _report_notes(openai_report)
+    assert notes[-1]["title"] == "目标响应不正确"
+    assert "错误答案相同" in notes[-1]["body"]
+    assert _openai_jpg_note(openai_report) == (
+        "流式一致性未通过: stream 或 non-stream 没有正确返回指定标记。"
+    )
+
+    gemini_report = {
+        "protocol": "gemini",
+        "results": [
+            {"name": "structured_output", "status": "pass"},
+            {"name": "token_usage", "status": "pass"},
+            {"name": "integrity", "status": "fail", "details": {}},
+        ],
+    }
+    gemini_notes = _report_notes(gemini_report)
+    assert gemini_notes[-1]["body"] == (
+        "stream 与 non-stream 的文本、结束原因或 usage 字段没有对齐。"
+    )
+    assert _gemini_jpg_note(gemini_report) == (
+        "流式响应存在偏差: stream 与 non-stream 没有完全对齐。"
+    )

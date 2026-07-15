@@ -1,4 +1,10 @@
-"""OpenAI stream vs non-stream response integrity detector."""
+"""OpenAI stream vs non-stream response integrity detector.
+
+The two probes are independent model invocations, so byte-for-byte equality is
+only supporting evidence.  Each response must first satisfy the same explicit
+echo instruction; otherwise two identical wrong answers could incorrectly earn
+full credit.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +14,9 @@ from ....core.models import DetectorResult
 from .base import ActiveDetector
 
 
-PROMPT = "Reply with exactly: xiance stream check"
+EXPECTED_TEXT = "XIANCE_STREAM_CHECK_7F3A9C"
+PROMPT = f"Reply with exactly this token and nothing else: {EXPECTED_TEXT}"
+PASS_SCORE = 80.0
 
 
 class IntegrityDetector(ActiveDetector):
@@ -62,17 +70,23 @@ class IntegrityDetector(ActiveDetector):
         non_usage = non_stream.get("usage") if isinstance(non_stream.get("usage"), dict) else {}
         stream_usage = stream["usage"] if isinstance(stream["usage"], dict) else {}
 
+        non_target_match = _matches_expected(non_text)
+        stream_target_match = _matches_expected(stream_text)
         text_match = _normalize_text(non_text) == _normalize_text(stream_text)
         finish_match = stream_finish in (non_finish, None) or non_finish in (stream_finish, None)
         usage_match = _usage_close(non_usage, stream_usage)
 
         score = 0.0
         if non_text:
-            score += 15.0
+            score += 10.0
         if stream_text:
+            score += 10.0
+        if non_target_match:
+            score += 20.0
+        if stream_target_match:
             score += 20.0
         if text_match:
-            score += 30.0
+            score += 5.0
         if finish_match:
             score += 15.0
         if stream_usage:
@@ -82,8 +96,11 @@ class IntegrityDetector(ActiveDetector):
 
         details.update(
             {
+                "expected_text": EXPECTED_TEXT,
                 "non_stream_text": non_text[:300],
                 "stream_text": stream_text[:300],
+                "non_stream_target_match": non_target_match,
+                "stream_target_match": stream_target_match,
                 "text_match": text_match,
                 "non_stream_finish_reason": non_finish,
                 "stream_finish_reason": stream_finish,
@@ -94,7 +111,7 @@ class IntegrityDetector(ActiveDetector):
                 "stream_chunk_count": stream["chunk_count"],
             }
         )
-        return self._result("pass" if score >= 70.0 else "fail", score, details)
+        return self._result("pass" if score >= PASS_SCORE else "fail", score, details)
 
 
 async def _collect_stream(client, *, model: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -157,6 +174,10 @@ def _finish_reason(resp: dict):
 
 def _normalize_text(value: str) -> str:
     return " ".join(value.lower().split()).strip(" .")
+
+
+def _matches_expected(value: str) -> bool:
+    return _normalize_text(value) == _normalize_text(EXPECTED_TEXT)
 
 
 def _usage_close(left: dict[str, Any], right: dict[str, Any]) -> bool:

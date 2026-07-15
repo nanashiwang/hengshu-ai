@@ -261,6 +261,16 @@ def _openai_jpg_note(report: dict[str, Any]) -> str:
     if token_billing.get("status") == "fail":
         return "Token 计费存在风险: 返回的 Token 统计有明显偏差。"
 
+    integrity = results.get("integrity") or {}
+    if integrity.get("status") != "pass":
+        details = integrity.get("details") or {}
+        if isinstance(details, dict) and (
+            details.get("non_stream_target_match") is False
+            or details.get("stream_target_match") is False
+        ):
+            return "流式一致性未通过: stream 或 non-stream 没有正确返回指定标记。"
+        return "流式一致性未通过: 结束原因或 usage 字段没有对齐。"
+
     protocol = results.get("protocol") or {}
     details = protocol.get("details") or {}
     if isinstance(details, dict):

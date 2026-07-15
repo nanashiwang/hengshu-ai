@@ -1167,6 +1167,25 @@ def _report_notes(report: dict) -> list[dict[str, str]]:
         # list already conveys this. We deliberately don't add a redundant
         # "Token 计费正常" note — report notes should only carry signal that
         # needs user attention.
+    integrity = results.get("integrity") or {}
+    idetails = (
+        integrity.get("details")
+        if isinstance(integrity.get("details"), dict)
+        else {}
+    )
+    if integrity and integrity.get("status") != "pass":
+        target_failed = (
+            idetails.get("non_stream_target_match") is False
+            or idetails.get("stream_target_match") is False
+        )
+        notes.append({
+            "title": "目标响应不正确" if target_failed else "流式响应存在偏差",
+            "body": (
+                "stream 或 non-stream 没有正确返回指定标记,不能仅凭两次错误答案相同就判定一致。"
+                if target_failed
+                else "stream 与 non-stream 的结束原因或 usage 字段没有对齐。"
+            ),
+        })
     return notes
 
 
