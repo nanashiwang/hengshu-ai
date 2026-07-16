@@ -6281,7 +6281,7 @@
           "type": "varchar",
           "primaryKey": false,
           "notNull": false,
-          "default": "'衡术 Hengshu'"
+          "default": "'溯源'"
         },
         "slogan": {
           "name": "slogan",

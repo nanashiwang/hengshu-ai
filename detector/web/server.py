@@ -1,4 +1,4 @@
-"""先测 AI FastAPI app — POST /api/detect, GET /r/{id}, GET /r/{id}.jpg."""
+"""溯源 FastAPI app — POST /api/detect, GET /r/{id}, GET /r/{id}.jpg."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ HERE = Path(__file__).resolve().parent
 TEMPLATE_DIR = HERE / "templates"
 STATIC_DIR = HERE / "static"
 
-logger = logging.getLogger("xiance")
+logger = logging.getLogger("suyuan")
 logger.setLevel(logging.INFO)
 
 _MAX_API_REQUEST_BODY_BYTES = 16 * 1024
@@ -168,7 +168,8 @@ _VALID_MODES = {"quick", "standard", "full"}
 _VALID_WISHLIST_PROTOCOLS = {"openai", "gemini"}
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 WISHLIST_PATH = Path(
-    os.environ.get("XIANCE_WISHLIST_PATH", "/opt/xiance-ai/web_data/wishlist.txt")
+    os.environ.get("SUYUAN_WISHLIST_PATH")
+    or "/opt/suyuan-detector/web_data/wishlist.txt"
 )
 
 
@@ -750,7 +751,7 @@ async def result_jpg(job_id: str) -> Response:
         content=cache_path.read_bytes(),
         media_type="image/jpeg",
         headers={
-            "Content-Disposition": f'inline; filename="xiance-{job_id}.jpg"',
+            "Content-Disposition": f'inline; filename="suyuan-{job_id}.jpg"',
             "Cache-Control": "public, max-age=86400",
         },
     )
@@ -789,13 +790,13 @@ def _seo_meta_for_report(report: dict) -> dict[str, str]:
     total = len(results)
 
     title = (
-        f"{domain} {proto_label} 中转站检测:{score:.0f}/100 {verdict_zh} | 先测 AI"
+        f"{domain} {proto_label} 中转站检测:{score:.0f}/100 {verdict_zh} | 溯源"
     )
     description = (
         f"对 {domain} 进行 {proto_label} 中转站检测的完整报告:"
         f"模型 {model},总分 {score:.0f}/100,判定为「{verdict_zh}」。"
         f"{total} 项检测中 {pass_count} 项通过、{fail_count} 项未通过。"
-        f"先测 AI 字段级穿透,识别中转站真伪与质量。"
+        f"溯源 字段级穿透,识别中转站真伪与质量。"
     )
     og_description = (
         f"{domain} 检测报告:{score:.0f}/100 {verdict_zh}({pass_count}/{total} 项通过)"
@@ -839,6 +840,20 @@ async def result_page(request: Request, job_id: str) -> HTMLResponse:
 @app.get("/healthz")
 async def healthz() -> JSONResponse:
     return JSONResponse({"ok": True, "ts": time.time()})
+
+
+@app.get("/readyz")
+async def readyz() -> JSONResponse:
+    """Report whether this process can accept jobs and persist reports."""
+    jobs_dir = jobs.JOBS_DIR
+    writable = (
+        jobs_dir.is_dir()
+        and os.access(jobs_dir, os.W_OK | os.X_OK)
+    )
+    return JSONResponse(
+        {"ok": writable, "storage_writable": writable},
+        status_code=200 if writable else 503,
+    )
 
 
 # SEO + AI GEO surface — see docs/SEO_AI_GEO_PLAN.md §3.1.A/B/C. These three

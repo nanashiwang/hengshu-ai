@@ -19,7 +19,7 @@ from .base import ActiveDetector
 from .utils import finish_reason, message_text
 
 
-PROMPT = "Reply with exactly: xiance stream check"
+PROMPT = "Reply with exactly: suyuan stream check"
 
 
 class IntegrityDetector(ActiveDetector):

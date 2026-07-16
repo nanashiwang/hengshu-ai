@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * 衡术 Hengshu —— 本地 Skill Runner CLI
+ * 溯源 —— 本地 Skill Runner CLI
  *
- *   hengshu login [--hub <url>]                设备码登录
- *   hengshu whoami                             查看登录归属
- *   hengshu rotate-token                       轮换本机 Runner 令牌
- *   hengshu install <slug>                     安装 Skill 到本地 ~/.hengshu/skills
- *   hengshu list                               列出已安装 Skill
- *   hengshu run <slug|file> [选项]              运行（已装则离线读本地）
- *   hengshu outdated                           检查有更新的 Skill
- *   hengshu update [<slug>]                    更新（不带 slug 则全部）
- *   hengshu remove <slug>                      移除已安装 Skill
- *   hengshu doctor [--endpoint <url>] [--model <m>]   体检：登录/endpoint/模型
+ *   suyuan login [--hub <url>]                设备码登录
+ *   suyuan whoami                             查看登录归属
+ *   suyuan rotate-token                       轮换本机 Runner 令牌
+ *   suyuan install <slug>                     安装 Skill 到本地 ~/.suyuan/skills
+ *   suyuan list                               列出已安装 Skill
+ *   suyuan run <slug|file> [选项]              运行（已装则离线读本地）
+ *   suyuan outdated                           检查有更新的 Skill
+ *   suyuan update [<slug>]                    更新（不带 slug 则全部）
+ *   suyuan remove <slug>                      移除已安装 Skill
+ *   suyuan doctor [--endpoint <url>] [--model <m>]   体检：登录/endpoint/模型
  *
  * run 选项：--endpoint --model --key --hub --in key=value --raw
  */
@@ -21,9 +21,10 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import readline from 'node:readline/promises'
 import { stdin as input, stdout as output } from 'node:process'
+import { normalizeSkillSlug, resolveSkillDir } from './pathSafety.mjs'
 
 const RUNNER_VERSION = '0.2.0'
-const HOME = path.join(os.homedir(), '.hengshu')
+const HOME = path.join(os.homedir(), '.suyuan')
 const CONFIG_PATH = path.join(HOME, 'config.json')
 const SKILLS_DIR = path.join(HOME, 'skills')
 const DEFAULT_HUB = 'http://localhost:3000'
@@ -47,7 +48,7 @@ function writeConfig(cfg) {
 }
 function requireAuth(args) {
   const cfg = readConfig()
-  if (!cfg.token) throw new Error('尚未登录，请先 hengshu login')
+  if (!cfg.token) throw new Error('尚未登录，请先 suyuan login')
   return { hub: (args.hub || cfg.hub || DEFAULT_HUB).replace(/\/$/, ''), token: cfg.token }
 }
 function bearer(token) {
@@ -97,7 +98,7 @@ async function getPublicKey(hub) {
 }
 
 function skillDir(slug) {
-  return path.join(SKILLS_DIR, slug)
+  return resolveSkillDir(SKILLS_DIR, slug)
 }
 function saveInstalled(slug, manifestYaml, meta) {
   const dir = skillDir(slug)
@@ -109,9 +110,11 @@ function listInstalled() {
   try {
     return fs
       .readdirSync(SKILLS_DIR)
-      .map((slug) => {
+      .map((directoryName) => {
         try {
-          return JSON.parse(fs.readFileSync(path.join(SKILLS_DIR, slug, 'meta.json'), 'utf8'))
+          const slug = normalizeSkillSlug(directoryName)
+          const meta = JSON.parse(fs.readFileSync(path.join(skillDir(slug), 'meta.json'), 'utf8'))
+          return { ...meta, slug }
         } catch {
           return null
         }
@@ -181,7 +184,7 @@ async function cmdLogin(args) {
     }
     if (data.error && data.error !== 'authorization_pending') throw new Error(`登录失败：${data.error}`)
   }
-  throw new Error('设备码已过期，请重新 hengshu login')
+  throw new Error('设备码已过期，请重新 suyuan login')
 }
 
 async function cmdWhoami(args) {
@@ -204,13 +207,16 @@ async function cmdRotateToken(args) {
 
 // ───────── install / list / remove ─────────
 async function installSlug(hub, token, slug, opts = {}) {
+  const safeSlug = normalizeSkillSlug(slug)
   const res = await fetch(`${hub}/v1/runner/install`, {
     method: 'POST',
     headers: bearer(token),
-    body: JSON.stringify({ slug }),
+    body: JSON.stringify({ slug: safeSlug }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok || !data.ok) throw new Error(data.error || `安装失败（${res.status}）`)
+  const responseSlug = normalizeSkillSlug(data.slug || safeSlug)
+  if (responseSlug !== safeSlug) throw new Error('Hub 返回的 Skill slug 与请求不一致，已拒绝安装')
 
   // 校验和 + ed25519 验签：默认强制"有校验和 + 已签名 + 签名有效"，杜绝克隆站镜像换签/去签重分发。
   // --allow-unsigned 显式豁免（自建/离线调试用）。
@@ -233,8 +239,8 @@ async function installSlug(hub, token, slug, opts = {}) {
     if (!allowUnsigned) throw new Error(`manifest 校验失败，拒绝安装：${e.message}（--allow-unsigned 可跳过）`)
   }
 
-  saveInstalled(slug, data.manifest, {
-    slug: data.slug,
+  saveInstalled(safeSlug, data.manifest, {
+    slug: safeSlug,
     name: data.name,
     version: data.version,
     checksum: data.checksum,
@@ -245,8 +251,8 @@ async function installSlug(hub, token, slug, opts = {}) {
 }
 async function cmdInstall(args) {
   const { hub, token } = requireAuth(args)
-  const slug = args._[0]
-  if (!slug) throw new Error('用法：hengshu install <slug> [--allow-unsigned]')
+  if (!args._[0]) throw new Error('用法：suyuan install <slug> [--allow-unsigned]')
+  const slug = normalizeSkillSlug(args._[0])
   const data = await installSlug(hub, token, slug, { allowUnsigned: !!args['allow-unsigned'] })
   console.log(`✅ 已安装 ${data.name} (v${data.version}) → ${skillDir(slug)}/skill.yaml`)
   const v = data._verify || {}
@@ -261,13 +267,13 @@ async function cmdInstall(args) {
 }
 function cmdList() {
   const items = listInstalled()
-  if (items.length === 0) return console.log('（暂无已安装 Skill，用 hengshu install <slug> 安装）')
+  if (items.length === 0) return console.log('（暂无已安装 Skill，用 suyuan install <slug> 安装）')
   console.log('已安装 Skill：')
   for (const m of items) console.log(`  · ${m.slug}  v${m.version}  ${(m.checksum || '').slice(0, 26)}…`)
 }
 async function cmdRemove(args) {
-  const slug = args._[0]
-  if (!slug) throw new Error('用法：hengshu remove <slug>')
+  if (!args._[0]) throw new Error('用法：suyuan remove <slug>')
+  const slug = normalizeSkillSlug(args._[0])
   removeInstalled(slug)
   try {
     const { hub, token } = requireAuth(args)
@@ -287,7 +293,9 @@ async function checkUpdates(hub, token, items) {
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || '检查更新失败')
-  const updates = data.updates || []
+  const updates = Array.isArray(data.updates)
+    ? data.updates.map((update) => ({ ...update, slug: normalizeSkillSlug(update?.slug) }))
+    : []
   updates._playbook = data.playbook
   return updates
 }
@@ -316,7 +324,7 @@ async function cmdOutdated(args) {
 }
 async function cmdUpdate(args) {
   const { hub, token } = requireAuth(args)
-  const only = args._[0]
+  const only = args._[0] ? normalizeSkillSlug(args._[0]) : undefined
   const installed = listInstalled().filter((m) => (only ? m.slug === only : true))
   if (installed.length === 0) return console.log('（无可更新项）')
   const updates = await checkUpdates(hub, token, installed.map((m) => ({ slug: m.slug, checksum: m.checksum })))
@@ -338,9 +346,10 @@ async function loadManifest(ref, hub) {
     }
     return JSON.parse(text)
   }
+  const slug = normalizeSkillSlug(ref)
   const base = (hub || DEFAULT_HUB).replace(/\/$/, '')
-  const res = await fetch(`${base}/v1/skills/${ref}/manifest?format=json`)
-  if (!res.ok) throw new Error(`无法从 Hub 拉取 Skill：${ref}（${res.status}）`)
+  const res = await fetch(`${base}/v1/skills/${encodeURIComponent(slug)}/manifest?format=json`)
+  if (!res.ok) throw new Error(`无法从 Hub 拉取 Skill：${slug}（${res.status}）`)
   return res.json()
 }
 function render(template, vars) {
@@ -432,7 +441,7 @@ async function collectInputs(schema, preset) {
 async function cmdRun(args) {
   const cfg = readConfig()
   const ref = args._[0]
-  if (!ref) throw new Error('用法：hengshu run <slug|file> [选项]')
+  if (!ref) throw new Error('用法：suyuan run <slug|file> [选项]')
 
   // 已安装的 slug → 离线读本地；否则按文件或从 Hub 拉取
   let manifestRef = ref
@@ -539,7 +548,7 @@ async function cmdRun(args) {
 async function cmdDoctor(args) {
   const cfg = readConfig()
   const ok = (b) => (b ? '✓' : '✗')
-  console.log('衡术 Runner 体检：')
+  console.log('溯源 Runner 体检：')
   console.log(`  ${ok(fs.existsSync(CONFIG_PATH))} 配置文件 ${CONFIG_PATH}`)
   // 登录
   let loginOk = false
@@ -596,7 +605,7 @@ async function main() {
     doctor: cmdDoctor,
   }
   if (table[cmd]) return table[cmd](args)
-  console.log('用法：hengshu <login|whoami|rotate-token|install|list|run|outdated|update|remove|doctor> [选项]')
+  console.log('用法：suyuan <login|whoami|rotate-token|install|list|run|outdated|update|remove|doctor> [选项]')
   process.exit(cmd ? 1 : 0)
 }
 

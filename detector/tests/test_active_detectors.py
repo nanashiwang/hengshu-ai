@@ -18,6 +18,9 @@ from relay_detector.detectors.token_usage import TokenUsageDetector
 from relay_detector.protocols.anthropic.detectors.behavioral_signature import (
     _load_signatures,
 )
+from relay_detector.protocols.anthropic.detectors.thinking_signature import (
+    _is_thinking_validation_error,
+)
 from relay_detector.protocols.anthropic.detectors.token_usage import _delta_range
 from relay_detector.models import StreamEvent
 
@@ -43,6 +46,35 @@ def test_lookup_model_opus_4_8_registered():
     assert info.supports_extended_thinking is False
     assert ThinkingSignatureDetector().applies_to("claude-opus-4-8") is True
     assert lookup_model("claude-opus-4-8-20260515") is not None
+
+
+def test_lookup_model_fable_5_uses_observed_adaptive_capabilities():
+    info = lookup_model("claude-fable-5")
+    assert info is not None
+    assert info.supports_adaptive_thinking is True
+    assert info.supports_extended_thinking is False
+    assert info.new_tokenizer is True
+    assert ThinkingSignatureDetector().applies_to("claude-fable-5") is True
+    assert _delta_range("claude-fable-5") == (90, 230)
+
+
+def test_thinking_validation_accepts_precise_invalid_signature_message():
+    class RelayError(Exception):
+        status = 400
+        body = (
+            '{"error":{"type":"<nil>","message":"content.0: '
+            'Invalid `signature` in `thinking` block"}}'
+        )
+
+    assert _is_thinking_validation_error(RelayError()) is True
+
+
+def test_thinking_validation_rejects_generic_thinking_400():
+    class GenericError(Exception):
+        status = 400
+        body = '{"error":{"message":"thinking request is invalid"}}'
+
+    assert _is_thinking_validation_error(GenericError()) is False
     assert lookup_model("claude-opus-4.8") is not None
 
 

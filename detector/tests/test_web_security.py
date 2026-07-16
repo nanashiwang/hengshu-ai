@@ -69,6 +69,13 @@ async def test_private_target_requires_explicit_self_hosted_opt_in():
     ) == "http://192.168.1.9:3000/v1"
 
 
+def test_suyuan_private_target_setting_is_explicit(monkeypatch):
+    monkeypatch.setenv("SUYUAN_ALLOW_PRIVATE_TARGETS", "0")
+    assert security.private_targets_allowed() is False
+    monkeypatch.setenv("SUYUAN_ALLOW_PRIVATE_TARGETS", "1")
+    assert security.private_targets_allowed() is True
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "target",
@@ -105,7 +112,7 @@ def test_handoff_script_never_persists_api_key():
     )
     assert "api_key: apiKeyInput" not in script
     assert "data.api_key" not in script
-    assert "sessionStorage.setItem('xiance:handoff'" in script
+    assert "sessionStorage.setItem('suyuan:handoff'" in script
 
 
 def test_security_headers_and_private_target_http_rejection():
@@ -132,6 +139,26 @@ def test_security_headers_and_private_target_http_rejection():
     assert response.status_code == 400
     assert "元数据" in response.json()["detail"] or "在线版" in response.json()["detail"]
     assert response.headers["cache-control"] == "no-store"
+
+
+def test_health_and_readiness_cover_process_and_report_storage(tmp_path, monkeypatch):
+    from web import server
+
+    monkeypatch.setattr(server.jobs, "JOBS_DIR", tmp_path)
+    client = TestClient(server.app)
+
+    health = client.get("/healthz")
+    assert health.status_code == 200
+    assert health.json()["ok"] is True
+
+    ready = client.get("/readyz")
+    assert ready.status_code == 200
+    assert ready.json() == {"ok": True, "storage_writable": True}
+
+    monkeypatch.setattr(server.jobs, "JOBS_DIR", tmp_path / "missing")
+    not_ready = client.get("/readyz")
+    assert not_ready.status_code == 503
+    assert not_ready.json() == {"ok": False, "storage_writable": False}
 
 
 def test_oversized_api_body_is_rejected_before_form_parsing():

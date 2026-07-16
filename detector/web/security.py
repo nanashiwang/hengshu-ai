@@ -32,7 +32,8 @@ class TargetValidationError(ValueError):
 
 def private_targets_allowed() -> bool:
     """Return whether this deployment explicitly allows private targets."""
-    return os.environ.get("XIANCE_ALLOW_PRIVATE_TARGETS", "").strip().lower() in _TRUE_VALUES
+    value = os.environ.get("SUYUAN_ALLOW_PRIVATE_TARGETS", "")
+    return value.strip().lower() in _TRUE_VALUES
 
 
 def _is_public_ip(value: str) -> bool:
@@ -67,7 +68,7 @@ async def validate_target_url(
 
     All currently resolved addresses must be globally routable.  A self-hosted
     operator who intentionally needs LAN targets can set
-    ``XIANCE_ALLOW_PRIVATE_TARGETS=1``; URL structure checks still apply.
+    ``SUYUAN_ALLOW_PRIVATE_TARGETS=1``; URL structure checks still apply.
     """
     if not isinstance(value, str):
         raise TargetValidationError("中转站地址格式不正确")

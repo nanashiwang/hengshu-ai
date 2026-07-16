@@ -21,7 +21,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-_JOBS_DIR = Path(os.environ.get("XIANCE_JOBS_DIR", "/opt/xiance-ai/web_data/jobs"))
+_JOBS_DIR = Path(
+    os.environ.get("SUYUAN_JOBS_DIR")
+    or "/opt/suyuan-detector/web_data/jobs"
+)
 REPORT_DIRS = [
     _JOBS_DIR / "anthropic",
     _JOBS_DIR / "openai",

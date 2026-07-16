@@ -1,0 +1,20 @@
+# Direct dependency versions verified together on 2026-07-16.
+# Production installs only .[web]; .[dev,web] additionally uses the test pins.
+# Keep this file in the deploy command so direct dependency releases cannot
+# silently change the detector on the next server rebuild.
+httpx==0.28.1
+pydantic==2.13.4
+typer==0.27.0
+rich==15.0.0
+rapidfuzz==3.14.5
+
+fastapi==0.139.1
+uvicorn==0.51.0
+jinja2==3.1.6
+pillow==12.3.0
+python-multipart==0.0.32
+
+pytest==9.1.1
+pytest-asyncio==1.4.0
+respx==0.23.1
+reportlab==5.0.0

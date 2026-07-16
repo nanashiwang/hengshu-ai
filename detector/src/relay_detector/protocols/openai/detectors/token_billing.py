@@ -61,6 +61,12 @@ class TokenBillingDetector(ActiveDetector):
                 temperature=0,
                 messages=[{"role": "user", "content": LONG_PROMPT}],
             )
+            short_transport = short_resp.get("_suyuan_transport")
+            long_transport = long_resp.get("_suyuan_transport")
+            stream_only = any(
+                isinstance(item, dict) and item.get("effective_stream") is True
+                for item in (short_transport, long_transport)
+            )
             stream = await _collect_stream_usage(
                 client,
                 {
@@ -143,10 +149,14 @@ class TokenBillingDetector(ActiveDetector):
             "stream_usage": stream_usage,
             "stream_chunk_count": stream.get("chunk_count"),
             "stream_error": stream.get("error"),
-            "pass": stream_ok,
-            "note": stream_note,
+            "pass": stream_ok and not stream_only,
+            "note": (
+                "接口不支持非流式请求；两侧结果实际都来自 SSE，不能作为独立流/非流交叉验证"
+                if stream_only
+                else stream_note
+            ),
         }
-        if stream_ok:
+        if stream_ok and not stream_only:
             score += 20.0
 
         reference = await _get_reference(model)
@@ -178,6 +188,7 @@ class TokenBillingDetector(ActiveDetector):
             "sub_checks": sub,
             "risk_level": risk_level,
             "evaluation_zh": evaluation_zh,
+            "non_stream_supported": not stream_only,
         }
         return self._result("pass" if score >= 90.0 else "fail", score, details)
 
@@ -502,7 +513,7 @@ def _range(values) -> dict[str, Any]:
 
 
 def _reference_path() -> Path:
-    configured = os.environ.get("XIANCE_OPENAI_TOKEN_REFERENCE_PATH")
+    configured = os.environ.get("SUYUAN_OPENAI_TOKEN_REFERENCE_PATH")
     if configured:
         return Path(configured)
     return Path("web_data/openai_token_reference.json")
@@ -537,7 +548,7 @@ def _openai_api_key() -> str | None:
     key = os.environ.get("OPENAI_API_KEY")
     if key:
         return key
-    for path in (Path.cwd() / ".env", Path("/opt/xiance-ai/.env")):
+    for path in (Path.cwd() / ".env", Path("/opt/suyuan-detector/.env")):
         try:
             for line in path.read_text(encoding="utf-8").splitlines():
                 line = line.strip()

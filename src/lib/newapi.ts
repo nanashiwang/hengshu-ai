@@ -60,7 +60,7 @@ export function redactGatewayErrorText(text: string, extraSecrets: string[] = []
 // 构造透传给网关的 metadata 请求头（X-YH-*）
 function metadataHeaders(m?: GatewayMetadata): Record<string, string> {
   if (!m) return {}
-  const h: Record<string, string> = { 'X-YH-Source': m.source || 'hengshu' }
+  const h: Record<string, string> = { 'X-YH-Source': m.source || 'suyuan' }
   if (m.runId) h['X-YH-Run-ID'] = m.runId
   if (m.skillId) h['X-YH-Skill-ID'] = String(m.skillId)
   if (m.skillVersionId) h['X-YH-Skill-Version-ID'] = String(m.skillVersionId)

@@ -1,7 +1,7 @@
 import type { NewApiUsageSource, UserUsageDriftResult } from '@/lib/newapiReconcile'
 
-export const DRIFT_REPORT_SCHEMA = 'hengshu.newapi.user_drift.v1'
-export const DRIFT_REMEDIATION_SCHEMA = 'hengshu.newapi.user_drift_remediation.v1'
+export const DRIFT_REPORT_SCHEMA = 'suyuan.newapi.user_drift.v1'
+export const DRIFT_REMEDIATION_SCHEMA = 'suyuan.newapi.user_drift_remediation.v1'
 
 export interface DriftReportRow extends UserUsageDriftResult {
   schema: typeof DRIFT_REPORT_SCHEMA

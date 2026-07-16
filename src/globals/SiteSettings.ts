@@ -10,7 +10,7 @@ export const SiteSettings: GlobalConfig = {
     update: isAdmin,
   },
   fields: [
-    { name: 'siteName', type: 'text', defaultValue: '衡术 Hengshu', label: '站点名称' },
+    { name: 'siteName', type: 'text', defaultValue: '溯源', label: '站点名称' },
     {
       name: 'slogan',
       type: 'text',

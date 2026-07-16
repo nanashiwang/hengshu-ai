@@ -72,6 +72,19 @@ class ModelInfo:
 
 
 MODELS: dict[str, ModelInfo] = {
+    # Relay-exposed Claude-family model. Live capability probing confirmed
+    # adaptive summarized thinking and signed thinking blocks. Keep context
+    # claims conservative until a long-context baseline is collected.
+    "claude-fable-5": ModelInfo(
+        alias="claude-fable-5",
+        aliases=("claude-fable-5",),
+        context_tokens=200_000,
+        max_output_tokens=64_000,
+        pdf_page_max=100,
+        supports_extended_thinking=False,
+        supports_adaptive_thinking=True,
+        new_tokenizer=True,
+    ),
     "claude-opus-4-8": ModelInfo(
         alias="claude-opus-4-8",
         aliases=("claude-opus-4-8",),

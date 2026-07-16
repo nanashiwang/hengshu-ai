@@ -88,10 +88,18 @@ def _error_text(error: Exception) -> str:
 def _is_thinking_validation_error(error: Exception) -> bool:
     status = getattr(error, "status", None)
     text = _error_text(error).lower()
-    return status == 400 and "thinking" in text and (
+    if status != 400 or "thinking" not in text:
+        return False
+    return (
         "cannot be modified" in text
         or "must remain as they were" in text
         or "must remain unchanged" in text
+        # Several compatible relays preserve Anthropic's precise validation
+        # message but serialize error.type as <nil>. The message still binds
+        # the rejection to the tampered signature and is strong enough; a
+        # generic 400 mentioning thinking remains rejected by this predicate.
+        or "invalid `signature`" in text
+        or "invalid signature" in text
     )
 
 

@@ -1,4 +1,4 @@
-# 衡术 Hengshu PRD v0.2
+# 溯源 PRD v0.2
 
 > AI Skill 注册表、本地运行分发平台、贡献驱动社区与兼容性评测网络  
 > 文档版本：v0.2  
@@ -10,9 +10,9 @@
 
 ## 1. 文档目的
 
-本文档用于明确「衡术 Hengshu」下一阶段的产品方向、功能范围、用户路径、数据结构、隐私边界、贡献机制和迭代计划。
+本文档用于明确「溯源」下一阶段的产品方向、功能范围、用户路径、数据结构、隐私边界、贡献机制和迭代计划。
 
-当前衡术已经完成 MVP 的端到端验证：用户可以浏览 Skill 市场、在线试用、下载 Skill Manifest，并通过本地 Runner 或自有模型端点运行。下一阶段的重点不是继续堆叠页面，而是把衡术从「Skill 下载站」升级为：
+当前 溯源 已经完成 MVP 的端到端验证：用户可以浏览 Skill 市场、在线试用、下载 Skill Manifest，并通过本地 Runner 或自有模型端点运行。下一阶段的重点不是继续堆叠页面，而是把 溯源 从「Skill 下载站」升级为：
 
 > 可安装、可更新、可反馈、可排名、可共建的 AI Skill 分发社区。
 
@@ -22,11 +22,11 @@
 
 ### 2.1 一句话定位
 
-**衡术 Hengshu 是一个面向本地模型和自有模型端点用户的 AI Skill 注册表、Runner 分发平台、兼容性评测网络与贡献驱动社区。**
+**溯源 是一个面向本地模型和自有模型端点用户的 AI Skill 注册表、Runner 分发平台、兼容性评测网络与贡献驱动社区。**
 
 ### 2.2 产品不是什么
 
-衡术不是：
+溯源 不是：
 
 - 单纯的 Prompt 模板站；
 - 单纯的 AI 工作流 SaaS；
@@ -36,7 +36,7 @@
 
 ### 2.3 产品是什么
 
-衡术是：
+溯源 是：
 
 - AI Skill 的注册表；
 - 可下载 Skill Manifest 的分发平台；
@@ -52,7 +52,7 @@
 
 > 有没有这个 Prompt？
 
-衡术要解决的是：
+溯源 要解决的是：
 
 > 这个 Skill 能不能安装？能不能更新？在哪些模型上能跑？输出稳不稳？谁在维护？社区反馈如何？我能不能求一个更适合自己的版本？
 
@@ -62,7 +62,7 @@
 
 ### 3.1 当前已具备基础
 
-衡术 MVP 已具备以下基础能力：
+溯源 MVP 已具备以下基础能力：
 
 - Skill 市场；
 - Skill 详情页；
@@ -76,7 +76,7 @@
 
 ### 3.2 当前主要问题
 
-如果衡术只停留在「找 Skill、下载 Skill」的形态，会遇到几个问题：
+如果 溯源 只停留在「找 Skill、下载 Skill」的形态，会遇到几个问题：
 
 1. **用户低频**：用户只有需要 Skill 时才访问，用不到就不上线。
 2. **下载即离站**：Manifest 下载后，用户可直接本地使用，平台可能退化成下载页。
@@ -100,12 +100,12 @@
 
 ### 4.1 v0.2 目标
 
-v0.2 的目标是让衡术完成从「可下载」到「可安装、可更新、可反馈」的升级。
+v0.2 的目标是让 溯源 完成从「可下载」到「可安装、可更新、可反馈」的升级。
 
 核心交付：
 
-1. Hengshu Skill Spec v1；
-2. Hengshu Runner v0.2；
+1. 溯源 Skill Spec v1；
+2. 溯源 Runner v0.2；
 3. 我的术台；
 4. Skill 更新机制；
 5. 本地模型兼容报告；
@@ -115,7 +115,7 @@ v0.2 的目标是让衡术完成从「可下载」到「可安装、可更新、
 ### 4.2 业务目标
 
 - 提升用户二次访问率；
-- 让用户在本地运行后仍然需要回到衡术查看更新、兼容性和社区反馈；
+- 让用户在本地运行后仍然需要回到 溯源 查看更新、兼容性和社区反馈；
 - 让创作者有持续维护 Skill 的动机；
 - 让平台沉淀本地模型兼容数据，而不是只沉淀下载次数；
 - 让需求通过「求术」机制转化为新的 Skill 供给。
@@ -299,7 +299,7 @@ Skill 入库
 
 ### 核心操作
 
-- `hengshu install <slug>`；
+- `suyuan install <slug>`；
 - 下载 YAML；
 - 下载 JSON；
 - 收藏；
@@ -342,28 +342,28 @@ Skill 入库
 
 ---
 
-## 7.4 Hengshu Runner
+## 7.4 溯源 Runner
 
-Runner 是衡术的本地触点。
+Runner 是 溯源 的本地触点。
 
 ### v0.2 命令
 
 ```bash
-hengshu login
-hengshu install <slug>
-hengshu list
-hengshu run <slug> --in key=value
-hengshu update <slug>
-hengshu outdated
-hengshu remove <slug>
-hengshu doctor
-hengshu config
+suyuan login
+suyuan install <slug>
+suyuan list
+suyuan run <slug> --in key=value
+suyuan update <slug>
+suyuan outdated
+suyuan remove <slug>
+suyuan doctor
+suyuan config
 ```
 
 ### 本地目录
 
 ```text
-~/.hengshu/
+~/.suyuan/
 ├── config.json
 ├── skills/
 │   └── <skill-slug>/
@@ -396,7 +396,7 @@ hengshu config
 
 ### 定位
 
-兼容榜是衡术区别于普通 Prompt 市场的核心资产。
+兼容榜是 溯源 区别于普通 Prompt 市场的核心资产。
 
 ### 展示维度
 
@@ -538,7 +538,7 @@ Skill 入库
 
 ---
 
-## 8. Hengshu Skill Spec v1
+## 8. 溯源 Skill Spec v1
 
 ### 8.1 目标
 
@@ -547,7 +547,7 @@ Skill 入库
 ### 8.2 Manifest 示例
 
 ```yaml
-schema_version: hengshu.skill/v1
+schema_version: suyuan.skill/v1
 id: xhs-title-generator
 name: 小红书标题生成器
 version: 1.0.0
@@ -953,7 +953,7 @@ created_at
 
 任务：
 
-- 定义 Hengshu Skill Spec v1；
+- 定义 溯源 Skill Spec v1；
 - 新增 SkillArtifacts；
 - manifest checksum；
 - 版本 changelog；
@@ -973,12 +973,12 @@ created_at
 
 任务：
 
-- `hengshu install`；
-- `hengshu list`；
-- `hengshu run`；
-- `hengshu update`；
-- `hengshu doctor`；
-- `~/.hengshu` 本地目录；
+- `suyuan install`；
+- `suyuan list`；
+- `suyuan run`；
+- `suyuan update`；
+- `suyuan doctor`；
+- `~/.suyuan` 本地目录；
 - Runner 安装页；
 - Ollama / LM Studio 教程。
 
@@ -1140,7 +1140,7 @@ created_at
 
 首页首屏：
 
-- 标题：衡术：AI Skill 注册表与本地运行分发社区；
+- 标题：溯源：AI Skill 注册表与本地运行分发社区；
 - 副标题：发现、安装、更新和共建可本地运行的 AI Skill；
 - CTA：进入术库、安装 Runner、查看兼容榜、发布求术。
 
@@ -1164,7 +1164,7 @@ created_at
 ```text
 1. 我的术台
 2. Runner install/list/update
-3. Hengshu Skill Spec v1
+3. 溯源 Skill Spec v1
 4. CompatReports
 5. 贡献值规则 2.0
 6. 求术广场闭环
@@ -1184,7 +1184,7 @@ created_at
 
 ## 19. 最终产品判断
 
-衡术不应只做成用户偶尔访问的 Skill 市场，而应做成：
+溯源 不应只做成用户偶尔访问的 Skill 市场，而应做成：
 
 > 用户管理 AI Skill、更新 Skill、评估模型兼容性、发布需求、参与贡献、沉淀团队能力的长期工作台。
 

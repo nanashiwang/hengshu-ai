@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
 
 from ....core.models import DetectorResult
 from ..baseline import extract_openai_features, sanitize_openai_headers
-from ..protocol_templates import validate_chat_completion
+from ..protocol_templates import ProtocolIssue, validate_chat_completion
 from .base import PassiveDetector
 
 
@@ -31,6 +32,19 @@ class ProtocolDetector(PassiveDetector):
             response,
             request_model=str(request.get("model") or ""),
         )
+        transport = response.get("_suyuan_transport")
+        if isinstance(transport, dict) and transport.get("fallback_reason"):
+            validation.issues.append(
+                ProtocolIssue(
+                    "major",
+                    "non_stream_unsupported",
+                    "$.transport",
+                    "Endpoint rejected a standard non-stream Chat Completions request and required stream=true",
+                    expected="both stream=false and stream=true supported",
+                    actual=transport.get("fallback_reason"),
+                )
+            )
+            validation.score = min(validation.score, 70.0)
         safe_headers = sanitize_openai_headers(headers)
         self._observations.append(
             {
@@ -55,17 +69,22 @@ class ProtocolDetector(PassiveDetector):
             if isinstance(obs.get("validation"), dict)
         ]
         score = sum(scores) / len(scores) if scores else 0.0
-        issues = [
+        raw_issues = [
             issue
             for obs in self._observations
             for issue in obs["validation"].get("issues", [])
         ]
+        issues = _deduplicate_issues(raw_issues)
         critical_count = sum(1 for issue in issues if issue.get("severity") == "critical")
         major_count = sum(1 for issue in issues if issue.get("severity") == "major")
         details = {
             "observation_count": len(self._observations),
             "critical_issue_count": critical_count,
+            "critical_issue_occurrence_count": sum(
+                1 for issue in raw_issues if issue.get("severity") == "critical"
+            ),
             "major_issue_count": major_count,
+            "issue_occurrence_count": len(raw_issues),
             "issues": issues[:30],
             "fingerprints": [
                 obs["validation"].get("fingerprints", {})
@@ -74,3 +93,24 @@ class ProtocolDetector(PassiveDetector):
         }
         passed = score >= 80.0 and critical_count == 0
         return self._result("pass" if passed else "fail", score, details)
+
+
+def _deduplicate_issues(issues: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse repeated findings while preserving how often they occurred."""
+    grouped: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for issue in issues:
+        if not isinstance(issue, dict):
+            continue
+        actual = json.dumps(issue.get("actual"), ensure_ascii=False, sort_keys=True, default=str)
+        key = (
+            str(issue.get("severity") or ""),
+            str(issue.get("code") or ""),
+            str(issue.get("path") or ""),
+            actual,
+        )
+        if key not in grouped:
+            grouped[key] = dict(issue)
+            grouped[key]["occurrences"] = 1
+        else:
+            grouped[key]["occurrences"] += 1
+    return list(grouped.values())

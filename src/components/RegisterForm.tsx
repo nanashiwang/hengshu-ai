@@ -79,7 +79,7 @@ export function RegisterForm({
 
   return (
     <div className="mx-auto max-w-sm py-8">
-      <h1 className="mb-1 text-xl font-semibold">注册衡术 Hengshu</h1>
+      <h1 className="mb-1 text-xl font-semibold">注册 溯源</h1>
       <p className="mb-6 text-sm text-[var(--muted)]">
         已有账号？
         <Link href="/login" className="ml-1 text-[var(--accent)]">

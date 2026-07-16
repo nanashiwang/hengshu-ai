@@ -7,7 +7,7 @@ describe('evidenceSnapshot — 证据签名快照', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-08T00:00:00.000Z'))
-    vi.stubEnv('HENGSHU_SIGNING_KEY', '')
+    vi.stubEnv('SUYUAN_SIGNING_KEY', '')
   })
 
   afterEach(() => {

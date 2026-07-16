@@ -1,12 +1,12 @@
 {
-  "name": "hengshu-ai",
+  "name": "suyuan",
   "version": "0.1.0",
-  "description": "衡术 Hengshu — AI Skill 的可信与兼容控制平面",
+  "description": "溯源 — AI Skill 的可信与兼容控制平面",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
-    "devsafe": "rm -rf .next && cross-env NODE_OPTIONS=--no-deprecation next dev",
+    "devsafe": "node scripts/clear-next.mjs && cross-env NODE_OPTIONS=--no-deprecation next dev",
     "build": "cross-env NODE_OPTIONS=\"--no-deprecation --max-old-space-size=8000\" next build",
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
     "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
@@ -28,7 +28,7 @@
     "test:watch": "vitest",
     "lint": "cross-env NODE_OPTIONS=--no-deprecation tsx scripts/lint-guardrails.ts",
     "typecheck": "tsc --noEmit",
-    "runner": "node runner/hengshu.mjs",
+    "runner": "node runner/suyuan.mjs",
     "worker:reconcile-newapi": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/reconcile-newapi.ts",
     "worker:plan-newapi-drift": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/plan-newapi-drift-actions.ts",
     "worker:migrate-secrets": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/migrate-secrets.ts",
@@ -48,15 +48,15 @@
     "worker:reverify-queue": "cross-env NODE_OPTIONS=--no-deprecation tsx src/worker/reverify-queue.ts"
   },
   "dependencies": {
-    "@payloadcms/db-postgres": "3.85.1",
-    "@payloadcms/next": "3.85.1",
-    "@payloadcms/richtext-lexical": "3.85.1",
-    "@payloadcms/ui": "3.85.1",
+    "@payloadcms/db-postgres": "3.86.0",
+    "@payloadcms/next": "3.86.0",
+    "@payloadcms/richtext-lexical": "3.86.0",
+    "@payloadcms/ui": "3.86.0",
     "cross-env": "^7.0.3",
     "dotenv": "16.4.7",
     "graphql": "^16.8.1",
     "next": "16.2.6",
-    "payload": "3.85.1",
+    "payload": "3.86.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "redis": "^6.1.0",
@@ -72,6 +72,11 @@
     "tsx": "^4.21.0",
     "typescript": "5.7.3",
     "vitest": "^4.1.9"
+  },
+  "overrides": {
+    "monaco-editor": {
+      "dompurify": "3.4.12"
+    }
   },
   "engines": {
     "node": ">=22 <23"

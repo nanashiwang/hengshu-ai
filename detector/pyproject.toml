@@ -3,12 +3,12 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "relay-detector"
+name = "suyuan-detector"
 version = "0.1.0"
-description = "先测 AI · AI API relay station quality and authenticity detector"
+description = "溯源 · AI API relay station quality and authenticity detector"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
-authors = [{ name = "先测 AI" }]
+authors = [{ name = "溯源" }]
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -35,8 +35,7 @@ web = [
 ]
 
 [project.scripts]
-relay-detector = "relay_detector.cli:app"
-xiance = "relay_detector.cli:app"
+suyuan = "relay_detector.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]

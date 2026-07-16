@@ -73,7 +73,7 @@ function zipStore(files: Record<string, string>) {
   return Buffer.concat([...locals, central, eocd])
 }
 
-const manifest = `schema_version: hengshu.skill/v1
+const manifest = `schema_version: suyuan.skill/v1
 name: 测试 Skill
 version: 1.0.0
 runtime:
@@ -97,11 +97,11 @@ input_schema:
 describe('skill package analysis', () => {
   it('extracts manifest and prompt from a zip package', () => {
     const pkg = zipStore({
-      'hengshu.skill.yaml': manifest,
+      'suyuan.skill.yaml': manifest,
       'README.md': '# 测试 Skill\n用于测试。',
     })
     const analysis = analyzeSkillPackage('skill.zip', pkg)
-    expect(analysis.manifestName).toBe('hengshu.skill.yaml')
+    expect(analysis.manifestName).toBe('suyuan.skill.yaml')
     expect(analysis.promptTemplate).toContain('{{topic}}')
     expect(analysis.inputSchema.topic.label).toBe('主题')
     expect(analysis.issues.filter((i) => i.level === 'blocker')).toHaveLength(0)
@@ -109,14 +109,14 @@ describe('skill package analysis', () => {
 
   it('blocks packages containing secret files', () => {
     const pkg = zipStore({
-      'hengshu.skill.yaml': manifest,
+      'suyuan.skill.yaml': manifest,
       '.env': 'MODEL_GATEWAY_KEY=secret',
     })
     const analysis = analyzeSkillPackage('skill.zip', pkg)
     expect(analysis.issues.some((i) => i.code === 'SECRET_FILE_INCLUDED' && i.level === 'blocker')).toBe(true)
   })
 
-  it('keeps packages without hengshu.skill.yaml on manual review path', () => {
+  it('keeps packages without suyuan.skill.yaml on manual review path', () => {
     const pkg = zipStore({ 'README.md': '# only readme' })
     const analysis = analyzeSkillPackage('skill.zip', pkg)
     expect(analysis.issues.some((i) => i.code === 'MANIFEST_MISSING' && i.level === 'manual')).toBe(true)
@@ -165,18 +165,18 @@ describe('skill package analysis', () => {
 
   it('uses the compliance-review skill prompt for package review context', () => {
     const pkg = zipStore({
-      'hengshu.skill.yaml': manifest,
+      'suyuan.skill.yaml': manifest,
       'README.md': '# 测试 Skill\n用于测试。',
     })
     const analysis = analyzeSkillPackage('skill.zip', pkg)
     const prompt = buildSkillComplianceReviewPrompt({ title: '测试 Skill', category: 'AI 评测', analysis })
     expect(prompt).toContain('Skill 安全')
-    expect(prompt).toContain('hengshu.skill.yaml')
+    expect(prompt).toContain('suyuan.skill.yaml')
     expect(prompt).toContain('测试 Skill')
   })
 
   it('only publishes AI-approved packages; all non-approve decisions stay pending for staff review', () => {
-    const analysis = analyzeSkillPackage('skill.zip', zipStore({ 'hengshu.skill.yaml': manifest }))
+    const analysis = analyzeSkillPackage('skill.zip', zipStore({ 'suyuan.skill.yaml': manifest }))
     expect(packageStatusForReview({ decision: 'approve' }, analysis)).toBe('published')
     expect(packageStatusForReview({ decision: 'manual_review' }, analysis)).toBe('pending')
     expect(packageStatusForReview({ decision: 'reject' }, analysis)).toBe('pending')

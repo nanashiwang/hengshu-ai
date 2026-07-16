@@ -40,12 +40,12 @@ export async function generateMetadata({
       overrideAccess: true,
     })
     const s = res.docs[0] as any
-    if (!canReadSkillEvidence(s, null)) return { title: 'Skill · 衡术 Hengshu' }
+    if (!canReadSkillEvidence(s, null)) return { title: 'Skill · 溯源' }
     const desc = String(
       s.description || `${s.title} —— 跨模型兼容评测与本地运行`,
     ).slice(0, 160)
     return {
-      title: `${s.title} · 衡术 Hengshu`,
+      title: `${s.title} · 溯源`,
       description: desc,
       openGraph: {
         title: s.title as string,
@@ -54,7 +54,7 @@ export async function generateMetadata({
       },
     }
   } catch {
-    return { title: 'Skill · 衡术 Hengshu' }
+    return { title: 'Skill · 溯源' }
   }
 }
 
@@ -770,7 +770,7 @@ export default async function SkillDetailPage({
               <Empty>
                 暂无兼容报告。用{' '}
                 <code className="surface px-1 text-[11px]">
-                  hengshu run --report
+                  suyuan run --report
                 </code>{' '}
                 贡献你本地模型的兼容数据（不含输入/输出）。
               </Empty>

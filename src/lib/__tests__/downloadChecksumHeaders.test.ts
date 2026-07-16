@@ -1,0 +1,14 @@
+import { describe, expect, it } from 'vitest'
+import { downloadChecksumHeaders } from '@/lib/downloadChecksumHeaders'
+
+describe('downloadChecksumHeaders', () => {
+  it('returns the suyuan checksum evidence header', () => {
+    expect(downloadChecksumHeaders('sha256:abc')).toEqual({
+      'X-Suyuan-Checksum': 'sha256:abc',
+    })
+  })
+
+  it('does not serialize missing checksums as undefined', () => {
+    expect(downloadChecksumHeaders(undefined)['X-Suyuan-Checksum']).toBe('')
+  })
+})

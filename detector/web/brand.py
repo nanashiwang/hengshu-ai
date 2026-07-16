@@ -1,4 +1,4 @@
-"""Single source of truth for the public XianCe AI brand."""
+"""Single source of truth for the public 溯源 brand."""
 
 from __future__ import annotations
 
@@ -19,12 +19,16 @@ def _normalise_site_url(value: str) -> str:
         or parsed.query
         or parsed.fragment
     ):
-        raise RuntimeError("XIANCE_SITE_URL must be an absolute http(s) URL")
+        raise RuntimeError("SUYUAN_SITE_URL must be an absolute http(s) URL")
     return value
 
 
+def _env(name: str, default: str = "") -> str:
+    return os.environ.get(name) or default
+
+
 def _optional_http_url(name: str) -> str:
-    value = os.environ.get(name, "").strip().rstrip("/")
+    value = _env(name).strip().rstrip("/")
     if not value:
         return ""
     parsed = urlparse(value)
@@ -34,9 +38,9 @@ def _optional_http_url(name: str) -> str:
 
 
 def _analytics_id() -> str:
-    value = os.environ.get("XIANCE_ANALYTICS_ID", "").strip()
+    value = _env("SUYUAN_ANALYTICS_ID").strip()
     if value and not re.fullmatch(r"[A-Z0-9-]{3,32}", value):
-        raise RuntimeError("XIANCE_ANALYTICS_ID has an invalid format")
+        raise RuntimeError("SUYUAN_ANALYTICS_ID has an invalid format")
     return value
 
 
@@ -60,13 +64,13 @@ class BrandConfig:
 
 
 brand = BrandConfig(
-    name="先测 AI",
-    english_name="XianCe AI",
-    short_name="先测",
-    slogan="先测，再用。",
+    name="溯源",
+    english_name="suyuan",
+    short_name="溯源",
+    slogan="让 AI 能力，有据可验。",
     site_url=_normalise_site_url(
-        os.environ.get("XIANCE_SITE_URL", "http://localhost:8765")
+        _env("SUYUAN_SITE_URL", "http://localhost:8765")
     ),
-    source_url=_optional_http_url("XIANCE_SOURCE_URL"),
+    source_url=_optional_http_url("SUYUAN_SOURCE_URL"),
     analytics_id=_analytics_id(),
 )

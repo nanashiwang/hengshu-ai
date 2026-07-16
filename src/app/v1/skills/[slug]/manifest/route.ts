@@ -1,6 +1,7 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { ensureArtifact } from '@/lib/artifacts'
+import { downloadChecksumHeaders } from '@/lib/downloadChecksumHeaders'
 import { resolvePublishedSkill } from '@/lib/installs'
 import { normalizeManifestFormat } from '@/lib/manifestRequest'
 
@@ -51,7 +52,7 @@ export async function GET(
           ? 'application/json; charset=utf-8'
           : 'application/x-yaml; charset=utf-8',
       'Content-Disposition': `attachment; filename="${skill.slug}-${ver}.${format}"`,
-      'X-Hengshu-Checksum': artifact.checksum || '',
+      ...downloadChecksumHeaders(artifact.checksum),
       'Cache-Control': 'no-store',
     },
   })
