@@ -2,6 +2,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { resolvePublishedSkill } from '@/lib/installs'
 import { findStoredSkillPackage } from '@/lib/skillPackage'
+import { downloadChecksumHeaders } from '@/lib/downloadChecksumHeaders'
 
 // GET /v1/skills/{slug}/package —— 下载审核通过后冻结的 Skill 压缩包。
 export async function GET(
@@ -34,7 +35,7 @@ export async function GET(
       'Content-Type': pkg.type,
       'Content-Disposition': `attachment; filename="${skill.slug}-${version.version || '1.0.0'}.${ext}"`,
       'Content-Length': String(pkg.size),
-      'X-Hengshu-Checksum': pkg.checksum,
+      ...downloadChecksumHeaders(pkg.checksum),
       'Cache-Control': 'no-store',
     },
   })

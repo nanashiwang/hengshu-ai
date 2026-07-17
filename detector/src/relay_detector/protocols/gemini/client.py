@@ -1,6 +1,6 @@
 """Gemini OpenAI-compatible HTTP client.
 
-先测 AI tests Gemini relays through the OpenAI Chat Completions wire format
+The detector tests Gemini relays through the OpenAI Chat Completions wire format
 exclusively. Google's official OpenAI-compatible endpoint lives at
 `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`;
 third-party relays usually expose `/v1/chat/completions`. Both speak the same

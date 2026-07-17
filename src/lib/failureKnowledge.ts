@@ -83,7 +83,7 @@ export const FAILURE_META: Record<string, FailureMeta> = {
     likelyCause: '模型名、参数、上下文长度或网关请求格式不被该通道接受。',
     publicFixHint: '核对模型名和输入规模；过长输入先拆分。',
     repairTemplate: '确认模型名在网关可用；降低 maxTokens；为超长输入增加切片策略。',
-    verifyTemplate: '用 0-500 输入规模档先测通，再逐步放大到原输入规模。',
+    verifyTemplate: '用 0-500 输入规模档先验证，再逐步放大到原输入规模。',
   },
   http_5xx: {
     label: '上游服务异常',

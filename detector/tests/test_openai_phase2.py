@@ -9,6 +9,8 @@ import pytest
 
 from relay_detector.core.detectors_base import ActiveDetector, PassiveDetector
 from relay_detector.core.models import ExecutionConfig, Mode
+from relay_detector.core.scorer import compute_total, effective_verdict
+from relay_detector.report import Report
 from relay_detector.protocols.openai import (
     build_detectors,
     default_model,
@@ -16,7 +18,10 @@ from relay_detector.protocols.openai import (
     tier_banner,
 )
 from relay_detector.protocols.openai.client import (
+    OpenAIAPIError,
     OpenAIChatClient,
+    ThrottledOpenAIClient,
+    is_stream_required_error,
     normalize_openai_base_url,
 )
 from relay_detector.protocols.openai.detectors.basic_request import BasicRequestDetector
@@ -95,7 +100,7 @@ class FakeOpenAIBaseClient:
                 content='{"ok":true,"nonce":"openai-detector"}',
                 usage=usage,
             )
-        elif "XIANCE_STREAM_CHECK" in prompt:
+        elif "SUYUAN_STREAM_CHECK" in prompt:
             response = _chat_payload(model=model, content=EXPECTED_TEXT, usage=usage)
         elif "HTTP status 418" in prompt:
             response = _chat_payload(
@@ -196,6 +201,86 @@ class IntegrityResponseClient:
         }, 9
 
 
+class StreamOnlyOpenAIBaseClient:
+    """Relay shape observed live: non-stream rejected, SSE contains Claude usage."""
+
+    async def chat_completions_create(self, **_body: Any):
+        raise OpenAIAPIError(
+            400,
+            '{"error":{"message":"Stream must be set to true"}}',
+        )
+
+    async def chat_completions_stream(self, **body: Any):
+        prompt = str(body.get("messages") or [])
+        model = body["model"]
+        prompt_tokens = 2584 if "Reference text:" in prompt else 2504
+        finish_reason = "stop"
+        content = "pong"
+        delta: dict[str, Any] = {"content": content}
+        if body.get("tools"):
+            finish_reason = "tool_calls"
+            delta = {
+                "tool_calls": [
+                    {
+                        "index": 0,
+                        "id": "call_stream_only",
+                        "type": "function",
+                        "function": {
+                            "name": "get_current_weather",
+                            "arguments": '{"city":"Boston, MA","unit":"celsius"}',
+                        },
+                    }
+                ]
+            }
+        elif body.get("response_format"):
+            delta = {"content": '{"ok":true,"nonce":"openai-detector"}'}
+        elif "SUYUAN_STREAM_CHECK" in prompt:
+            delta = {"content": EXPECTED_TEXT}
+        elif "HTTP status 418" in prompt:
+            delta = {"content": "HTTP 418 means I'm a teapot."}
+        elif "Reply with exactly: ok" in prompt:
+            delta = {"content": "ok"}
+
+        yield {
+            "id": "chatcmpl-stream-only",
+            "object": "chat.completion.chunk",
+            "created": 1_741_569_952,
+            "model": model,
+            "choices": [{"index": 0, "delta": {"role": "assistant"}}],
+        }, 3
+        yield {
+            "id": "chatcmpl-stream-only",
+            "object": "chat.completion.chunk",
+            "created": 1_741_569_952,
+            "model": model,
+            "choices": [{"index": 0, "delta": delta}],
+        }, 5
+        yield {
+            "id": "chatcmpl-stream-only",
+            "object": "chat.completion.chunk",
+            "created": 1_741_569_952,
+            "model": model,
+            "choices": [
+                {"index": 0, "delta": {}, "finish_reason": finish_reason}
+            ],
+        }, 7
+        yield {
+            "id": "chatcmpl-stream-only",
+            "object": "chat.completion.chunk",
+            "created": 1_741_569_952,
+            "model": model,
+            "choices": [],
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": 4,
+                "total_tokens": prompt_tokens + 4,
+                "input_tokens": prompt_tokens,
+                "output_tokens": 4,
+                "claude_cache_creation_5_m_tokens": 0,
+            },
+        }, 9
+
+
 def test_openai_base_url_normalization_handles_v1_suffix():
     assert normalize_openai_base_url("https://api.example.com") == (
         "https://api.example.com/v1"
@@ -203,6 +288,87 @@ def test_openai_base_url_normalization_handles_v1_suffix():
     assert normalize_openai_base_url("https://api.example.com/v1/") == (
         "https://api.example.com/v1"
     )
+
+
+def test_stream_required_error_detection_is_narrow():
+    assert is_stream_required_error(
+        OpenAIAPIError(400, "Stream must be set to true")
+    )
+    assert not is_stream_required_error(
+        OpenAIAPIError(400, "stream field has an invalid type")
+    )
+    assert not is_stream_required_error(
+        OpenAIAPIError(500, "Stream must be set to true")
+    )
+
+
+def test_terminal_report_formats_structured_protocol_issues():
+    result = type(
+        "Result",
+        (),
+        {
+            "status": "fail",
+            "name": "protocol",
+            "details": {
+                "issues": [
+                    {"code": "non_stream_unsupported", "severity": "major"},
+                    {"code": "usage_contains_claude_fields", "severity": "critical"},
+                ]
+            },
+        },
+    )()
+    note = Report()._note_for(result)
+    assert "non_stream_unsupported" in note
+    assert "usage_contains_claude_fields" in note
+
+
+@pytest.mark.asyncio
+async def test_stream_only_relay_is_adapted_but_never_misreported_as_fully_compatible():
+    cfg = ExecutionConfig.for_mode(Mode.FULL, max_concurrent=3)
+    runner = Runner(StreamOnlyOpenAIBaseClient(), build_detectors(), cfg)
+    outcome = await runner.run("gpt-5.6-sol")
+    by_name = {result.name: result for result in outcome.results}
+
+    assert by_name["basic_request"].status == "pass"
+    assert by_name["function_calling"].status == "pass"
+    assert by_name["structured_output"].status == "pass"
+    assert by_name["integrity"].status == "skip"
+    assert by_name["integrity"].details["skip_reason"] == "non-stream-unsupported"
+    assert by_name["token_billing"].status == "fail"
+    assert by_name["token_billing"].details["non_stream_supported"] is False
+
+    protocol = by_name["protocol"]
+    assert protocol.status == "fail"
+    issue_codes = {issue["code"] for issue in protocol.details["issues"]}
+    assert "non_stream_unsupported" in issue_codes
+    assert "usage_contains_claude_fields" in issue_codes
+    assert protocol.details["critical_issue_count"] > 0
+    claude_issue = next(
+        issue
+        for issue in protocol.details["issues"]
+        if issue["code"] == "usage_contains_claude_fields"
+    )
+    assert claude_issue["occurrences"] > 1
+    assert protocol.details["issue_occurrence_count"] > len(protocol.details["issues"])
+
+    score = compute_total(outcome.results)
+    assert score > 0
+    assert effective_verdict(score, outcome.results) == "marginal"
+
+
+@pytest.mark.asyncio
+async def test_stream_fallback_reassembles_tool_call_deltas():
+    client = ThrottledOpenAIClient(StreamOnlyOpenAIBaseClient())
+    _request, response, _headers, _latency = await client.chat_completions_create(
+        model="gpt-5.6-sol",
+        messages=[{"role": "user", "content": "Use the tool"}],
+        tools=[{"type": "function", "function": {"name": "get_current_weather"}}],
+    )
+    call = response["choices"][0]["message"]["tool_calls"][0]
+    assert call["id"] == "call_stream_only"
+    assert call["function"]["name"] == "get_current_weather"
+    assert call["function"]["arguments"].startswith("{")
+    assert response["_suyuan_transport"]["effective_stream"] is True
 
 
 @pytest.mark.asyncio

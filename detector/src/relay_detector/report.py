@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -107,7 +108,14 @@ class Report:
             issues = r.details.get("issues") or []
             if not issues:
                 return "[dim]协议合规[/dim]"
-            preview = ", ".join(issues[:2])
+            labels: list[str] = []
+            for issue in issues[:2]:
+                if isinstance(issue, dict):
+                    label = issue.get("code") or issue.get("message") or "protocol_issue"
+                else:
+                    label = str(issue)
+                labels.append(str(label))
+            preview = escape(", ".join(labels))
             more = "" if len(issues) <= 2 else f" (+{len(issues) - 2})"
             return f"[yellow]{preview}{more}[/yellow]"
         if r.name == "message_id":
@@ -130,4 +138,7 @@ class Report:
         return report.model_dump_json(indent=2)
 
     def write_json(self, report: DetectionReport, path: Path) -> None:
-        path.write_text(self.to_json(report), encoding="utf-8")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        temporary.write_text(self.to_json(report), encoding="utf-8")
+        temporary.replace(path)

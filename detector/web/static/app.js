@@ -77,7 +77,7 @@
   // Exposed so the probe layer can replace the suggestions with whatever
   // the relay actually advertises. Falls back to the static template list
   // if probe fails / relay doesn't expose /v1/models.
-  window.xianceSetModelChoices = function (values) {
+  window.suyuanSetModelChoices = function (values) {
     list.innerHTML = '';
     values.forEach((v) => {
       const li = document.createElement('li');
@@ -226,15 +226,15 @@
     );
 
     // Replace the dropdown with what the relay actually carries.
-    if (window.xianceSetModelChoices) {
-      window.xianceSetModelChoices(myModels);
+    if (window.suyuanSetModelChoices) {
+      window.suyuanSetModelChoices(myModels);
     }
     setSubmitEnabled(true);
 
     // Stash best_by_protocol globally — the submit handler reads it when
     // preflight 422s so it can offer a one-click swap to the recommended
     // model.
-    window.xianceBestByProtocol = data.best_by_protocol || {};
+    window.suyuanBestByProtocol = data.best_by_protocol || {};
 
     // If the user-typed model isn't in the list, auto-correct to the
     // protocol-preferred default rather than whatever sorts first
@@ -271,7 +271,7 @@
       btn.addEventListener('click', () => {
         const target = btn.getAttribute('data-handoff');
         try {
-          sessionStorage.setItem('xiance:handoff', JSON.stringify({
+          sessionStorage.setItem('suyuan:handoff', JSON.stringify({
             base_url: baseUrlInput.value.trim(),
             from: protocol,
           }));
@@ -299,9 +299,9 @@
   // browser storage; the user deliberately re-enters the key on the target
   // page. Single-shot — clear the URL handoff after reading it.
   try {
-    const raw = sessionStorage.getItem('xiance:handoff');
+    const raw = sessionStorage.getItem('suyuan:handoff');
     if (raw) {
-      sessionStorage.removeItem('xiance:handoff');
+      sessionStorage.removeItem('suyuan:handoff');
       const data = JSON.parse(raw);
       if (data && data.base_url) {
         baseUrlInput.value = data.base_url;
@@ -340,7 +340,7 @@
   function renderModelDeadError(detail) {
     // Backend returns: {code, message, model, protocol, upstream_error}
     const proto = currentProtocol();
-    const recommended = (window.xianceBestByProtocol || {})[proto];
+    const recommended = (window.suyuanBestByProtocol || {})[proto];
     const dead = detail.model || '该模型';
     const reason = detail.upstream_error || '上游拒绝';
 
@@ -451,7 +451,7 @@
 // section's data-mode. Choice persists in localStorage so the user
 // doesn't have to re-toggle every visit.
 (() => {
-  const STORAGE_KEY = 'xiance_faq_mode';
+  const STORAGE_KEY = 'suyuan_faq_mode';
   const sections = document.querySelectorAll('.faq[data-mode]');
   if (!sections.length) return;
 

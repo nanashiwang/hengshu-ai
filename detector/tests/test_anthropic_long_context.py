@@ -119,7 +119,7 @@ async def test_anthropic_long_context_passes_haiku_with_200k_clamp():
     clamping the haystack to leave room for the question. Catches the bug
     where naive `target > limit` skips the highest tier on every 200k
     Anthropic model (Haiku 4.5, Opus 4.5, Sonnet 4.5, etc.) and silently
-    lowers 先测 AI's coverage."""
+    lowers the detector's coverage."""
     det = LongContextDetector()
     det.config = ExecutionConfig.for_mode(Mode.FULL, include_long_context=True)
     client = _MockClient()

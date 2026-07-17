@@ -2,9 +2,9 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import Link from 'next/link'
 
-export const metadata = { title: '用户功能说明 · 衡术 Hengshu' }
+export const metadata = { title: '用户功能说明 · 溯源' }
 
-const DOC_RELATIVE_PATH = 'docs/衡术-功能说明书.md'
+const DOC_RELATIVE_PATH = 'docs/suyuan-功能说明书.md'
 
 type HeadingBlock = {
   type: 'heading'

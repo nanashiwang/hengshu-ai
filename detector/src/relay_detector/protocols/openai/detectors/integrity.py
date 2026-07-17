@@ -14,7 +14,7 @@ from ....core.models import DetectorResult
 from .base import ActiveDetector
 
 
-EXPECTED_TEXT = "XIANCE_STREAM_CHECK_7F3A9C"
+EXPECTED_TEXT = "SUYUAN_STREAM_CHECK_7F3A9C"
 PROMPT = f"Reply with exactly this token and nothing else: {EXPECTED_TEXT}"
 PASS_SCORE = 80.0
 
@@ -33,6 +33,17 @@ class IntegrityDetector(ActiveDetector):
                 temperature=0,
                 messages=[{"role": "user", "content": PROMPT}],
             )
+            transport = non_stream.get("_suyuan_transport")
+            if isinstance(transport, dict) and transport.get("effective_stream") is True:
+                return self._result(
+                    "skip",
+                    0.0,
+                    {
+                        "skip_reason": "non-stream-unsupported",
+                        "non_stream_supported": False,
+                        "fallback_reason": transport.get("fallback_reason"),
+                    },
+                )
             stream = await _collect_stream(
                 client,
                 model=model,

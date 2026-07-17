@@ -25,12 +25,13 @@ from .models import (
     Protocol,
     mask_api_key,
 )
+from .monitor import monitor_output_path, normalize_target_id, resolve_monitor_api_key
 from .report import Report
 from .runner import Runner
 from .scorer import compute_total, effective_verdict, fatal_run_error, summary_text
 
 app = typer.Typer(
-    name="relay-detector",
+    name="suyuan",
     help="Detect quality and authenticity of Claude API relay stations.",
     no_args_is_help=True,
 )
@@ -46,7 +47,7 @@ console = Console()
 @app.command()
 def version() -> None:
     """Print the version and exit."""
-    console.print(f"relay-detector {__version__}")
+    console.print(f"suyuan {__version__}")
 
 
 def _load_dotenv(path: Path) -> None:
@@ -284,11 +285,104 @@ def detect(
     asyncio.run(_run_detect(proto, base_url, api_key, model, config, output))
 
 
+@app.command(name="monitor-once")
+def monitor_once(
+    target_id: str = typer.Option(
+        ...,
+        "--target-id",
+        envvar="SUYUAN_MONITOR_TARGET_ID",
+        help="Stable ASCII monitor id used only in the report filename.",
+    ),
+    base_url: str = typer.Option(
+        ...,
+        "--base-url",
+        envvar="SUYUAN_MONITOR_BASE_URL",
+        help="Relay base URL.",
+    ),
+    model: str = typer.Option(
+        ...,
+        "--model",
+        envvar="SUYUAN_MONITOR_MODEL",
+        help="Model id to monitor.",
+    ),
+    protocol: Optional[str] = typer.Option(
+        None,
+        "--protocol",
+        envvar="SUYUAN_MONITOR_PROTOCOL",
+        help="anthropic / openai / gemini; inferred from model when omitted.",
+    ),
+    mode: Mode = typer.Option(
+        Mode.QUICK,
+        "--mode",
+        envvar="SUYUAN_MONITOR_MODE",
+        case_sensitive=False,
+        help="quick / standard / full",
+    ),
+    api_key_env: Optional[str] = typer.Option(
+        None,
+        "--api-key-env",
+        envvar="SUYUAN_MONITOR_API_KEY_ENV",
+        help=(
+            "Environment variable name containing the API key. systemd "
+            "LoadCredential=api_key takes precedence. The raw key is never a CLI option."
+        ),
+    ),
+    output_root: Path = typer.Option(
+        Path("/opt/suyuan-detector/web_data/jobs"),
+        "--output-root",
+        envvar="SUYUAN_JOBS_DIR",
+        help="Root jobs directory; reports are written under <protocol>/.",
+    ),
+    max_concurrent: int = typer.Option(
+        2,
+        "--max-concurrent",
+        envvar="SUYUAN_MONITOR_MAX_CONCURRENT",
+    ),
+    timeout: Optional[float] = typer.Option(
+        None,
+        "--timeout",
+        envvar="SUYUAN_MONITOR_TIMEOUT",
+    ),
+    include_long_context: bool = typer.Option(
+        False,
+        "--long-context/--no-long-context",
+        envvar="SUYUAN_MONITOR_LONG_CONTEXT",
+        help="Opt in explicitly; routine monitors keep this costly probe off.",
+    ),
+) -> None:
+    """Run one scheduled probe and atomically persist it for history/leaderboard."""
+    try:
+        safe_target_id = normalize_target_id(target_id)
+        api_key = resolve_monitor_api_key(api_key_env)
+    except (ValueError, RuntimeError) as error:
+        console.print(f"[red]monitor configuration error:[/red] {error}")
+        raise typer.Exit(2) from error
+
+    proto = _resolve_protocol(protocol, model)
+    config = ExecutionConfig.for_mode(mode, max_concurrent=max_concurrent)
+    if timeout is not None:
+        config.request_timeout_s = timeout
+    config.include_long_context = include_long_context
+    if include_long_context:
+        config.overall_timeout_s = max(config.overall_timeout_s, 300.0)
+
+    path = monitor_output_path(output_root, proto, safe_target_id)
+    report = asyncio.run(
+        _run_detect(proto, base_url, api_key, model, config, path)
+    )
+    console.print(
+        f"[dim]monitor target={safe_target_id} verdict={report.verdict} "
+        f"score={report.total_score:.1f}[/dim]"
+    )
+    if report.run_error:
+        raise typer.Exit(1)
+
+
 _DEFAULT_BASE_URLS = {
     Protocol.OPENAI: "https://api.openai.com/v1",
     Protocol.GEMINI: "https://generativelanguage.googleapis.com/v1beta/openai",
     # Anthropic intentionally has no default — the official endpoint requires
-    # an Anthropic key, which most relay-detector users won't have. Forcing
+    # an Anthropic key, which most suyuan users won't have. Forcing
     # an explicit --base-url avoids accidentally probing api.anthropic.com
     # when the user meant a relay.
 }
@@ -353,7 +447,7 @@ async def _run_detect(
     model: str,
     config: ExecutionConfig,
     output_path: Optional[Path],
-) -> None:
+) -> DetectionReport:
     masked = mask_api_key(api_key)
     console.print(
         f"[bold]Detecting[/bold] protocol=[cyan]{protocol.value}[/cyan] "
@@ -435,11 +529,17 @@ async def _run_detect(
         detected_non_anthropic_brands=detected_brands,
     )
 
+    # Persist the machine-readable evidence before terminal presentation. A
+    # renderer/encoding failure must never discard an otherwise completed live
+    # run, especially after the caller has already paid the upstream token cost.
+    if output_path:
+        Report().write_json(report, output_path)
+
     Report(console).render_terminal(report)
 
     if output_path:
-        Report().write_json(report, output_path)
         console.print(f"[dim]Wrote JSON report to {output_path}[/dim]")
+    return report
 
 
 # ---------------------------------------------------------------------------
@@ -464,7 +564,7 @@ _SEVERITY_LABEL = {
 @app.command(name="compare")
 def compare_cmd(
     relay_report: Path = typer.Argument(
-        ..., help="relay-detector detect 输出的 JSON 报告"
+        ..., help="suyuan detect 输出的 JSON 报告"
     ),
     baseline: Optional[Path] = typer.Option(
         None,

@@ -8,7 +8,7 @@ export function serverSecret(): string {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('PAYLOAD_SECRET 必须在生产环境配置为强随机值')
   }
-  return 'hengshu-dev-secret'
+  return 'suyuan-dev-secret'
 }
 
 function secretKey(): Buffer {

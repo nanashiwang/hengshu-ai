@@ -1,6 +1,6 @@
 """Gemini OpenAI-compatible protocol package.
 
-先测 AI tests Gemini relays through the OpenAI Chat Completions wire shape.
+The detector tests Gemini relays through the OpenAI Chat Completions wire shape.
 There is no native `/v1beta/models/X:generateContent` path — almost every
 third-party relay exposes Gemini under `/v1/chat/completions`, and Google's
 own OpenAI-compat endpoint at `/v1beta/openai/chat/completions` speaks the

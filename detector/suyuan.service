@@ -1,0 +1,44 @@
+[Unit]
+Description=溯源 relay verification web service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/suyuan-detector
+Environment=PYTHONUNBUFFERED=1
+Environment=SUYUAN_JOBS_DIR=/opt/suyuan-detector/web_data/jobs
+Environment=SUYUAN_WISHLIST_PATH=/opt/suyuan-detector/web_data/wishlist.txt
+EnvironmentFile=-/etc/suyuan.env
+ExecStartPre=/usr/bin/test -d /opt/suyuan-detector/web_data/jobs
+ExecStartPre=/usr/bin/test -w /opt/suyuan-detector/web_data/jobs
+ExecStart=/opt/suyuan-detector/venv/bin/python -m uvicorn web.server:app \
+  --host 127.0.0.1 --port 8765 \
+  --workers 1 \
+  --log-level info \
+  --proxy-headers \
+  --forwarded-allow-ips='127.0.0.1'
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=45
+StandardOutput=journal
+StandardError=journal
+User=suyuan
+Group=suyuan
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+ReadWritePaths=/opt/suyuan-detector/web_data
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

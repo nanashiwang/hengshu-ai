@@ -71,7 +71,7 @@ export const SkillVersions: CollectionConfig = {
         { label: '破坏性变更', value: 'breaking_change' },
       ],
     },
-    // ── Hengshu Skill Spec v1 运行时声明 ──
+    // ── 溯源 Skill Spec v1 运行时声明 ──
     {
       name: 'license',
       type: 'text',

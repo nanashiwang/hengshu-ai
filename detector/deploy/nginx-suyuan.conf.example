@@ -1,0 +1,40 @@
+# Install this file under /etc/nginx/sites-available/suyuan, replace the
+# placeholder domain, enable it, then obtain TLS with certbot.
+# The result page polls /api/status every 2.5 seconds. Keep this edge limit
+# above normal polling traffic; application-level probe/detect limits remain
+# stricter and protect expensive outbound work.
+limit_req_zone $binary_remote_addr zone=suyuan_api:10m rate=120r/m;
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name detector.example.com;
+
+    client_max_body_size 16k;
+    limit_req_status 429;
+
+    location /api/ {
+        limit_req zone=suyuan_api burst=12 nodelay;
+        proxy_pass http://127.0.0.1:8765;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8765;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+}

@@ -39,10 +39,9 @@ from .security import redact_secret, redact_text
 
 JobStatus = Literal["queued", "running", "done", "error"]
 
-# Production default; override via XIANCE_JOBS_DIR in tests / dev so the
-# import doesn't try to mkdir into /opt/xiance-ai on a developer laptop.
 JOBS_DIR = Path(
-    os.environ.get("XIANCE_JOBS_DIR", "/opt/xiance-ai/web_data/jobs")
+    os.environ.get("SUYUAN_JOBS_DIR")
+    or "/opt/suyuan-detector/web_data/jobs"
 )
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 

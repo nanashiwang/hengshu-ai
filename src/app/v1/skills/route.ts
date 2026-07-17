@@ -17,7 +17,7 @@ import {
   MAX_SKILL_PACKAGE_CATEGORY_LENGTH,
   MAX_SKILL_PACKAGE_DESCRIPTION_LENGTH,
   MAX_SKILL_PACKAGE_TITLE_LENGTH,
-  preflightSkillPackageFormRequest,
+  readSkillPackageFormData,
   readSkillPackageText,
 } from '@/lib/skillPackageSubmissionRequest'
 import {
@@ -332,14 +332,9 @@ async function handlePackageSubmission(
   request: Request,
   user: any,
 ) {
-  const preflight = preflightSkillPackageFormRequest(request)
-  if (!preflight.ok) return Response.json({ error: preflight.error }, { status: preflight.status })
-  let form: FormData
-  try {
-    form = await request.formData()
-  } catch {
-    return Response.json({ error: '表单数据无效' }, { status: 400 })
-  }
+  const parsedForm = await readSkillPackageFormData(request)
+  if (!parsedForm.ok) return Response.json({ error: parsedForm.error }, { status: parsedForm.status })
+  const form = parsedForm.form
 
   const titleValue = readSkillPackageText(form.get('title'), MAX_SKILL_PACKAGE_TITLE_LENGTH, 'title', true)
   if (!titleValue.ok) return Response.json({ error: titleValue.error }, { status: titleValue.status })

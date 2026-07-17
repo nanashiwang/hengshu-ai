@@ -3,8 +3,11 @@ import { cookies } from 'next/headers'
 import './globals.css'
 import { SiteNav } from '@/components/SiteNav'
 
+// 前台依赖登录态和 Payload；避免生产构建阶段预渲染时误连数据库。
+export const dynamic = 'force-dynamic'
+
 export const metadata = {
-  title: '衡术 Hengshu — AI Skill 的可信与兼容控制平面',
+  title: '溯源 — AI Skill 的可信与兼容控制平面',
   description:
     '让 AI Skill 拥有身份、版本、签名、兼容证据、失败记录和企业治理能力，适配用户已有模型、网关和本地 Runner。',
 }
@@ -35,7 +38,7 @@ export default async function FrontendLayout({ children }: { children: React.Rea
         <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-8 sm:px-6 lg:px-8">{children}</main>
         <footer className="border-t border-[var(--border)]">
           <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-2 px-4 py-8 text-xs text-[var(--faint)] sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-            <span>© 2026 衡术 Hengshu · v0.1</span>
+            <span>© 2026 溯源 · v0.1</span>
             <span>Passport · Compatibility · Runner · Enterprise Registry</span>
           </div>
         </footer>

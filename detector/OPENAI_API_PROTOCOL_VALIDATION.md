@@ -44,7 +44,7 @@ export OPENAI_API_KEY='sk-...'
 采集低成本完整样本：
 
 ```bash
-venv/bin/relay-detector openai baseline \
+venv/bin/suyuan openai baseline \
   --model gpt-4o-mini \
   --wire-api both \
   --probe-set full \
@@ -54,7 +54,7 @@ venv/bin/relay-detector openai baseline \
 只做连通性/基础协议冒烟：
 
 ```bash
-venv/bin/relay-detector openai baseline \
+venv/bin/suyuan openai baseline \
   --model gpt-4o-mini \
   --wire-api both \
   --probe-set smoke
@@ -462,13 +462,13 @@ src/relay_detector/
 CLI 增加：
 
 ```bash
-relay-detector openai \
+suyuan openai \
   --base-url https://api.openai.com \
   --api-key sk-... \
   --model <model-from-v1-models> \
   --protocol responses
 
-relay-detector openai \
+suyuan openai \
   --base-url https://some-relay.example.com \
   --api-key sk-... \
   --model <model-from-v1-models> \
@@ -477,7 +477,7 @@ relay-detector openai \
 
 `--protocol auto` 时：
 
-1. 先测 `/v1/responses`。
+1. 先检测 `/v1/responses`。
 2. 如果 404/405/明确不支持，再测 `/v1/chat/completions`。
 3. 两者都支持则都跑，输出双协议分数。
 

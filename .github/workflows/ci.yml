@@ -15,9 +15,11 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: detector/pyproject.toml
+          cache-dependency-path: |
+            detector/pyproject.toml
+            detector/constraints.txt
       - name: Install detector dependencies
-        run: python -m pip install -e "./detector[dev,web]"
+        run: python -m pip install -c detector/constraints.txt -e "./detector[dev,web]"
       - name: Test detector
         run: python -m pytest -q detector/tests
 

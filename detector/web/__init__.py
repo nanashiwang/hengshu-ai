@@ -1,1 +1,1 @@
-"""先测 AI web layer — wraps the relay-detector CLI as an HTTP service."""
+"""溯源 web layer — wraps the suyuan CLI as an HTTP service."""

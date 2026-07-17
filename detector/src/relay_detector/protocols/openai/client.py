@@ -49,6 +49,24 @@ class OpenAIAPIError(Exception):
         super().__init__(f"HTTP {status}: {body[:200]}")
 
 
+def is_stream_required_error(error: Exception) -> bool:
+    """Return whether a Chat Completions endpoint explicitly requires SSE.
+
+    Some relay-only models reject every non-stream request with HTTP 400.  We
+    may still exercise their capabilities through SSE, but must preserve that
+    transport downgrade in the report instead of silently pretending a real
+    non-stream response existed.
+    """
+    if not isinstance(error, OpenAIAPIError) or error.status != 400:
+        return False
+    text = error.body.lower()
+    return (
+        "stream must be set to true" in text
+        or "stream must be true" in text
+        or "stream=true is required" in text
+    )
+
+
 class OpenAIChatClient:
     """Raw httpx client for OpenAI-compatible endpoints."""
 
@@ -236,28 +254,107 @@ class ThrottledOpenAIClient:
     async def chat_completions_create(
         self, **body: Any
     ) -> tuple[dict[str, Any], dict[str, Any], httpx.Headers, int]:
-        return await self._with_retry(
-            lambda: self._base.chat_completions_create(**body),
-            broadcast=True,
-        )
+        try:
+            return await self._with_retry(
+                lambda: self._base.chat_completions_create(**body),
+                broadcast=True,
+            )
+        except OpenAIAPIError as error:
+            if not is_stream_required_error(error):
+                raise
+
+        # The endpoint is usable only through SSE.  Re-run the same semantic
+        # request as a stream and synthesize the Chat Completions envelope that
+        # active detectors already understand.  The explicit metadata is
+        # consumed by Integrity/Protocol/TokenBilling so this cannot inflate a
+        # stream-only endpoint into a false full-compatibility pass.
+        stream_body = dict(body)
+        stream_body.setdefault("stream_options", {"include_usage": True})
+        try:
+            return await self._collect_stream_response(
+                stream_body,
+                transport_meta={
+                    "requested_stream": False,
+                    "effective_stream": True,
+                    "fallback_reason": "stream_required",
+                },
+            )
+        except OpenAIAPIError as error:
+            # A few compatible relays require streaming but reject the optional
+            # stream_options object.  Retry once without it; absence of usage is
+            # then visible to token/protocol detectors.
+            if "stream_options" not in error.body.lower():
+                raise
+            stream_body.pop("stream_options", None)
+            return await self._collect_stream_response(
+                stream_body,
+                transport_meta={
+                    "requested_stream": False,
+                    "effective_stream": True,
+                    "fallback_reason": "stream_required_without_usage_option",
+                },
+            )
 
     async def chat_completions_stream(
-        self, **body: Any
+        self,
+        *,
+        _broadcast: bool = True,
+        _transport_meta: dict[str, Any] | None = None,
+        **body: Any,
     ) -> AsyncIterator[tuple[dict[str, Any], int]]:
         await self._wait_for_backoff()
         async with self._sema:
             self.request_count += 1
             usage: dict[str, Any] | None = None
             ttft_recorded = False
+            chunks_for_broadcast: list[dict[str, Any]] = []
+            request_started = time.monotonic()
             async for chunk, elapsed_ms in self._base.chat_completions_stream(**body):
+                if chunk.get("_done") or chunk.get("_parse_error"):
+                    continue
                 if not ttft_recorded and _chunk_has_text_delta(chunk):
                     self._ttft_samples_ms.append(elapsed_ms)
                     ttft_recorded = True
                 if isinstance(chunk.get("usage"), dict):
                     usage = chunk["usage"]
+                chunks_for_broadcast.append(chunk)
                 yield chunk, elapsed_ms
             if usage:
                 self._absorb_response_usage({"usage": usage})
+            if _broadcast and chunks_for_broadcast:
+                synthesized = _synthesize_stream_response(chunks_for_broadcast, usage)
+                if _transport_meta:
+                    synthesized["_suyuan_transport"] = dict(_transport_meta)
+                latency = int((time.monotonic() - request_started) * 1000)
+                request = dict(body)
+                request["stream"] = True
+                self._broadcast(request, synthesized, httpx.Headers(), latency)
+
+    async def _collect_stream_response(
+        self,
+        body: dict[str, Any],
+        *,
+        transport_meta: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any], httpx.Headers, int]:
+        chunks: list[dict[str, Any]] = []
+        usage: dict[str, Any] | None = None
+        last_elapsed = 0
+        async for chunk, elapsed in self.chat_completions_stream(
+            _broadcast=False,
+            **body,
+        ):
+            chunks.append(chunk)
+            last_elapsed = elapsed
+            if isinstance(chunk.get("usage"), dict):
+                usage = chunk["usage"]
+        if not chunks:
+            raise OpenAIAPIError(502, "stream ended without any data chunks")
+        response = _synthesize_stream_response(chunks, usage)
+        response["_suyuan_transport"] = dict(transport_meta)
+        request = dict(body)
+        request["stream"] = True
+        self._broadcast(request, response, httpx.Headers(), last_elapsed)
+        return request, response, httpx.Headers(), last_elapsed
 
     async def _with_retry(
         self,
@@ -305,6 +402,88 @@ def _chunk_has_text_delta(chunk: dict[str, Any]) -> bool:
         if isinstance(delta, dict) and delta.get("content"):
             return True
     return False
+
+
+def _synthesize_stream_response(
+    chunks: list[dict[str, Any]],
+    final_usage: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Reduce Chat Completions chunks to a non-stream-shaped response.
+
+    Besides text, this reassembles tool-call deltas so stream-only endpoints
+    can still be tested for function calling without weakening the checks.
+    """
+    head = chunks[0] if chunks else {}
+    text_parts: list[str] = []
+    finish_reason: Any = None
+    tool_calls: dict[int, dict[str, Any]] = {}
+    for chunk in chunks:
+        choices = chunk.get("choices")
+        if not isinstance(choices, list):
+            continue
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            if choice.get("finish_reason") is not None:
+                finish_reason = choice.get("finish_reason")
+            delta = choice.get("delta")
+            if not isinstance(delta, dict):
+                continue
+            content = delta.get("content")
+            if isinstance(content, str):
+                text_parts.append(content)
+            calls = delta.get("tool_calls")
+            if not isinstance(calls, list):
+                continue
+            for position, call_delta in enumerate(calls):
+                if not isinstance(call_delta, dict):
+                    continue
+                index = call_delta.get("index")
+                if not isinstance(index, int) or isinstance(index, bool):
+                    index = position
+                call = tool_calls.setdefault(
+                    index,
+                    {
+                        "id": "",
+                        "type": "function",
+                        "function": {"name": "", "arguments": ""},
+                    },
+                )
+                if isinstance(call_delta.get("id"), str):
+                    call["id"] += call_delta["id"]
+                if isinstance(call_delta.get("type"), str):
+                    call["type"] = call_delta["type"]
+                fn_delta = call_delta.get("function")
+                if isinstance(fn_delta, dict):
+                    fn = call["function"]
+                    if isinstance(fn_delta.get("name"), str):
+                        fn["name"] += fn_delta["name"]
+                    if isinstance(fn_delta.get("arguments"), str):
+                        fn["arguments"] += fn_delta["arguments"]
+
+    message: dict[str, Any] = {
+        "role": "assistant",
+        "content": "".join(text_parts),
+    }
+    if tool_calls:
+        message["content"] = None
+        message["tool_calls"] = [tool_calls[index] for index in sorted(tool_calls)]
+    response: dict[str, Any] = {
+        "id": head.get("id"),
+        "object": "chat.completion",
+        "created": head.get("created"),
+        "model": head.get("model"),
+        "choices": [
+            {
+                "index": 0,
+                "message": message,
+                "finish_reason": finish_reason,
+            }
+        ],
+    }
+    if isinstance(final_usage, dict):
+        response["usage"] = final_usage
+    return response
 
 
 OpenAIClient = OpenAIChatClient
