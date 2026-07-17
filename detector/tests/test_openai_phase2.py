@@ -442,13 +442,15 @@ def test_openai_tier_banner_disclaims_authenticity():
 
 def test_openai_default_model_choices_are_gpt5_series():
     assert model_choices() == [
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
         "gpt-5.5",
         "gpt-5.4",
-        "gpt-5.3-codex",
-        "gpt-5.4-nano",
         "gpt-5.4-mini",
+        "gpt-5.4-nano",
     ]
-    assert default_model() == "gpt-5.5"
+    assert default_model() == "gpt-5.6-sol"
 
 
 def test_openai_protocol_detector_accepts_chat_completion_shape():

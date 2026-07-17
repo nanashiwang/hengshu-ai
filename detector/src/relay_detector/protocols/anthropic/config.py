@@ -72,15 +72,14 @@ class ModelInfo:
 
 
 MODELS: dict[str, ModelInfo] = {
-    # Relay-exposed Claude-family model. Live capability probing confirmed
-    # adaptive summarized thinking and signed thinking blocks. Keep context
-    # claims conservative until a long-context baseline is collected.
+    # Current public Claude lineup. Capability and limit metadata follows the
+    # official model overview; legacy entries below remain for relay support.
     "claude-fable-5": ModelInfo(
         alias="claude-fable-5",
         aliases=("claude-fable-5",),
-        context_tokens=200_000,
-        max_output_tokens=64_000,
-        pdf_page_max=100,
+        context_tokens=1_000_000,
+        max_output_tokens=128_000,
+        pdf_page_max=600,
         supports_extended_thinking=False,
         supports_adaptive_thinking=True,
         new_tokenizer=True,
@@ -94,6 +93,16 @@ MODELS: dict[str, ModelInfo] = {
         # 与前一代 opus-4-7 一致:自适应思维(output_config.effort),
         # 不走 extended(thinking.budget_tokens)。没这条 thinking_signature
         # 对 4.8 会被 applies_to() 判 False 而跳过(皇冠级检测失灵)。
+        supports_extended_thinking=False,
+        supports_adaptive_thinking=True,
+        new_tokenizer=True,
+    ),
+    "claude-sonnet-5": ModelInfo(
+        alias="claude-sonnet-5",
+        aliases=("claude-sonnet-5",),
+        context_tokens=1_000_000,
+        max_output_tokens=128_000,
+        pdf_page_max=600,
         supports_extended_thinking=False,
         supports_adaptive_thinking=True,
         new_tokenizer=True,

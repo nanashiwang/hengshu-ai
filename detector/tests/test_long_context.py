@@ -144,22 +144,49 @@ def test_estimate_cost_handles_snapshot_suffix():
     assert 0.014 <= cost <= 0.016
 
 
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("gpt-5.6-sol", 0.5),
+        ("gpt-5.6-terra", 0.25),
+        ("gpt-5.6-luna", 0.1),
+        ("claude-fable-5", 1.0),
+        ("claude-sonnet-5", 0.3),
+        ("gemini-3.5-flash", 0.15),
+        ("gemini-3.1-flash-lite", 0.025),
+        ("gemini-2.5-flash", 0.03),
+        ("gemini-2.5-flash-lite", 0.01),
+    ],
+)
+def test_estimate_cost_current_models(model, expected):
+    assert estimate_cost_usd(100_000, model) == expected
+
+
 # ---------- Model context limit ----------
 
 
 def test_model_context_limit_known_models():
-    """Values verified against official docs 2026-05-05 — see
+    """Values verified against official docs 2026-07-18 — see
     _MODEL_CONTEXT_LIMITS docstring for sources. Update both the table and
     this test together so drift surfaces in CI rather than as silent
     coverage loss."""
     # OpenAI
+    assert model_context_limit("gpt-5.6-sol") == 1_050_000
+    assert model_context_limit("gpt-5.6-terra") == 1_050_000
+    assert model_context_limit("gpt-5.6-luna") == 1_050_000
+    assert model_context_limit("gpt-5.5") == 1_050_000
+    assert model_context_limit("gpt-5.4") == 1_050_000
+    assert model_context_limit("gpt-5.4-mini") == 400_000
+    assert model_context_limit("gpt-5.4-nano") == 400_000
     assert model_context_limit("gpt-4o-mini") == 128_000
     assert model_context_limit("gpt-4o") == 128_000
     assert model_context_limit("gpt-4.1") == 1_047_576
     assert model_context_limit("gpt-5") == 272_000
     assert model_context_limit("o3-mini") == 200_000  # was 128k pre-2025-04
     assert model_context_limit("o1-mini") == 128_000
-    # Anthropic — 1M is GA on Opus/Sonnet 4.6+
+    # Anthropic — 1M is GA on the current Fable/Opus/Sonnet lineup
+    assert model_context_limit("claude-fable-5") == 1_000_000
+    assert model_context_limit("claude-sonnet-5") == 1_000_000
     assert model_context_limit("claude-haiku-4-5") == 200_000
     assert model_context_limit("claude-sonnet-4-6") == 1_000_000
     assert model_context_limit("claude-opus-4-6") == 1_000_000
@@ -167,6 +194,8 @@ def test_model_context_limit_known_models():
     assert model_context_limit("claude-opus-4-8") == 1_000_000
     assert model_context_limit("claude-opus-4-5") == 200_000
     # Gemini — all 1,048,576 (1MB binary) per ai.google.dev model pages
+    assert model_context_limit("gemini-3.5-flash") == 1_048_576
+    assert model_context_limit("gemini-3.1-flash-lite") == 1_048_576
     assert model_context_limit("gemini-2.5-pro") == 1_048_576
     assert model_context_limit("gemini-2.5-flash") == 1_048_576
     assert model_context_limit("gemini-3.1-pro") == 1_048_576

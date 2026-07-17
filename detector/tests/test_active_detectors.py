@@ -51,11 +51,24 @@ def test_lookup_model_opus_4_8_registered():
 def test_lookup_model_fable_5_uses_observed_adaptive_capabilities():
     info = lookup_model("claude-fable-5")
     assert info is not None
+    assert info.context_tokens == 1_000_000
+    assert info.max_output_tokens == 128_000
     assert info.supports_adaptive_thinking is True
     assert info.supports_extended_thinking is False
     assert info.new_tokenizer is True
     assert ThinkingSignatureDetector().applies_to("claude-fable-5") is True
     assert _delta_range("claude-fable-5") == (90, 230)
+
+
+def test_lookup_model_sonnet_5_uses_adaptive_thinking():
+    info = lookup_model("claude-sonnet-5")
+    assert info is not None
+    assert info.context_tokens == 1_000_000
+    assert info.max_output_tokens == 128_000
+    assert info.supports_adaptive_thinking is True
+    assert info.supports_extended_thinking is False
+    assert info.new_tokenizer is True
+    assert ThinkingSignatureDetector().applies_to("claude-sonnet-5") is True
 
 
 def test_thinking_validation_accepts_precise_invalid_signature_message():

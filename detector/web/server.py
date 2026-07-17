@@ -206,19 +206,11 @@ def _protocol_from_model(model: str) -> str:
 
 
 def _model_choices() -> list[dict[str, str]]:
-    """Curated dropdown — 4 most-tested model names. Free-form input still
-    accepts anything; lookup_model() prefix-matches snapshot/alias forms.
-
-    We keep it short on purpose:
-    - Opus 4.7 + Opus 4.6: top-tier choices
-    - Sonnet 4.6: most popular
-    - Haiku 4.5 in snapshot form (-20251001) because some relays only route
-      the snapshot ID, not the bare alias.
-    """
+    """Current public Claude lineup; free-form legacy IDs remain accepted."""
     suggestions = [
-        "claude-opus-4-7",
-        "claude-opus-4-6",
-        "claude-sonnet-4-6",
+        "claude-fable-5",
+        "claude-opus-4-8",
+        "claude-sonnet-5",
         "claude-haiku-4-5-20251001",
     ]
     return [{"id": s, "label": s} for s in suggestions]

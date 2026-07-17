@@ -23,20 +23,43 @@ def default_model() -> str:
     return OPENAI_MODEL_CHOICES[0]
 
 
-# Stable, widely-supported aliases preferred when /v1/models gives us a
-# choice. Cheap-and-mainstream first (gpt-4o-mini), then incrementally larger
-# / older fallbacks. Used by pick_default_model() to pre-fill the form's
-# model field after a probe rather than landing on whatever happens to sort
-# first in the relay's response.
+# Current, cost-conscious aliases preferred when /v1/models gives us a
+# choice. Luna is the cheapest GPT-5.6 tier; older aliases remain as relay
+# compatibility fallbacks. Used by pick_default_model() to pre-fill the form
+# after a probe rather than landing on whatever happens to sort first.
 _PREFERRED_DEFAULTS = (
+    "gpt-5.6-luna",
+    "gpt-5.6-terra",
+    "gpt-5.6-sol",
+    "gpt-5.6",
+    "gpt-5.5",
+    "gpt-5.4-nano",
+    "gpt-5.4-mini",
+    "gpt-5.4",
+    "gpt-5-mini",
+    "gpt-5",
     "gpt-4o-mini",
     "gpt-4o",
     "gpt-4.1-mini",
     "gpt-4.1",
-    "gpt-5-mini",
-    "gpt-5",
     "gpt-3.5-turbo",
 )
+
+
+def _matches_preferred_alias(model: str, preferred: str) -> bool:
+    """Match an alias or an official numeric snapshot, not another SKU.
+
+    A plain prefix match makes `gpt-5.4-pro` look like a snapshot of
+    `gpt-5.4`, which can auto-select a Responses-only model for this Chat
+    Completions detector. Official snapshots start with a numeric suffix.
+    """
+    if model == preferred:
+        return True
+    prefix = preferred + "-"
+    if not model.startswith(prefix):
+        return False
+    suffix = model[len(prefix):]
+    return bool(suffix) and suffix[0].isdigit()
 
 
 def pick_default_model(available: list[str]) -> str | None:
@@ -52,7 +75,7 @@ def pick_default_model(available: list[str]) -> str | None:
         return None
     for pref in _PREFERRED_DEFAULTS:
         for m in available:
-            if m == pref or m.startswith(pref + "-"):
+            if _matches_preferred_alias(m, pref):
                 return m
     return available[0]
 

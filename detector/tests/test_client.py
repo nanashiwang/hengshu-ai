@@ -25,6 +25,20 @@ def test_normalize_base_url_accepts_trailing_v1():
     assert _normalize_base_url("https://api.example.com") == "https://api.example.com"
 
 
+@pytest.mark.parametrize("model", ["claude-fable-5", "claude-sonnet-5"])
+def test_current_claude_models_strip_non_default_sampling_parameters(model):
+    from relay_detector.protocols.anthropic.client import _sanitize_body
+
+    body = {
+        "model": model,
+        "temperature": 0,
+        "top_p": 0.9,
+        "top_k": 20,
+        "max_tokens": 10,
+    }
+    assert _sanitize_body(body) == {"model": model, "max_tokens": 10}
+
+
 @pytest.mark.asyncio
 async def test_messages_create_strips_temperature_for_opus_4_7():
     """Opus 4.7 rejects `temperature` (deprecated). Client must strip it."""

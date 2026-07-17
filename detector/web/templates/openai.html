@@ -55,7 +55,7 @@
     {"@type": "HowToStep", "name": "打开检测页", "text": "访问 {{ brand.site_url }}/openai"},
     {"@type": "HowToStep", "name": "填中转站地址", "text": "填 OpenAI-compatible base_url,例如 https://api.example.com 或 https://api.example.com/v1"},
     {"@type": "HowToStep", "name": "粘贴 API key", "text": "粘贴你的 sk-... key,只用于本次检测"},
-    {"@type": "HowToStep", "name": "选模型 + 模式", "text": "选 gpt-4o-mini / gpt-4o / gpt-5 等,standard 模式约 40 秒"},
+    {"@type": "HowToStep", "name": "选模型 + 模式", "text": "推荐 gpt-5.6-sol;也可按成本选择 gpt-5.6-terra 或 gpt-5.6-luna,standard 模式约 40 秒"},
     {"@type": "HowToStep", "name": "开始检测", "text": "点开始检测,等 30-70 秒拿到报告"},
     {"@type": "HowToStep", "name": "看 usage 字段指纹", "text": "重点看 protocol detector 是否报 usage_contains_claude_fields / usage_source_non_openai 等 critical issue — 它强烈提示异源适配或非标准扩展,但不单独证明实际后端模型"}
   ]
@@ -102,8 +102,8 @@
         <label for="model">目标模型</label>
         <div class="combo">
           <input type="text" id="model" name="model" required
-                 value="gpt-5.5" autocomplete="off"
-                 placeholder="gpt-5.5"
+                 value="gpt-5.6-sol" autocomplete="off"
+                 placeholder="gpt-5.6-sol"
                  maxlength="200" />
           <ul class="combo-list" id="model-list" hidden>
             {% for m in models %}

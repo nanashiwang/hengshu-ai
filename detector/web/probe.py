@@ -328,7 +328,8 @@ def _sort_by_preference(proto: str, available: list[str]) -> list[str]:
     Rationale: the dropdown should default-attract the user toward models
     we know are healthy. Deprecated entries (e.g. gpt-3.5-turbo) sink to
     the bottom; stable mainstays (gpt-4o-mini) rise to the top. Matching
-    is prefix-tolerant so snapshots line up under their alias bucket.
+    accepts numeric snapshot suffixes but not sibling SKUs such as
+    `gpt-5.4-pro` or retired `gemini-3.1-flash-lite-preview`.
     """
     prefs = _preference_list(proto)
     if not prefs:
@@ -337,7 +338,9 @@ def _sort_by_preference(proto: str, available: list[str]) -> list[str]:
     def rank(model: str) -> tuple[int, int]:
         bare = model.removeprefix("models/")
         for i, pref in enumerate(prefs):
-            if bare == pref or bare.startswith(pref + "-"):
+            prefix = pref + "-"
+            suffix = bare[len(prefix):] if bare.startswith(prefix) else ""
+            if bare == pref or (suffix and suffix[0].isdigit()):
                 return (0, i)  # preferred bucket, ranked by preference index
         return (1, 0)  # everything else, kept in input order via stable sort
 

@@ -30,33 +30,39 @@ def default_model() -> str:
     return GEMINI_MODEL_CHOICES[0]
 
 
-# Stable Google-direct aliases first, then 3.x previews. Multi-protocol
-# relays (8864k etc.) often carry only the preview series, so we still want
-# a sensible fall-through. Used by pick_default_model() — see the OpenAI
-# version for the matching philosophy.
+# Stable and cost-conscious aliases first. Older supported models remain as
+# fallbacks for relays that lag Google's current catalog; shut-down IDs are
+# intentionally absent. Used by pick_default_model() — see the OpenAI version
+# for the matching philosophy.
 _PREFERRED_DEFAULTS = (
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-flash-latest",
+    "gemini-3.1-pro-preview",
+    "gemini-3-flash-preview",
+    "gemini-2.5-flash-lite",
     "gemini-2.5-flash",
     "gemini-2.5-pro",
-    "gemini-2.5-flash-lite",
-    "gemini-3-flash-preview",
-    "gemini-3-pro-preview",
-    "gemini-3.1-flash-lite-preview",
-    "gemini-3.1-pro-preview",
 )
+
+
+def _matches_preferred_alias(model: str, preferred: str) -> bool:
+    bare = model.removeprefix("models/")
+    if bare == preferred:
+        return True
+    prefix = preferred + "-"
+    if not bare.startswith(prefix):
+        return False
+    suffix = bare[len(prefix):]
+    return bool(suffix) and suffix[0].isdigit()
 
 
 def pick_default_model(available: list[str]) -> str | None:
     if not available:
         return None
-    # Strip Google's `models/` prefix when matching so a relay returning the
-    # qualified id still maps to a preferred alias.
-    def _bare(name: str) -> str:
-        return name.removeprefix("models/")
-
     for pref in _PREFERRED_DEFAULTS:
         for m in available:
-            bare = _bare(m)
-            if bare == pref or bare.startswith(pref + "-"):
+            if _matches_preferred_alias(m, pref):
                 return m
     return available[0]
 

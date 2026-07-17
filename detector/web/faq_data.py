@@ -269,8 +269,8 @@ FAQ_CATEGORIES: tuple[FAQCategory, ...] = (
             FAQEntry(
                 "gemini-model-not-found",
                 "为什么 Gemini API 中转站经常 model_not_found?",
-                "三种可能:① 中转站只代理部分 Gemini 模型(很多中转站只有 3.x preview 系列,没有 2.5);"
-                "② 模型名拼写差异(gemini-2.5-flash vs models/gemini-2.5-flash);③ 模型已下架。"
+                "三种可能:① 中转站只代理部分 Gemini 模型(例如仍停在旧 2.5 或 3.x preview,尚无 3.5);"
+                "② 模型名拼写差异(gemini-3.5-flash vs models/gemini-3.5-flash);③ 模型已下架。"
                 "格物 提交前会做 preflight,500ms 内识别死模型并给出可用列表替代。",
             ),
             FAQEntry(
@@ -290,7 +290,7 @@ FAQ_CATEGORIES: tuple[FAQCategory, ...] = (
             FAQEntry(
                 "gemini-pick",
                 "Gemini 中转站怎么挑?",
-                "三档:① 必须支持 gemini-2.5-flash 或 gemini-3-flash-preview(2026 stable);"
+                "三档:① 优先支持稳定版 gemini-3.5-flash 或 gemini-3.1-flash-lite;"
                 "② 格物 上跑出 protocol 检测 ≥ 80;"
                 "③ usage 字段没有 gemini_* 之外的异源残留(意味着没在转协议)。"
                 "格物 自动按推荐顺序排序中转站的模型列表。",
