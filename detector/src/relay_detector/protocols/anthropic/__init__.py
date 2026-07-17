@@ -27,6 +27,9 @@ def default_model() -> str:
 # after a probe — Haiku is universal, Sonnet is the next-best fallback.
 _PREFERRED_DEFAULTS = (
     "claude-haiku-4-5",
+    "claude-sonnet-5",
+    "claude-opus-4-8",
+    "claude-fable-5",
     "claude-sonnet-4-6",
     "claude-opus-4-7",
     "claude-opus-4-6",
@@ -35,12 +38,22 @@ _PREFERRED_DEFAULTS = (
 )
 
 
+def _matches_preferred_alias(model: str, preferred: str) -> bool:
+    if model == preferred:
+        return True
+    prefix = preferred + "-"
+    if not model.startswith(prefix):
+        return False
+    suffix = model[len(prefix):]
+    return bool(suffix) and suffix[0].isdigit()
+
+
 def pick_default_model(available: list[str]) -> str | None:
     if not available:
         return None
     for pref in _PREFERRED_DEFAULTS:
         for m in available:
-            if m == pref or m.startswith(pref + "-"):
+            if _matches_preferred_alias(m, pref):
                 return m
     return available[0]
 

@@ -32,20 +32,19 @@ MODE_DETECTORS: dict[Mode, set[str]] = {
 
 
 # Curated suggestions surfaced in the web form. Free-form input is still
-# accepted; this is just the dropdown. Updated against the official model page
-# (May 2026): 2.0/1.5 are deprecated and removed; 3.x previews are listed but
-# kept after the stable 2.5 family because preview support drifts.
+# accepted; this is just the dropdown. Updated against the official model and
+# deprecation pages (July 2026). Shut-down 3 Pro / 3.1 Flash-Lite preview IDs
+# and the retired 2.0/1.5 families must never be advertised.
 GEMINI_MODEL_CHOICES = [
-    # Preview models first — most multi-protocol relays carry the 3.x line
-    # before the 2.5 line as of May 2026.
-    "gemini-3-flash-preview",
-    "gemini-3-pro-preview",
-    "gemini-3.1-flash-lite-preview",
+    # Current stable / preview text-generation lineup.
+    "gemini-3.5-flash",
     "gemini-3.1-pro-preview",
-    # Stable Google-direct lineup
+    "gemini-3.1-flash-lite",
+    "gemini-3-flash-preview",
+    # Supported 2.5 compatibility fallbacks.
+    "gemini-2.5-pro",
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
-    "gemini-2.5-pro",
 ]
 
 

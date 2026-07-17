@@ -829,7 +829,7 @@ def openai_baseline(
         help="OpenAI API key. Prefer OPENAI_API_KEY or .env instead of typing it here.",
     ),
     model: str = typer.Option(
-        "gpt-5.5",
+        "gpt-5.6-sol",
         "--model",
         envvar="OPENAI_MODEL",
         help="Model ID to probe. Use the exact model you want as the official baseline.",

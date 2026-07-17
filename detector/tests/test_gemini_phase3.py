@@ -271,12 +271,20 @@ def test_tier_banner_signals_protocol_level_and_mentions_openai_compat():
 
 def test_model_choices_contains_supported_aliases_and_no_deprecated():
     choices = model_choices()
-    assert "gemini-2.5-flash" in choices
-    assert "gemini-2.5-pro" in choices
-    assert "gemini-2.5-flash-lite" in choices
-    # 1.5 / 2.0 are deprecated per Google docs; they must not be advertised.
+    assert choices == [
+        "gemini-3.5-flash",
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-flash-lite",
+        "gemini-3-flash-preview",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+    ]
+    # Retired families and shut-down previews must not be advertised.
     assert not any(c.startswith("gemini-1.5") for c in choices)
-    assert not any(c == "gemini-2.0-flash" for c in choices)
+    assert not any(c.startswith("gemini-2.0") for c in choices)
+    assert "gemini-3-pro-preview" not in choices
+    assert "gemini-3.1-flash-lite-preview" not in choices
 
 
 def test_models_match_handles_snapshot_and_models_prefix():

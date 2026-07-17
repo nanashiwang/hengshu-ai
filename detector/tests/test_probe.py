@@ -359,14 +359,18 @@ def test_protocols_constant_matches_buckets_in_response():
 @pytest.mark.asyncio
 async def test_probe_picks_protocol_preferred_default(monkeypatch):
     """best_by_protocol should follow each protocol's pick_default_model
-    ordering, not just the relay's natural sort. For OpenAI that means
-    gpt-4o-mini wins over gpt-3.5-turbo even when 3.5 sorts first."""
+    ordering, not just the relay's natural sort. Current cost-conscious
+    aliases should win over older or more expensive models."""
     def handler(request):
         return httpx.Response(200, json={"data": [
             {"id": "gpt-3.5-turbo"},      # sorts first alphabetically
             {"id": "gpt-4"},
             {"id": "gpt-4o"},
             {"id": "gpt-4o-mini"},        # but THIS is the preferred pick
+            {"id": "gpt-5.6-sol"},
+            {"id": "gpt-5.6-luna"},
+            {"id": "gemini-3.5-flash"},
+            {"id": "gemini-3.1-flash-lite"},
             {"id": "gemini-2.5-flash"},
             {"id": "claude-haiku-4-5-20251001"},
             {"id": "claude-opus-4-7"},
@@ -375,8 +379,8 @@ async def test_probe_picks_protocol_preferred_default(monkeypatch):
     _patch_async_client(monkeypatch, _mock(handler))
     out = await probe_relay("https://relay.example.com/v1", "sk-test")
 
-    assert out["best_by_protocol"]["openai"] == "gpt-4o-mini"
-    assert out["best_by_protocol"]["gemini"] == "gemini-2.5-flash"
+    assert out["best_by_protocol"]["openai"] == "gpt-5.6-luna"
+    assert out["best_by_protocol"]["gemini"] == "gemini-3.1-flash-lite"
     assert out["best_by_protocol"]["anthropic"] == "claude-haiku-4-5-20251001"
 
 
@@ -434,10 +438,21 @@ async def test_probe_404_response_includes_best_by_protocol_nulls(monkeypatch):
 # ---- per-protocol pick_default_model -----------------------------------
 
 
-def test_openai_pick_default_prefers_gpt_4o_mini():
+def test_openai_pick_default_prefers_current_low_cost_tier():
     from relay_detector.protocols.openai import pick_default_model
-    available = ["gpt-3.5-turbo", "gpt-5", "gpt-4o", "gpt-4o-mini"]
-    assert pick_default_model(available) == "gpt-4o-mini"
+    available = ["gpt-4o-mini", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.5"]
+    assert pick_default_model(available) == "gpt-5.6-luna"
+
+
+def test_openai_pick_default_understands_56_alias():
+    from relay_detector.protocols.openai import pick_default_model
+    assert pick_default_model(["gpt-5.5", "gpt-5.6"]) == "gpt-5.6"
+
+
+def test_openai_pick_default_does_not_treat_pro_as_snapshot():
+    from relay_detector.protocols.openai import pick_default_model
+    available = ["gpt-5.4-pro", "gpt-5.4-2026-03-01"]
+    assert pick_default_model(available) == "gpt-5.4-2026-03-01"
 
 
 def test_openai_pick_default_falls_back_to_first():
@@ -446,15 +461,16 @@ def test_openai_pick_default_falls_back_to_first():
     assert pick_default_model([]) is None
 
 
-def test_gemini_pick_default_prefers_25_flash_over_3_preview():
+def test_gemini_pick_default_prefers_current_stable_low_cost_tier():
     from relay_detector.protocols.gemini import pick_default_model
     available = [
-        "gemini-3-pro-preview",
+        "gemini-3.1-pro-preview",
         "gemini-2.5-pro",
         "gemini-2.5-flash",
-        "gemini-3-flash-preview",
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
     ]
-    assert pick_default_model(available) == "gemini-2.5-flash"
+    assert pick_default_model(available) == "gemini-3.1-flash-lite"
 
 
 def test_gemini_pick_default_strips_models_prefix_when_matching():
@@ -463,15 +479,28 @@ def test_gemini_pick_default_strips_models_prefix_when_matching():
     assert pick_default_model(available) == "models/gemini-2.5-flash"
 
 
-def test_gemini_pick_default_only_previews_available():
-    """Multi-protocol relays often carry only the 3.x preview line."""
+def test_gemini_pick_default_current_preview_fallback():
     from relay_detector.protocols.gemini import pick_default_model
     available = [
         "gemini-3-flash-preview",
-        "gemini-3-pro-preview",
-        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-pro-preview",
     ]
-    assert pick_default_model(available) == "gemini-3-flash-preview"
+    assert pick_default_model(available) == "gemini-3.1-pro-preview"
+
+
+def test_gemini_pick_default_does_not_promote_shut_down_preview():
+    from relay_detector.protocols.gemini import pick_default_model
+    available = ["gemini-3.1-flash-lite-preview", "gemini-2.5-flash"]
+    assert pick_default_model(available) == "gemini-2.5-flash"
+
+
+def test_probe_sort_does_not_promote_sibling_sku_as_snapshot():
+    from web.probe import _sort_by_preference
+
+    sorted_models = _sort_by_preference(
+        "openai", ["gpt-5.4-pro", "gpt-5.4-2026-03-01"]
+    )
+    assert sorted_models == ["gpt-5.4-2026-03-01", "gpt-5.4-pro"]
 
 
 def test_anthropic_pick_default_prefers_haiku_over_sonnet_over_opus():

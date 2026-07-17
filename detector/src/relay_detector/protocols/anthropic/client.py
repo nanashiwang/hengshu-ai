@@ -33,11 +33,15 @@ MAX_RETRIES = 4
 # Per-model parameter deprecations: when the model alias starts with the key,
 # the listed body fields are stripped before sending. Anthropic occasionally
 # deprecates parameters silently in newer models — Opus 4.7/4.8 reject requests
-# that include `temperature` with HTTP 400 "deprecated for this model".
+# that include non-default sampling values with HTTP 400. Fable 5 and Sonnet
+# 5 inherit the same restriction. The detector only emits `temperature`, but
+# all known rejected fields are listed so future probes stay safe too.
 # Adding entries here keeps detector code model-agnostic.
 PARAM_DEPRECATIONS: dict[str, tuple[str, ...]] = {
-    "claude-opus-4-7": ("temperature",),
-    "claude-opus-4-8": ("temperature",),
+    "claude-fable-5": ("temperature", "top_p", "top_k"),
+    "claude-sonnet-5": ("temperature", "top_p", "top_k"),
+    "claude-opus-4-7": ("temperature", "top_p", "top_k"),
+    "claude-opus-4-8": ("temperature", "top_p", "top_k"),
 }
 
 
