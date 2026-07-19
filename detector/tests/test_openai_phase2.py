@@ -207,7 +207,7 @@ class StreamOnlyOpenAIBaseClient:
     async def chat_completions_create(self, **_body: Any):
         raise OpenAIAPIError(
             502,
-            '{"error":{"message":"Stream must be set to true","type":"bad_response_status_code"}}',
+            '{"error":{"message":"No available OpenAI accounts support the requested model: gpt-5.6-sol","type":"upstream_error"}}',
         )
 
     async def chat_completions_stream(self, **body: Any):
@@ -299,6 +299,9 @@ def test_stream_required_error_detection_is_narrow():
     )
     assert is_stream_required_error(
         OpenAIAPIError(502, "upstream: Stream must be set to true")
+    )
+    assert is_stream_required_error(
+        OpenAIAPIError(400, "No available OpenAI accounts support the requested model: gpt-5.6-sol")
     )
     assert not is_stream_required_error(
         OpenAIAPIError(401, "Stream must be set to true")

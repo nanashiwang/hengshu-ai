@@ -424,14 +424,33 @@ async def probe_model_alive(
     try:
         if protocol == "openai":
             from relay_detector.protocols.openai import make_client
+            from relay_detector.protocols.openai.client import (
+                is_stream_required_error,
+            )
+
+            request_body = {
+                "model": model,
+                "max_completion_tokens": 4,
+                "messages": [{"role": "user", "content": "ok"}],
+            }
             async with make_client(
                 base_url, api_key, timeout=PREFLIGHT_TIMEOUT_S, trust_env=False
             ) as c:
-                _req, _resp, _h, _lat = await c.chat_completions_create(
-                    model=model,
-                    max_completion_tokens=4,
-                    messages=[{"role": "user", "content": "ok"}],
-                )
+                try:
+                    await c.chat_completions_create(**request_body)
+                except Exception as error:
+                    if not is_stream_required_error(error):
+                        raise
+                    chunks = [
+                        chunk
+                        async for chunk, _elapsed in c.chat_completions_stream(
+                            **request_body
+                        )
+                        if not chunk.get("_done")
+                        and not chunk.get("_parse_error")
+                    ]
+                    if not chunks:
+                        raise RuntimeError("stream ended without any data chunks")
         elif protocol == "gemini":
             from relay_detector.protocols.gemini import make_client
             async with make_client(

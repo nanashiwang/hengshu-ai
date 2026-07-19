@@ -54,8 +54,10 @@ def is_stream_required_error(error: Exception) -> bool:
 
     Some relay-only models reject every non-stream request. Gateways sometimes
     wrap that upstream rejection as 5xx, so the explicit error message is more
-    reliable than requiring the outer status to be exactly HTTP 400. We
-    may still exercise their capabilities through SSE, but must preserve that
+    reliable than requiring the outer status to be exactly HTTP 400. One
+    gateway family also reports "no available accounts" for non-stream while
+    the identical streamed request succeeds. We may still exercise capabilities
+    through SSE, but must preserve that
     transport downgrade in the report instead of silently pretending a real
     non-stream response existed.
     """
@@ -69,6 +71,7 @@ def is_stream_required_error(error: Exception) -> bool:
         "stream must be set to true" in text
         or "stream must be true" in text
         or "stream=true is required" in text
+        or "no available openai accounts support the requested model" in text
     )
 
 

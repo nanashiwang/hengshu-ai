@@ -566,6 +566,40 @@ async def test_probe_model_alive_openai_returns_true_on_2xx(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_probe_model_alive_accepts_stream_only_model(monkeypatch):
+    """An advertised model is alive when non-stream lies but SSE succeeds."""
+    from web.probe import probe_model_alive
+
+    def handler(request):
+        import json
+
+        body = json.loads(request.content)
+        if not body.get("stream"):
+            return httpx.Response(
+                400,
+                text=(
+                    '{"error":{"message":"No available OpenAI accounts support '
+                    'the requested model: gpt-5.6-sol","type":"upstream_error"}}'
+                ),
+            )
+        return httpx.Response(
+            200,
+            text=(
+                'data: {"id":"x","object":"chat.completion.chunk","model":"gpt-5.6-sol",'
+                '"choices":[{"index":0,"delta":{"content":"OK"}}]}\n\n'
+                'data: [DONE]\n\n'
+            ),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    _patch_async_client(monkeypatch, _mock(handler))
+    alive, err = await probe_model_alive(
+        "https://relay.example.com/v1", "sk", "gpt-5.6-sol", "openai"
+    )
+    assert alive is True
+    assert err is None
+
+@pytest.mark.asyncio
 async def test_probe_model_alive_returns_false_with_upstream_body_on_4xx(monkeypatch):
     """A 4xx (model_not_found) must surface the upstream body so the user
     sees the real reason, not just a generic exception."""
