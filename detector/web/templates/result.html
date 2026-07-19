@@ -39,6 +39,10 @@
 
 {% set perf = report.performance or {} %}
 {% set usage = perf.usage or {} %}
+{% set ttft_ms = perf.ttft_ms | default(none) %}
+{% set total_latency_ms = perf.total_latency_ms | default(0) %}
+{% set input_tokens = usage.input_tokens | default(0) %}
+{% set output_tokens = usage.output_tokens | default(0) %}
 {% set score = report.total_score or 0 %}
 {% set verdict = report.verdict or 'failed' %}
 {% set protocol = report.protocol or 'anthropic' %}
@@ -96,10 +100,11 @@
   <div class="result-left">
     <div class="score-ring score-{{ verdict_class }}">
       <div class="score-inner">
-        <div class="score-num">{{ '%.0f' | format(score) }}%</div>
+        <div class="score-num"><span>{{ '%.0f' | format(score) }}</span><small>/100</small></div>
         <div class="score-caption">{{ caption }}</div>
       </div>
     </div>
+    <p class="score-meaning">协议质量分,不是模型真伪概率</p>
     <p class="muted small attribution">由 {{ brand.site_url }} 生成</p>
   </div>
 
@@ -139,23 +144,23 @@
 {% endif %}
 
 <section class="metrics-row metrics-row-5">
-  <div class="metric{% if perf.ttft_ms and perf.ttft_ms > 2000 %} metric-warn{% endif %}">
+  <div class="metric{% if ttft_ms is not none and ttft_ms > 2000 %} metric-warn{% endif %}">
     <div class="metric-label">首 TOKEN</div>
     <div class="metric-value" title="Time to first token,从发出请求到收到第一个真实 token 的时间(取所有流式请求的最小值)">
-      {% if perf.ttft_ms is not none %}{{ '{:,}'.format(perf.ttft_ms) }}ms{% else %}—{% endif %}
+      {% if ttft_ms is not none %}{{ '{:,}'.format(ttft_ms) }}ms{% else %}—{% endif %}
     </div>
   </div>
-  <div class="metric{% if (perf.total_latency_ms or 0) > 30000 %} metric-warn{% endif %}">
+  <div class="metric{% if total_latency_ms > 30000 %} metric-warn{% endif %}">
     <div class="metric-label">总耗时</div>
     <div class="metric-value" title="整批检测的钟表时间(并行运行,等于最慢 detector 的耗时)">
-      {{ '{:,}'.format(perf.total_latency_ms or 0) }}ms
+      {{ '{:,}'.format(total_latency_ms) }}ms
     </div>
   </div>
   <div class="metric">
     <div class="metric-label">吞吐 (T/S)</div>
     <div class="metric-value">
-      {% set out_t = (usage.output_tokens or 0) %}
-      {% set lat = (perf.total_latency_ms or 0) %}
+      {% set out_t = output_tokens %}
+      {% set lat = total_latency_ms %}
       {% if out_t and lat %}
         {{ '%.1f' | format(out_t * 1000.0 / lat) }}
       {% else %}—{% endif %}
@@ -163,11 +168,11 @@
   </div>
   <div class="metric">
     <div class="metric-label">输入 TOKENS</div>
-    <div class="metric-value">{{ '{:,}'.format(usage.input_tokens or 0) }}</div>
+    <div class="metric-value">{{ '{:,}'.format(input_tokens) }}</div>
   </div>
   <div class="metric">
     <div class="metric-label">输出 TOKENS</div>
-    <div class="metric-value">{{ '{:,}'.format(usage.output_tokens or 0) }}</div>
+    <div class="metric-value">{{ '{:,}'.format(output_tokens) }}</div>
   </div>
 </section>
 

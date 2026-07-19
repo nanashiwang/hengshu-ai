@@ -156,6 +156,8 @@
   pill.id = 'probe-pill';
   pill.className = 'probe-pill';
   pill.hidden = true;
+  pill.setAttribute('role', 'status');
+  pill.setAttribute('aria-live', 'polite');
   apiKeyField.appendChild(pill);
 
   let inflight = null;
@@ -174,6 +176,7 @@
     setPill('neutral', '🔄 正在识别中转站可用模型...');
     if (inflight) inflight.abort && inflight.abort();
     const ctrl = new AbortController();
+    const probeTimeout = setTimeout(() => ctrl.abort(), 20000);
     inflight = ctrl;
 
     const fd = new FormData();
@@ -184,9 +187,14 @@
       r = await fetch('/api/probe', {method: 'POST', body: fd, signal: ctrl.signal});
       data = await r.json();
     } catch (e) {
-      if (e.name === 'AbortError') return;
+      if (e.name === 'AbortError') {
+        setPill('warn', '⚪ 模型列表探测超时,不影响继续检测');
+        return;
+      }
       setPill('warn', '⚪ 探测失败,但不影响检测继续 — 你填的模型会被直接尝试');
       return;
+    } finally {
+      clearTimeout(probeTimeout);
     }
     if (r.status === 429) {
       // Rate limited — surface clearly and keep submit enabled so the user
@@ -232,7 +240,7 @@
           const label = {anthropic: 'Claude', openai: 'OpenAI', gemini: 'Gemini'}[o.proto];
           html +=
             '<button type="button" class="btn btn-ghost probe-action" data-handoff="' + o.proto + '">' +
-            '改用 ' + label + ' 协议 (' + o.count + ' 个可用)</button>';
+            '改用 ' + label + ' 协议 (' + o.count + ' 个候选)</button>';
         });
         html += '</div>';
       }
@@ -248,8 +256,9 @@
     const more = myModels.length > 4 ? ` 等共 ${myModels.length} 个` : '';
     setPillHtml(
       'ok',
-      '<div class="probe-headline">🟢 已识别 ' + total + ' 个模型,其中 ' + myModels.length + ' 个可用于本检测</div>' +
-      '<div class="probe-detail">' + escapeHtml(sample) + escapeHtml(more) + '</div>'
+      '<div class="probe-headline">🟢 接口声明 ' + total + ' 个模型,本页筛选出 ' + myModels.length + ' 个候选</div>' +
+      '<div class="probe-detail">' + escapeHtml(sample) + escapeHtml(more) + '</div>' +
+      '<div class="probe-detail">是否真正可调用,会在提交时通过真实请求确认。</div>'
     );
 
     // Replace the dropdown with what the relay actually carries.
@@ -365,55 +374,45 @@
   }
 
   function renderModelDeadError(detail) {
-    // Backend returns: {code, message, model, protocol, upstream_error}
     const proto = currentProtocol();
     const recommended = (window.gewuBestByProtocol || {})[proto];
-    const dead = detail.model || '该模型';
+    const model = detail.model || '该模型';
     const reason = detail.upstream_error || '上游拒绝';
 
     errBox.innerHTML = '';
     errBox.hidden = false;
-    errBox.classList.add('form-error-rich');
+    errBox.classList.add('form-warning-rich');
 
     const title = document.createElement('div');
     title.className = 'form-error-title';
-    title.textContent = '该模型在中转站实际不可用';
+    title.textContent = '单次预检未通过,尚未生成检测分数';
     errBox.appendChild(title);
 
+    const explanation = document.createElement('div');
+    explanation.className = 'form-error-explanation';
+    explanation.textContent = '预检只发送一条最小请求,不能替代完整检测。你可以继续运行全部检测并生成可复核分数。';
+    errBox.appendChild(explanation);
+
+    const details = document.createElement('details');
+    details.className = 'form-error-details';
+    const summary = document.createElement('summary');
+    summary.textContent = '查看预检返回';
     const body = document.createElement('div');
     body.className = 'form-error-body';
-    body.textContent = `${dead}: ${reason}`;
-    errBox.appendChild(body);
+    body.textContent = `${model}: ${reason}`;
+    details.appendChild(summary);
+    details.appendChild(body);
+    errBox.appendChild(details);
 
     const actions = document.createElement('div');
     actions.className = 'form-error-actions';
 
-    if (recommended && recommended !== dead) {
-      const swapBtn = document.createElement('button');
-      swapBtn.type = 'button';
-      swapBtn.className = 'btn btn-primary';
-      swapBtn.textContent = `换成 ${recommended} 重试`;
-      swapBtn.addEventListener('click', () => {
-        const modelInput = document.getElementById('model');
-        if (modelInput) modelInput.value = recommended;
-        errBox.hidden = true;
-        errBox.classList.remove('form-error-rich');
-        // Clear force flag if it was set by previous click.
-        const force = form.querySelector('input[name="force"]');
-        if (force) force.value = '';
-        form.requestSubmit();
-      });
-      actions.appendChild(swapBtn);
-    }
-
-    const forceBtn = document.createElement('button');
-    forceBtn.type = 'button';
-    forceBtn.className = 'btn btn-ghost';
-    forceBtn.textContent = '我知道,强制提交';
-    forceBtn.title = 'preflight 偶尔会误判(例如 max_tokens 太小被代理拒)。强制提交后,如果模型真挂了,检测会以错误结果呈现。';
-    forceBtn.addEventListener('click', () => {
-      // Append a hidden force=1 field; the detect routes skip preflight when
-      // it's set.
+    const continueBtn = document.createElement('button');
+    continueBtn.type = 'button';
+    continueBtn.className = 'btn btn-primary';
+    continueBtn.textContent = '继续完整检测并生成分数';
+    continueBtn.title = '跳过单次预检,由完整检测流程给出最终分数和证据。';
+    continueBtn.addEventListener('click', () => {
       let force = form.querySelector('input[name="force"]');
       if (!force) {
         force = document.createElement('input');
@@ -423,24 +422,61 @@
       }
       force.value = '1';
       errBox.hidden = true;
-      errBox.classList.remove('form-error-rich');
+      errBox.classList.remove('form-warning-rich');
       form.requestSubmit();
     });
-    actions.appendChild(forceBtn);
+    actions.appendChild(continueBtn);
+
+    if (recommended && recommended !== model) {
+      const swapBtn = document.createElement('button');
+      swapBtn.type = 'button';
+      swapBtn.className = 'btn btn-ghost';
+      swapBtn.textContent = `改用 ${recommended}`;
+      swapBtn.addEventListener('click', () => {
+        const modelInput = document.getElementById('model');
+        if (modelInput) modelInput.value = recommended;
+        errBox.hidden = true;
+        errBox.classList.remove('form-warning-rich');
+        const force = form.querySelector('input[name="force"]');
+        if (force) force.value = '';
+        form.requestSubmit();
+      });
+      actions.appendChild(swapBtn);
+    }
 
     errBox.appendChild(actions);
   }
 
+  function clearStaleFeedback() {
+    if (errBox.hidden) return;
+    errBox.hidden = true;
+    errBox.textContent = '';
+    errBox.classList.remove('form-error-rich', 'form-warning-rich');
+    const force = form.querySelector('input[name="force"]');
+    if (force) force.value = '';
+  }
+
+  form.querySelectorAll('input, select').forEach((field) => {
+    field.addEventListener('input', clearStaleFeedback);
+    field.addEventListener('change', clearStaleFeedback);
+  });
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     errBox.hidden = true;
-    errBox.classList.remove('form-error-rich');
+    errBox.classList.remove('form-error-rich', 'form-warning-rich');
     submitBtn.disabled = true;
     submitBtn.textContent = '正在确认模型可用…';
 
     const fd = new FormData(form);
     try {
-      const r = await fetch(endpointFor(), {method: 'POST', body: fd});
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 30000);
+      let r;
+      try {
+        r = await fetch(endpointFor(), {method: 'POST', body: fd, signal: ctrl.signal});
+      } finally {
+        clearTimeout(timeout);
+      }
       if (r.status === 422) {
         const j = await r.json().catch(() => ({}));
         const detail = j && j.detail;
@@ -465,7 +501,9 @@
       location.href = '/r/' + j.job_id;
     } catch (e) {
       errBox.hidden = false;
-      errBox.textContent = e.message || 'Submission failed';
+      errBox.textContent = e.name === 'AbortError'
+        ? '提交确认超时,请检查网络后重试。API 密钥未被保存。'
+        : (e.message || '提交失败');
       submitBtn.disabled = false;
       submitBtn.textContent = '开始检测';
     }

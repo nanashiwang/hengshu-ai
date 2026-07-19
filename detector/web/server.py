@@ -667,12 +667,33 @@ async def api_status(job_id: str) -> JSONResponse:
         "finished_at": j.finished_at,
     }
     if j.status == "done":
-        payload["result_url"] = f"/r/{j.id}"
-        payload["image_url"] = f"/r/{j.id}.jpg"
-        payload["json_url"] = f"/api/result/{j.id}.json"
+        report = j.report or {}
+        results = report.get("results")
+        result_rows = results if isinstance(results, list) else []
+        completed = sum(
+            1
+            for row in result_rows
+            if isinstance(row, dict) and row.get("status") != "skip"
+        )
+        payload.update(
+            {
+                "result_url": f"/r/{j.id}",
+                "image_url": f"/r/{j.id}.jpg",
+                "json_url": f"/api/result/{j.id}.json",
+                "total_score": (
+                    float(report.get("total_score"))
+                    if isinstance(report.get("total_score"), (int, float))
+                    and not isinstance(report.get("total_score"), bool)
+                    else 0.0
+                ),
+                "verdict": str(report.get("verdict") or "failed"),
+                "completed_checks": completed,
+                "total_checks": len(result_rows),
+            }
+        )
     elif j.status == "error":
         payload["error"] = j.error
-    return JSONResponse(payload)
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/result/{job_id}.json")

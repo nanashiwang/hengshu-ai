@@ -278,3 +278,71 @@ def test_legacy_detect_route_returns_deprecation_headers(monkeypatch):
     assert response.headers["deprecation"] == "true"
     assert "successor-version" in response.headers["link"]
     assert "sk-test-secret" not in response.text
+
+
+def test_status_api_exposes_score_only_after_completion(monkeypatch):
+    from web import jobs, server
+
+    report = {
+        "total_score": 91.2,
+        "verdict": "passed",
+        "results": [
+            {"name": "basic_request", "status": "pass", "score": 100},
+            {"name": "protocol", "status": "fail", "score": 70},
+            {"name": "long_context", "status": "skip", "score": 0},
+        ],
+    }
+
+    async def get_job(_job_id: str):
+        return jobs.Job(id="scorejob123", status="done", report=report)
+
+    monkeypatch.setattr(server.jobs, "get", get_job)
+    response = TestClient(server.app).get("/api/status/scorejob123")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert payload["total_score"] == pytest.approx(91.2)
+    assert payload["verdict"] == "passed"
+    assert payload["completed_checks"] == 2
+    assert payload["total_checks"] == 3
+    assert payload["result_url"] == "/r/scorejob123"
+
+
+def test_result_page_labels_score_as_quality_not_probability(monkeypatch):
+    from web import jobs, server
+
+    report = {
+        "total_score": 91.0,
+        "verdict": "passed",
+        "protocol": "openai",
+        "target_model": "gpt-test",
+        "mode": "standard",
+        "base_url": "https://relay.example/v1",
+        "results": [],
+        "performance": {},
+    }
+
+    async def get_job(_job_id: str):
+        return jobs.Job(id="scorejob123", status="done", report=report)
+
+    monkeypatch.setattr(server.jobs, "get", get_job)
+    response = TestClient(server.app).get("/r/scorejob123")
+
+    assert response.status_code == 200
+    assert "91" in response.text
+    assert "/100" in response.text
+    assert "协议质量分,不是模型真伪概率" in response.text
+    assert "91%" not in response.text
+
+
+def test_detection_frontend_uses_advisory_preflight_and_honest_model_wording():
+    static_dir = Path(__file__).resolve().parents[1] / "web" / "static"
+    script = (static_dir / "app.js").read_text(encoding="utf-8")
+
+    assert "接口声明" in script
+    assert "个候选" in script
+    assert "继续完整检测并生成分数" in script
+    assert "单次预检未通过,尚未生成检测分数" in script
+    assert "该模型在中转站实际不可用" not in script
+    assert "setTimeout(() => ctrl.abort(), 30000)" in script
