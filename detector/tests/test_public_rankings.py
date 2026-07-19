@@ -13,11 +13,14 @@ def test_public_rankings_are_disjoint_sorted_and_have_unique_domains():
     assert len(red_domains) == len(set(red_domains))
     assert len(black_domains) == len(set(black_domains))
     assert set(red_domains).isdisjoint(black_domains)
+    assert len(BLACK_RANKING) == 53
+    assert all("." in domain for domain in black_domains)
+    assert not any(domain == "localhost" or domain.endswith("example.com") for domain in black_domains)
     assert [site.score for site in RED_RANKING] == sorted(
         (site.score for site in RED_RANKING), reverse=True
     )
     assert [site.score for site in BLACK_RANKING] == sorted(
-        (site.score for site in BLACK_RANKING), reverse=True
+        site.score for site in BLACK_RANKING
     )
 
 
@@ -29,6 +32,8 @@ def test_leaderboard_renders_single_public_view_without_internal_provenance():
     assert "黑榜" in response.text
     assert "nan.meta-api.vip" in response.text
     assert "codexpp.com" in response.text
+    assert "api.thinkai.tv" in response.text
+    assert "api.example.com" not in response.text
     for hidden_term in ("自营", "第三方", "Veridrop", "排除", "源榜", "前 10"):
         assert hidden_term not in response.text
 
