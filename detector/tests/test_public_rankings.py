@@ -34,6 +34,8 @@ def test_leaderboard_renders_single_public_view_without_internal_provenance():
     assert "codexpp.com" in response.text
     assert "api.thinkai.tv" in response.text
     assert "api.example.com" not in response.text
+    assert 'href="/login"' in response.text
+    assert 'href="/register"' in response.text
     for hidden_term in ("自营", "第三方", "Veridrop", "排除", "源榜", "前 10"):
         assert hidden_term not in response.text
 
@@ -44,3 +46,13 @@ def test_legacy_ranking_surfaces_redirect_to_the_single_leaderboard():
 
     assert response.status_code == 308
     assert response.headers["location"] == "/leaderboard"
+
+
+def test_homepage_exposes_optional_account_and_relay_management_entry():
+    response = TestClient(app).get("/")
+
+    assert response.status_code == 200
+    assert 'href="/register"' in response.text
+    assert 'href="/login"' in response.text
+    assert "????????" in response.text
+    assert "????????????" in response.text
