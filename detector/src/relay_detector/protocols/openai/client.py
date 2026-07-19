@@ -52,12 +52,17 @@ class OpenAIAPIError(Exception):
 def is_stream_required_error(error: Exception) -> bool:
     """Return whether a Chat Completions endpoint explicitly requires SSE.
 
-    Some relay-only models reject every non-stream request with HTTP 400.  We
+    Some relay-only models reject every non-stream request. Gateways sometimes
+    wrap that upstream rejection as 5xx, so the explicit error message is more
+    reliable than requiring the outer status to be exactly HTTP 400. We
     may still exercise their capabilities through SSE, but must preserve that
     transport downgrade in the report instead of silently pretending a real
     non-stream response existed.
     """
-    if not isinstance(error, OpenAIAPIError) or error.status != 400:
+    if (
+        not isinstance(error, OpenAIAPIError)
+        or error.status not in {400, 422, 500, 502, 503}
+    ):
         return False
     text = error.body.lower()
     return (

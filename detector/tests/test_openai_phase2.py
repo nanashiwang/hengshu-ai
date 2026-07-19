@@ -206,8 +206,8 @@ class StreamOnlyOpenAIBaseClient:
 
     async def chat_completions_create(self, **_body: Any):
         raise OpenAIAPIError(
-            400,
-            '{"error":{"message":"Stream must be set to true"}}',
+            502,
+            '{"error":{"message":"Stream must be set to true","type":"bad_response_status_code"}}',
         )
 
     async def chat_completions_stream(self, **body: Any):
@@ -297,8 +297,11 @@ def test_stream_required_error_detection_is_narrow():
     assert not is_stream_required_error(
         OpenAIAPIError(400, "stream field has an invalid type")
     )
+    assert is_stream_required_error(
+        OpenAIAPIError(502, "upstream: Stream must be set to true")
+    )
     assert not is_stream_required_error(
-        OpenAIAPIError(500, "Stream must be set to true")
+        OpenAIAPIError(401, "Stream must be set to true")
     )
 
 
