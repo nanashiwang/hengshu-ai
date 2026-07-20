@@ -104,7 +104,7 @@ def test_ranking_detail_renders_local_trend_and_report_history(monkeypatch):
 
 def test_compare_page_limits_deduplicates_and_validates_domains():
     response = TestClient(app).get(
-        "/compare?domains=nan.meta-api.vip,codereel.pro,nan.meta-api.vip,evil.example"
+        "/leaderboard/compare?domains=nan.meta-api.vip,codereel.pro,nan.meta-api.vip,evil.example"
     )
 
     assert response.status_code == 200
@@ -152,7 +152,7 @@ def test_public_pages_do_not_expose_repository_entry_points():
     client = TestClient(app)
     for path in (
         "/", "/faq", "/leaderboard", "/leaderboard/nan.meta-api.vip",
-        "/compare", "/claude", "/openai", "/gemini", "/llms.txt",
+        "/leaderboard/compare", "/claude", "/openai", "/gemini", "/llms.txt",
     ):
         response = client.get(path)
         assert response.status_code == 200

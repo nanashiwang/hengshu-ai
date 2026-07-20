@@ -395,6 +395,34 @@ async def leaderboard_page(request: Request) -> HTMLResponse:
     )
 
 
+@app.get("/leaderboard/compare", response_class=HTMLResponse)
+async def compare_page(request: Request) -> HTMLResponse:
+    """Compare up to three validated public ranking entries."""
+    requested = request.query_params.get("domains", "")[:1024].split(",")
+    snapshot = _public_ranking_snapshot()
+    site_by_domain = {
+        site.domain: site
+        for site in (*snapshot["red_sites"], *snapshot["black_sites"])
+    }
+    selected: list[PublicRankingSite] = []
+    seen: set[str] = set()
+    for raw_domain in requested:
+        domain = raw_domain.strip().lower()
+        if domain in seen or not leaderboard.is_valid_domain(domain):
+            continue
+        site = site_by_domain.get(domain)
+        if site is not None:
+            selected.append(site)
+            seen.add(domain)
+        if len(selected) == 3:
+            break
+    return templates.TemplateResponse(
+        request,
+        "compare.html",
+        {"sites": selected},
+    )
+
+
 @app.get("/leaderboard/{domain}", response_class=HTMLResponse)
 async def leaderboard_domain_page(request: Request, domain: str) -> HTMLResponse:
     """Render a safe decision page for every domain in the public ranking."""
@@ -436,32 +464,6 @@ async def leaderboard_domain_page(request: Request, domain: str) -> HTMLResponse
     )
 
 
-@app.get("/compare", response_class=HTMLResponse)
-async def compare_page(request: Request) -> HTMLResponse:
-    """Compare up to three validated public ranking entries."""
-    requested = request.query_params.get("domains", "")[:1024].split(",")
-    snapshot = _public_ranking_snapshot()
-    site_by_domain = {
-        site.domain: site
-        for site in (*snapshot["red_sites"], *snapshot["black_sites"])
-    }
-    selected: list[PublicRankingSite] = []
-    seen: set[str] = set()
-    for raw_domain in requested:
-        domain = raw_domain.strip().lower()
-        if domain in seen or not leaderboard.is_valid_domain(domain):
-            continue
-        site = site_by_domain.get(domain)
-        if site is not None:
-            selected.append(site)
-            seen.add(domain)
-        if len(selected) == 3:
-            break
-    return templates.TemplateResponse(
-        request,
-        "compare.html",
-        {"sites": selected},
-    )
 
 
 @app.get("/faq", response_class=HTMLResponse)

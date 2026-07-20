@@ -725,7 +725,7 @@
   const count = document.getElementById('compare-selection-count');
   const open = document.getElementById('compare-selection-open');
   const clear = document.getElementById('compare-selection-clear');
-  const compareUrl = () => `/compare?${new URLSearchParams({domains: Array.from(compared).join(',')})}`;
+  const compareUrl = () => `/leaderboard/compare?${new URLSearchParams({domains: Array.from(compared).join(',')})}`;
   function renderCompare() {
     compareButtons.forEach((button) => {
       const active = compared.has(normalize(button.dataset.compareDomain));
