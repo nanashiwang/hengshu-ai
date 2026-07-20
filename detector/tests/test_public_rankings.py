@@ -36,6 +36,12 @@ def test_leaderboard_renders_single_public_view_without_internal_provenance():
     assert "api.example.com" not in response.text
     assert 'href="/login"' in response.text
     assert 'href="/register"' in response.text
+    assert 'href="https://nan.meta-api.vip"' in response.text
+    assert 'href="https://api.thinkai.tv"' in response.text
+    assert 'target="_blank"' in response.text
+    assert 'rel="noopener noreferrer nofollow external"' in response.text
+    assert 'referrerpolicy="no-referrer"' in response.text
+    assert "点击域名会在新窗口打开外部站点" in response.text
     for hidden_term in ("自营", "第三方", "Veridrop", "排除", "源榜", "前 10"):
         assert hidden_term not in response.text
 

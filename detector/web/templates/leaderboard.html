@@ -10,7 +10,7 @@
 <article class="public-rank-row public-rank-row-{{ tone }}" data-rank-row data-tone="{{ tone }}" data-domain="{{ site.domain|lower }}" data-protocols="{{ site.protocols|join(' ') }}">
   <div class="public-rank-position"><span>{{ rank }}</span></div>
   <div class="public-rank-main">
-    <div class="public-rank-title-line"><h3>{{ site.domain }}</h3><span class="rank-freshness">{{ site.last_checked }}</span></div>
+    <div class="public-rank-title-line"><h3><a class="rank-domain-link" href="https://{{ site.domain }}" target="_blank" rel="noopener noreferrer nofollow external" referrerpolicy="no-referrer" aria-label="访问 {{ site.domain }}（新窗口）">{{ site.domain }}<span aria-hidden="true">↗</span></a></h3><span class="rank-freshness">{{ site.last_checked }}</span></div>
     <div class="rank-protocols">{% for p in site.protocols %}{{ badge(p) }}{% endfor %}<span class="rank-check-count">{{ site.report_count }} 次检测</span></div>
   </div>
   <div class="public-rank-score"><strong>{{ site.score }}</strong><span>综合分</span></div>
@@ -40,5 +40,5 @@
 <p class="ranking-empty" id="ranking-empty" hidden>没有匹配的中转站,请换个域名或筛选条件。</p>
 <details class="ranking-methodology"><summary>排名和分数怎么看?</summary><div><p>榜单同时考虑协议透传、功能完整性、usage 字段、流式一致性和可用性。样本少的高分不等于长期稳定,不同协议的 100 分也不代表同样强度的真伪证明。</p></div></details>
 <section class="leaderboard-cta"><div><span>没找到你的中转站?</span><h2>用真实 API 请求生成一份可复核报告</h2></div><a class="btn btn-primary" href="/#quick-check">开始检测</a></section>
-<section class="hub-note public-ranking-note"><h2>使用边界</h2><p>榜单用于快速筛查,不构成商业信用、价格或永久质量结论。请以最新实测报告为准。</p></section>
+<section class="hub-note public-ranking-note"><h2>使用边界</h2><p>点击域名会在新窗口打开外部站点。榜单用于快速筛查,不构成商业信用、价格或永久质量结论;风险榜站点请谨慎访问,并以最新实测报告为准。</p></section>
 {% endblock %}

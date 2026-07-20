@@ -2249,6 +2249,10 @@ a.coverage-metric:hover strong { color: var(--green); }
 .public-rank-row:hover { transform: translateY(-2px); border-color: #c7c9ff; box-shadow: 0 14px 32px rgba(15,23,42,.08); }
 .public-rank-title-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .public-rank-title-line h3 { min-width: 0; }
+.rank-domain-link { display: inline-flex; max-width: 100%; align-items: center; gap: 6px; color: var(--text); }
+.rank-domain-link:hover { color: var(--green-dark); text-decoration: none; }
+.rank-domain-link > span { flex: 0 0 auto; color: var(--muted); font-family: sans-serif; font-size: 11px; transition: transform .15s ease, color .15s ease; }
+.rank-domain-link:hover > span { color: var(--green-dark); transform: translate(2px,-2px); }
 .rank-freshness { color: var(--muted); font-size: 10px; white-space: nowrap; }
 .rank-protocols { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
 .rank-protocol { padding: 3px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; }
