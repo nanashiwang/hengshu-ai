@@ -70,46 +70,44 @@ def test_public_pages_do_not_expose_repository_entry_points():
     assert app.openapi_url is None
 
 
-def test_homepage_metrics_merge_rankings_and_live_reports_without_double_counting(monkeypatch):
+def test_public_ranking_snapshot_merges_newer_live_reports_without_double_counting(monkeypatch):
     from datetime import datetime, timezone
     from types import SimpleNamespace
     from web import server
+    from web.public_rankings import PublicRankingSite
 
-    monkeypatch.setattr(
-        server,
-        "RED_RANKING",
-        (SimpleNamespace(domain="a.example", report_count=10),),
-    )
-    monkeypatch.setattr(
-        server,
-        "BLACK_RANKING",
-        (SimpleNamespace(domain="b.example", report_count=5),),
-    )
+    monkeypatch.setattr(server, "RED_RANKING", (
+        PublicRankingSite("a.example", 80, 10, "2026-07-19", ("openai",)),
+    ))
+    monkeypatch.setattr(server, "BLACK_RANKING", (
+        PublicRankingSite("b.example", 40, 5, "2026-07-19", ("anthropic",)),
+    ))
     monkeypatch.setattr(server, "UPDATED_AT", "2026-07-19")
-    monkeypatch.setattr(
-        server.leaderboard,
-        "aggregate",
-        lambda: ([
-            SimpleNamespace(
-                domain="a.example",
-                total_count=12,
-                last_checked=datetime(2026, 7, 20, tzinfo=timezone.utc),
-            ),
-            SimpleNamespace(
-                domain="c.example",
-                total_count=2,
-                last_checked=datetime(2026, 7, 18, tzinfo=timezone.utc),
-            ),
-        ], {}),
-    )
+    monkeypatch.setattr(server.leaderboard, "aggregate", lambda: ([
+        SimpleNamespace(
+            domain="a.example", total_count=12, overall_median=91.0,
+            by_protocol={"openai": object(), "gemini": object()},
+            last_checked=datetime(2026, 7, 20, tzinfo=timezone.utc),
+        ),
+        SimpleNamespace(
+            domain="c.example", total_count=2, overall_median=60.0,
+            by_protocol={"anthropic": object()},
+            last_checked=datetime(2026, 7, 18, tzinfo=timezone.utc),
+        ),
+    ], {}))
 
-    metrics = server._compute_homepage_metrics()
+    snapshot = server._compute_public_ranking_snapshot()
+    metrics = snapshot["metrics"]
+    red = {site.domain: site for site in snapshot["red_sites"]}
+    black = {site.domain: site for site in snapshot["black_sites"]}
 
     assert metrics["site_count"] == 3
     assert metrics["report_count"] == 19
-    assert metrics["site_count_label"] == "3"
-    assert metrics["report_count_label"] == "19"
     assert metrics["updated_at"] == "2026-07-20"
+    assert red["a.example"].score == 91
+    assert red["a.example"].report_count == 12
+    assert red["a.example"].protocols == ("gemini", "openai")
+    assert black["c.example"].score == 60
 
 
 def test_homepage_renders_coverage_counts_and_truthful_key_policy(monkeypatch):
@@ -135,3 +133,29 @@ def test_homepage_renders_coverage_counts_and_truthful_key_policy(monkeypatch):
     assert "次检测记录" in response.text
     assert "sk-y7xU" not in response.text
     assert "不会保留密钥前缀" in response.text
+    assert 'id="quick-check"' in response.text
+    assert 'name="protocol"' in response.text
+    assert "\u5bc6\u94a5\u4e0d\u4f1a\u5199\u5165 URL" in response.text
+
+
+def test_leaderboard_has_search_protocol_filters_and_methodology(monkeypatch):
+    from web import server
+
+    monkeypatch.setattr(server, "_public_ranking_snapshot", lambda: {
+        "red_sites": RED_RANKING[:2],
+        "black_sites": BLACK_RANKING[:2],
+        "metrics": {
+            "site_count": 4, "report_count": 14,
+            "red_count": 2, "black_count": 2,
+            "site_count_label": "4", "report_count_label": "14",
+            "updated_at": "2026-07-20",
+        },
+    })
+    response = TestClient(server.app).get("/leaderboard")
+
+    assert response.status_code == 200
+    assert 'id="ranking-search"' in response.text
+    assert 'data-rank-protocol="anthropic"' in response.text
+    assert 'data-rank-tone="black"' in response.text
+    assert "\u6392\u540d\u548c\u5206\u6570\u600e\u4e48\u770b" in response.text
+    assert "\u4e2d\u8f6c\u7ad9\u600e\u4e48\u9009" in response.text

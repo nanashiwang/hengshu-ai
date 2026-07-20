@@ -1,93 +1,44 @@
-﻿{% extends "base.html" %}
-
+{% extends "base.html" %}
 {% block title %}AI API 中转站红黑榜 | 格物{% endblock %}
-{% block description %}格物 AI API 中转站红黑榜，集中查看中转站综合分、检测次数、支持协议和最近检测时间。{% endblock %}
-{% block og_title %}AI API 中转站红黑榜 | 格物{% endblock %}
-{% block og_description %}集中查看 AI API 中转站综合表现与风险记录。{% endblock %}
+{% block description %}格物 AI API 中转站红黑榜,查看综合分、检测次数、协议和最近检测时间。{% endblock %}
 {% block canonical %}{{ brand.site_url }}/leaderboard{% endblock %}
 {% block og_url %}{{ brand.site_url }}/leaderboard{% endblock %}
+{% block head_extra %}<script type="application/ld+json">{"@context":"https://schema.org","@type":"ItemList","name":"AI API 中转站红榜","numberOfItems":{{ red_sites|length }},"itemListElement":[{% for site in red_sites %}{"@type":"ListItem","position":{{ loop.index }},"name":{{ site.domain|tojson }}}{% if not loop.last %},{% endif %}{% endfor %}]}</script>{% endblock %}
 
-{% block head_extra %}
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "ItemList",
-  "name": "AI API 中转站红榜",
-  "numberOfItems": {{ red_sites|length }},
-  "itemListOrder": "https://schema.org/ItemListOrderDescending",
-  "itemListElement": [
-    {%- for site in red_sites %}
-    {
-      "@type": "ListItem",
-      "position": {{ loop.index }},
-      "name": {{ site.domain|tojson }}
-    }{% if not loop.last %},{% endif %}
-    {%- endfor %}
-  ]
-}
-</script>
-{% endblock %}
-
-{% macro ranking_row(site, rank, tone) %}
-<article class="public-rank-row public-rank-row-{{ tone }}">
-  <div class="public-rank-position">
-    {% if tone == "red" and rank == 1 %}🥇
-    {% elif tone == "red" and rank == 2 %}🥈
-    {% elif tone == "red" and rank == 3 %}🥉
-    {% else %}<span>{{ rank }}</span>{% endif %}
-  </div>
+{% macro badge(p) %}<span class="rank-protocol rank-protocol-{{ p }}">{% if p == "anthropic" %}Claude{% elif p == "openai" %}OpenAI{% elif p == "gemini" %}Gemini{% else %}{{ p }}{% endif %}</span>{% endmacro %}
+{% macro row(site, rank, tone) %}
+<article class="public-rank-row public-rank-row-{{ tone }}" data-rank-row data-tone="{{ tone }}" data-domain="{{ site.domain|lower }}" data-protocols="{{ site.protocols|join(' ') }}">
+  <div class="public-rank-position"><span>{{ rank }}</span></div>
   <div class="public-rank-main">
-    <h3>{{ site.domain }}</h3>
-    <p>{{ site.protocols_label }} · {{ site.report_count }} 次检测 · 最近 {{ site.last_checked }}</p>
+    <div class="public-rank-title-line"><h3>{{ site.domain }}</h3><span class="rank-freshness">{{ site.last_checked }}</span></div>
+    <div class="rank-protocols">{% for p in site.protocols %}{{ badge(p) }}{% endfor %}<span class="rank-check-count">{{ site.report_count }} 次检测</span></div>
   </div>
-  <div class="public-rank-score">
-    <strong>{{ site.score }}</strong>
-    <span>综合分</span>
-  </div>
+  <div class="public-rank-score"><strong>{{ site.score }}</strong><span>综合分</span></div>
 </article>
 {% endmacro %}
 
 {% block content %}
-<section class="hub-hero leaderboard-hero">
-  <h1>AI API 中转站红黑榜</h1>
-  <p class="answer-capsule">
-    集中查看中转站的综合表现和风险记录。分数与状态会随新检测变化，选择服务前建议再用格物实测一次。
-    <span class="hub-meta-inline">更新于 {{ updated_at }} · <a href="/">返回首页检测</a></span>
-  </p>
-</section>
-
-<section class="public-ranking-section" aria-labelledby="red-ranking-title">
-  <div class="public-ranking-heading public-ranking-heading-red">
-    <div>
-      <span class="public-ranking-kicker">RED LIST</span>
-      <h2 id="red-ranking-title">红榜</h2>
-    </div>
-    <strong>{{ red_sites|length }} 家</strong>
-  </div>
-  <div class="public-ranking-list">
-    {% for site in red_sites %}
-      {{ ranking_row(site, loop.index, "red") }}
-    {% endfor %}
+<section class="leaderboard-hero">
+  <div class="leaderboard-eyebrow"><i></i> 持续更新的中转站质量视图</div>
+  <div class="leaderboard-hero-grid">
+    <div><h1>AI API 中转站<br><span>红黑榜</span></h1><p>先看长期稳定性,再看最新检测。分数会随新报告更新,选择服务前建议用自己的 key 再实测一次。</p><div class="leaderboard-hero-actions"><a class="btn btn-primary" href="/#quick-check">立即检测</a><a class="btn btn-ghost" href="#ranking-browser">浏览榜单</a></div></div>
+    <div class="leaderboard-overview"><div><strong>{{ coverage.site_count_label }}</strong><span>家中转站</span></div><div><strong>{{ coverage.report_count_label }}</strong><span>次检测</span></div><div class="overview-red"><strong>{{ coverage.red_count }}</strong><span>红榜</span></div><div class="overview-black"><strong>{{ coverage.black_count }}</strong><span>风险榜</span></div><p>更新于 {{ updated_at }} · 域名去重</p></div>
   </div>
 </section>
 
-<section class="public-ranking-section" aria-labelledby="black-ranking-title">
-  <div class="public-ranking-heading public-ranking-heading-black">
-    <div>
-      <span class="public-ranking-kicker">RISK LIST</span>
-      <h2 id="black-ranking-title">黑榜</h2>
-    </div>
-    <strong>{{ black_sites|length }} 家</strong>
-  </div>
-  <div class="public-ranking-list">
-    {% for site in black_sites %}
-      {{ ranking_row(site, loop.index, "black") }}
-    {% endfor %}
+<section class="ranking-guide"><div class="ranking-guide-head"><span>HOW TO READ</span><h2>中转站怎么选?</h2></div><div class="ranking-guide-grid"><article><strong>01 · 先看样本</strong><p>分数接近时,检测次数更多、最近仍稳定的站点更值得优先复测。</p></article><article><strong>02 · 再看协议</strong><p>Claude / OpenAI / Gemini 的证据强度不同,不要用单一协议的高分代替全部线路判断。</p></article><article><strong>03 · 最后自测</strong><p>榜单是筛选工具,不是永久保证;购买前复测当前模型。</p></article></div></section>
+
+<section class="ranking-browser" id="ranking-browser"><div class="ranking-browser-head"><div><span class="public-ranking-kicker">RANKING EXPLORER</span><h2>搜索与筛选</h2></div><strong id="ranking-visible-count">{{ coverage.site_count }} 家可见</strong></div>
+  <div class="ranking-toolbar"><label class="ranking-search"><span class="sr-only">搜索域名</span><input id="ranking-search" type="search" placeholder="搜索域名,例如 meta-api.vip" autocomplete="off"></label>
+    <div class="ranking-filter-group"><button class="ranking-filter is-active" type="button" data-rank-tone="all">全部</button><button class="ranking-filter" type="button" data-rank-tone="red">红榜</button><button class="ranking-filter" type="button" data-rank-tone="black">风险榜</button></div>
+    <div class="ranking-filter-group"><button class="ranking-filter is-active" type="button" data-rank-protocol="all">全协议</button><button class="ranking-filter" type="button" data-rank-protocol="anthropic">Claude</button><button class="ranking-filter" type="button" data-rank-protocol="openai">OpenAI</button><button class="ranking-filter" type="button" data-rank-protocol="gemini">Gemini</button></div>
   </div>
 </section>
 
-<section class="hub-note public-ranking-note">
-  <h2>使用说明</h2>
-  <p>榜单用于快速筛查，不构成商业信用、价格或永久质量结论。接口质量可能随线路、模型和时间变化，请以最新实测报告为准。</p>
-</section>
+<section class="public-ranking-section" data-ranking-section="red"><div class="public-ranking-heading public-ranking-heading-red"><div><span class="public-ranking-kicker">RED LIST</span><h2>红榜</h2></div><strong><span data-section-count="red">{{ red_sites|length }}</span> 家</strong></div><div class="public-ranking-list">{% for site in red_sites %}{{ row(site, loop.index, "red") }}{% endfor %}</div></section>
+<section class="public-ranking-section" data-ranking-section="black"><div class="public-ranking-heading public-ranking-heading-black"><div><span class="public-ranking-kicker">RISK LIST</span><h2>风险榜</h2></div><strong><span data-section-count="black">{{ black_sites|length }}</span> 家</strong></div><div class="public-ranking-list">{% for site in black_sites %}{{ row(site, loop.index, "black") }}{% endfor %}</div></section>
+<p class="ranking-empty" id="ranking-empty" hidden>没有匹配的中转站,请换个域名或筛选条件。</p>
+<details class="ranking-methodology"><summary>排名和分数怎么看?</summary><div><p>榜单同时考虑协议透传、功能完整性、usage 字段、流式一致性和可用性。样本少的高分不等于长期稳定,不同协议的 100 分也不代表同样强度的真伪证明。</p></div></details>
+<section class="leaderboard-cta"><div><span>没找到你的中转站?</span><h2>用真实 API 请求生成一份可复核报告</h2></div><a class="btn btn-primary" href="/#quick-check">开始检测</a></section>
+<section class="hub-note public-ranking-note"><h2>使用边界</h2><p>榜单用于快速筛查,不构成商业信用、价格或永久质量结论。请以最新实测报告为准。</p></section>
 {% endblock %}

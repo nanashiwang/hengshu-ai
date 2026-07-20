@@ -89,12 +89,43 @@
 
 {% block content %}
 <section class="hub-hero">
-  <h1>AI API 中转站真假检测</h1>
-  <p class="answer-capsule">
-    <strong>格物</strong> 是免费的 AI API 中转站检测工具:用 Claude thinking block 原始/篡改回放 + 多维行为指纹,
-    <strong>1 分钟</strong>评估 Claude / GPT / Gemini 的协议透传质量和后端替换风险。
-    无需注册、API key 不持久化、报告证据可复核。
-  </p>
+  <div class="hub-hero-grid">
+    <div class="hub-hero-copy">
+      <span class="live-status"><i aria-hidden="true"></i>实时检测开放 · 结果可复核</span>
+      <h1>AI API 中转站<br><span>先检测,再使用</span></h1>
+      <p class="answer-capsule">
+        <strong>格物</strong> 用 Claude thinking block 原始/篡改回放 + 多维行为指纹,
+        <strong>1 分钟</strong>评估 Claude / GPT / Gemini 的协议透传质量和后端替换风险。
+      </p>
+      <div class="hub-hero-actions">
+        <a class="btn btn-primary" href="#quick-check">开始检测</a>
+        <a class="btn btn-ghost" href="/leaderboard">查看红黑榜</a>
+      </div>
+      <p class="hero-assurance">无需注册 · API key 不持久化 · 报告 HTML / JPG 可分享</p>
+    </div>
+
+    <form class="quick-check-panel" id="quick-check" novalidate>
+      <div class="quick-check-head">
+        <span>QUICK CHECK</span>
+        <strong>先选协议,再检测真实线路</strong>
+      </div>
+      <fieldset class="quick-protocols">
+        <legend>接口协议</legend>
+        <label><input type="radio" name="protocol" value="claude" checked><span>Claude</span></label>
+        <label><input type="radio" name="protocol" value="openai"><span>OpenAI</span></label>
+        <label><input type="radio" name="protocol" value="gemini"><span>Gemini</span></label>
+      </fieldset>
+      <label class="quick-url-label" for="quick-base-url">API Base URL</label>
+      <div class="quick-url-row">
+        <input id="quick-base-url" name="base_url" type="url" inputmode="url"
+               placeholder="https://relay.example.com/v1" autocomplete="url" maxlength="2048" required>
+        <button class="btn btn-primary" type="submit">继续 <span aria-hidden="true">→</span></button>
+      </div>
+      <p class="quick-check-hint" id="quick-check-hint">只填不带查询参数的 Base URL;下一步再粘贴 API key,密钥不会写入 URL。</p>
+      <p class="quick-check-error" id="quick-check-error" role="alert" hidden></p>
+    </form>
+  </div>
+
   <div class="coverage-metrics" aria-label="格物检测覆盖数据">
     <a class="coverage-metric coverage-metric-primary" href="/leaderboard">
       <strong>{{ coverage.site_count_label }}</strong>

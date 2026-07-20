@@ -25,7 +25,12 @@ from .brand import brand
 from .faq_data import FAQ_CATEGORIES, faqpage_jsonld, total_question_count
 from .image_report import render_report_jpg
 from .probe import probe_model_alive, probe_relay
-from .public_rankings import BLACK_RANKING, RED_RANKING, UPDATED_AT
+from .public_rankings import (
+    BLACK_RANKING,
+    RED_RANKING,
+    UPDATED_AT,
+    PublicRankingSite,
+)
 from .ratelimit import check_rate
 from .security import (
     MAX_API_KEY_LENGTH,
@@ -230,42 +235,88 @@ def _gemini_model_choices() -> list[dict[str, str]]:
     return [{"id": s, "label": s} for s in model_choices()]
 
 
-_HOMEPAGE_METRICS_TTL_S = 60.0
-_homepage_metrics_cached_at = 0.0
-_homepage_metrics_cache: dict[str, int | str] | None = None
+_PUBLIC_RANKINGS_TTL_S = 60.0
+_public_rankings_cached_at = 0.0
+_public_rankings_cache: dict[str, object] | None = None
+_RED_SCORE_THRESHOLD = 70
 
 
-def _compute_homepage_metrics() -> dict[str, int | str]:
-    """Merge curated rankings and live reports without double counting domains."""
-    counts = {
-        site.domain: site.report_count
+def _compute_public_ranking_snapshot() -> dict[str, object]:
+    """Merge the curated snapshot with newer first-party reports by domain."""
+    sites = {
+        site.domain: site
         for site in (*RED_RANKING, *BLACK_RANKING)
     }
     latest = UPDATED_AT
     relays, _summary = leaderboard.aggregate()
     for relay in relays:
-        counts[relay.domain] = max(counts.get(relay.domain, 0), relay.total_count)
-        if relay.last_checked:
-            latest = max(latest, relay.last_checked.date().isoformat())
-    return {
-        "site_count": len(counts),
-        "report_count": sum(counts.values()),
-        "site_count_label": f"{len(counts):,}",
-        "report_count_label": f"{sum(counts.values()):,}",
+        if not relay.domain:
+            continue
+        current = sites.get(relay.domain)
+        local_checked = (
+            relay.last_checked.date().isoformat()
+            if relay.last_checked
+            else UPDATED_AT
+        )
+        latest = max(latest, local_checked)
+        protocols = tuple(sorted(relay.by_protocol.keys()))
+        if current is not None:
+            protocols = tuple(sorted(set(current.protocols) | set(protocols)))
+            use_local_score = local_checked >= current.last_checked
+            score = round(relay.overall_median) if use_local_score else current.score
+            last_checked = max(current.last_checked, local_checked)
+            report_count = max(current.report_count, relay.total_count)
+        else:
+            score = round(relay.overall_median)
+            last_checked = local_checked
+            report_count = relay.total_count
+        sites[relay.domain] = PublicRankingSite(
+            domain=relay.domain,
+            score=max(0, min(100, score)),
+            report_count=max(1, report_count),
+            last_checked=last_checked,
+            protocols=protocols,
+        )
+
+    red_sites = tuple(sorted(
+        (site for site in sites.values() if site.score >= _RED_SCORE_THRESHOLD),
+        key=lambda site: (-site.score, -site.report_count, site.domain),
+    ))
+    black_sites = tuple(sorted(
+        (site for site in sites.values() if site.score < _RED_SCORE_THRESHOLD),
+        key=lambda site: (site.score, -site.report_count, site.domain),
+    ))
+    total_reports = sum(site.report_count for site in sites.values())
+    metrics: dict[str, int | str] = {
+        "site_count": len(sites),
+        "report_count": total_reports,
+        "red_count": len(red_sites),
+        "black_count": len(black_sites),
+        "site_count_label": f"{len(sites):,}",
+        "report_count_label": f"{total_reports:,}",
         "updated_at": latest,
+    }
+    return {
+        "red_sites": red_sites,
+        "black_sites": black_sites,
+        "metrics": metrics,
     }
 
 
-def _homepage_metrics() -> dict[str, int | str]:
-    global _homepage_metrics_cached_at, _homepage_metrics_cache
+def _public_ranking_snapshot() -> dict[str, object]:
+    global _public_rankings_cached_at, _public_rankings_cache
     now = time.monotonic()
     if (
-        _homepage_metrics_cache is None
-        or now - _homepage_metrics_cached_at >= _HOMEPAGE_METRICS_TTL_S
+        _public_rankings_cache is None
+        or now - _public_rankings_cached_at >= _PUBLIC_RANKINGS_TTL_S
     ):
-        _homepage_metrics_cache = _compute_homepage_metrics()
-        _homepage_metrics_cached_at = now
-    return _homepage_metrics_cache
+        _public_rankings_cache = _compute_public_ranking_snapshot()
+        _public_rankings_cached_at = now
+    return _public_rankings_cache
+
+
+def _homepage_metrics() -> dict[str, int | str]:
+    return _public_ranking_snapshot()["metrics"]  # type: ignore[return-value]
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -306,13 +357,16 @@ async def gemini_index(request: Request) -> HTMLResponse:
 @app.get("/leaderboard", response_class=HTMLResponse)
 async def leaderboard_page(request: Request) -> HTMLResponse:
     """Render the single public red/black ranking surface."""
+    snapshot = _public_ranking_snapshot()
+    metrics = snapshot["metrics"]
     return templates.TemplateResponse(
         request,
         "leaderboard.html",
         {
-            "red_sites": RED_RANKING,
-            "black_sites": BLACK_RANKING,
-            "updated_at": UPDATED_AT,
+            "red_sites": snapshot["red_sites"],
+            "black_sites": snapshot["black_sites"],
+            "coverage": metrics,
+            "updated_at": metrics["updated_at"],
         },
     )
 

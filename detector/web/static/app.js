@@ -552,3 +552,103 @@
     });
   });
 })();
+
+// Homepage quick launcher and safe Base URL handoff. API keys never enter URLs.
+(() => {
+  function parseSafeBaseUrl(value) {
+    let parsed;
+    try { parsed = new URL(value); } catch { return null; }
+    if (!['http:', 'https:'].includes(parsed.protocol)
+      || !parsed.hostname
+      || parsed.username
+      || parsed.password
+      || parsed.search
+      || parsed.hash) {
+      return null;
+    }
+    return parsed;
+  }
+
+  const launcher = document.getElementById('quick-check');
+  if (launcher) {
+    const input = document.getElementById('quick-base-url');
+    const error = document.getElementById('quick-check-error');
+    launcher.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const value = String(input?.value || '').trim();
+      const parsed = parseSafeBaseUrl(value);
+      if (!parsed) {
+        if (error) {
+          error.textContent = '\u8bf7\u8f93\u5165\u4e0d\u542b\u8d26\u53f7\u3001\u5bc6\u7801\u3001\u67e5\u8be2\u53c2\u6570\u6216 # \u7247\u6bb5\u7684 HTTP(S) Base URL';
+          error.hidden = false;
+        }
+        input?.focus();
+        return;
+      }
+      const selected = launcher.querySelector('input[name="protocol"]:checked');
+      const protocol = selected?.value || 'claude';
+      location.href = `/${protocol}?base_url=${encodeURIComponent(value)}#detect-form`;
+    });
+  }
+
+  const detectorForm = document.getElementById('detect-form');
+  const baseUrlInput = document.getElementById('base_url');
+  if (detectorForm && baseUrlInput && !baseUrlInput.value) {
+    const candidate = new URLSearchParams(location.search).get('base_url');
+    if (candidate) {
+      const parsed = parseSafeBaseUrl(candidate);
+      if (parsed) baseUrlInput.value = candidate;
+    }
+  }
+})();
+
+// Client-side leaderboard search and dual filter. All rows remain in the HTML
+// for accessibility and search indexing; filtering only changes presentation.
+(() => {
+  const rows = Array.from(document.querySelectorAll('[data-rank-row]'));
+  if (!rows.length) return;
+  const search = document.getElementById('ranking-search');
+  const visibleCount = document.getElementById('ranking-visible-count');
+  const empty = document.getElementById('ranking-empty');
+  let tone = 'all';
+  let protocol = 'all';
+
+  function apply() {
+    const query = String(search?.value || '').trim().toLowerCase();
+    let visible = 0;
+    const sectionCounts = {red: 0, black: 0};
+    rows.forEach((row) => {
+      const protocols = String(row.dataset.protocols || '').split(/\s+/);
+      const show = (!query || String(row.dataset.domain || '').includes(query))
+        && (tone === 'all' || row.dataset.tone === tone)
+        && (protocol === 'all' || protocols.includes(protocol));
+      row.hidden = !show;
+      if (show) { visible += 1; sectionCounts[row.dataset.tone] += 1; }
+    });
+    document.querySelectorAll('[data-ranking-section]').forEach((section) => {
+      section.hidden = sectionCounts[section.dataset.rankingSection] === 0;
+    });
+    document.querySelectorAll('[data-section-count]').forEach((node) => {
+      node.textContent = String(sectionCounts[node.dataset.sectionCount] || 0);
+    });
+    if (visibleCount) visibleCount.textContent = `${visible} \u5bb6\u53ef\u89c1`;
+    if (empty) empty.hidden = visible !== 0;
+  }
+
+  search?.addEventListener('input', apply);
+  document.querySelectorAll('[data-rank-tone]').forEach((button) => {
+    button.addEventListener('click', () => {
+      tone = button.dataset.rankTone || 'all';
+      document.querySelectorAll('[data-rank-tone]').forEach((item) => item.classList.toggle('is-active', item === button));
+      apply();
+    });
+  });
+  document.querySelectorAll('[data-rank-protocol]').forEach((button) => {
+    button.addEventListener('click', () => {
+      protocol = button.dataset.rankProtocol || 'all';
+      document.querySelectorAll('[data-rank-protocol]').forEach((item) => item.classList.toggle('is-active', item === button));
+      apply();
+    });
+  });
+  apply();
+})();
