@@ -346,3 +346,43 @@ def test_detection_frontend_uses_advisory_preflight_and_honest_model_wording():
     assert "单次预检未通过,尚未生成检测分数" in script
     assert "该模型在中转站实际不可用" not in script
     assert "setTimeout(() => ctrl.abort(), 30000)" in script
+
+
+def test_raw_result_json_requires_internal_token_and_omits_key_mask(monkeypatch):
+    from web import jobs, server
+
+    report = {
+        "total_score": 91.0,
+        "verdict": "marginal",
+        "api_key_masked": "sk-partial...xy",
+        "results": [{"name": "protocol", "status": "fail", "details": {}}],
+    }
+
+    async def get_job(_job_id: str):
+        return jobs.Job(id="privatejob123", status="done", report=report)
+
+    monkeypatch.setattr(server.jobs, "get", get_job)
+    monkeypatch.setenv("GEWU_INTERNAL_API_TOKEN", "internal-test-token")
+    client = TestClient(server.app)
+
+    assert client.get("/api/result/privatejob123.json").status_code == 404
+    assert client.get(
+        "/api/result/privatejob123.json",
+        headers={"X-Gewu-Internal-Token": "wrong-token"},
+    ).status_code == 404
+
+    response = client.get(
+        "/api/result/privatejob123.json",
+        headers={"X-Gewu-Internal-Token": "internal-test-token"},
+    )
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert "api_key_masked" not in response.json()
+
+
+def test_server_side_detector_client_sends_internal_token():
+    source = (
+        Path(__file__).resolve().parents[2] / "src" / "lib" / "relayDetection.ts"
+    ).read_text(encoding="utf-8")
+    assert "X-Gewu-Internal-Token" in source
+    assert "process.env.GEWU_INTERNAL_API_TOKEN" in source

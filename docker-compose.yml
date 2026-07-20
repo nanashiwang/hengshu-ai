@@ -72,6 +72,7 @@ services:
       INTERNAL_SERVER_URL: http://127.0.0.1:3000
       DETECTOR_BASE_URL: ${DETECTOR_BASE_URL:-https://gewu.uk}
       DETECTOR_PUBLIC_URL: ${DETECTOR_PUBLIC_URL:-https://gewu.uk}
+      GEWU_INTERNAL_API_TOKEN: ${GEWU_INTERNAL_API_TOKEN}
       RELAY_CRON_SECRET: ${RELAY_CRON_SECRET}
       # 媒体上传目录，指向下方挂载的持久卷
       MEDIA_DIR: /app/media

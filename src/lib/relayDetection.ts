@@ -60,8 +60,12 @@ function detectorPublicUrl(): string {
 }
 
 async function detectorFetch(path: string, init?: RequestInit, timeoutMs = 30_000) {
+  const headers = new Headers(init?.headers)
+  const internalToken = process.env.GEWU_INTERNAL_API_TOKEN?.trim()
+  if (internalToken) headers.set('X-Gewu-Internal-Token', internalToken)
   const response = await fetch(`${detectorBaseUrl()}${path}`, {
     ...init,
+    headers,
     cache: 'no-store',
     redirect: 'error',
     signal: AbortSignal.timeout(timeoutMs),

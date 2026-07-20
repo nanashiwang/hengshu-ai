@@ -97,6 +97,8 @@ async def test_reflected_api_key_is_redacted_before_report_persistence(
     assert secret not in persisted
     assert "[REDACTED]" in persisted
     assert secret not in json.dumps(job.report, ensure_ascii=False)
+    assert job.report is not None
+    assert job.report["api_key_masked"] == "[REDACTED]"
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -679,7 +680,6 @@ async def api_status(job_id: str) -> JSONResponse:
             {
                 "result_url": f"/r/{j.id}",
                 "image_url": f"/r/{j.id}.jpg",
-                "json_url": f"/api/result/{j.id}.json",
                 "total_score": (
                     float(report.get("total_score"))
                     if isinstance(report.get("total_score"), (int, float))
@@ -696,12 +696,26 @@ async def api_status(job_id: str) -> JSONResponse:
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
 
+def _require_internal_result_access(request: Request) -> None:
+    """Protect raw detector evidence when a shared production token is set."""
+    expected = os.environ.get("GEWU_INTERNAL_API_TOKEN", "").strip()
+    if not expected:
+        return
+    supplied = request.headers.get("X-Gewu-Internal-Token", "")
+    if not supplied or not secrets.compare_digest(supplied, expected):
+        # Avoid advertising that the private evidence endpoint exists.
+        raise HTTPException(status_code=404, detail="result not found")
+
+
 @app.get("/api/result/{job_id}.json")
-async def api_result_json(job_id: str) -> JSONResponse:
+async def api_result_json(request: Request, job_id: str) -> JSONResponse:
+    _require_internal_result_access(request)
     j = await jobs.get(job_id)
     if j is None or j.report is None:
         raise HTTPException(status_code=404, detail="result not ready")
-    return JSONResponse(j.report)
+    report = dict(j.report)
+    report.pop("api_key_masked", None)
+    return JSONResponse(report, headers={"Cache-Control": "no-store"})
 
 
 # NOTE: declare .jpg route BEFORE the bare /r/{job_id} HTML route. Starlette
@@ -1131,10 +1145,20 @@ def _report_notes(report: dict) -> list[dict[str, str]]:
                 ),
             })
         elif token_billing.get("status") != "pass":
+            stream_only = td.get("non_stream_supported") is False
             notes.append({
-                "title": "Token 计费存在风险",
-                "body": td.get("evaluation_zh") or (
-                    "Token 统计有明显偏差,建议留意是否存在多算或统计错误。"
+                "title": (
+                    "Token 统计自洽,但缺少交叉验证"
+                    if stream_only
+                    else "Token 计费存在风险"
+                ),
+                "body": (
+                    "接口仅支持流式请求,现有 Token 数内部自洽,"
+                    "但无法做独立的流式/非流式对照。"
+                    if stream_only
+                    else td.get("evaluation_zh") or (
+                        "Token 统计有明显偏差,建议留意是否存在多算或统计错误。"
+                    )
                 ),
             })
         # Note: when token_billing passes, the green check in the detector
@@ -1147,7 +1171,7 @@ def _report_notes(report: dict) -> list[dict[str, str]]:
         if isinstance(integrity.get("details"), dict)
         else {}
     )
-    if integrity and integrity.get("status") != "pass":
+    if integrity and integrity.get("status") == "fail":
         target_failed = (
             idetails.get("non_stream_target_match") is False
             or idetails.get("stream_target_match") is False

@@ -608,3 +608,66 @@ def test_openai_integrity_target_failure_is_explained_without_affecting_gemini()
     assert _gemini_jpg_note(gemini_report) == (
         "流式响应存在偏差: stream 与 non-stream 没有完全对齐。"
     )
+
+
+def test_stream_only_report_does_not_invent_integrity_or_billing_failure():
+    from web.image_report import _openai_jpg_note
+    from web.server import _report_notes
+
+    report = {
+        "protocol": "openai",
+        "results": [
+            {"name": "structured_output", "status": "pass"},
+            {
+                "name": "token_billing",
+                "status": "fail",
+                "details": {
+                    "non_stream_supported": False,
+                    "evaluation_zh": (
+                        "现有 Token 统计内部自洽,但接口仅支持流式请求,"
+                        "无法完成独立的流式/非流式交叉验证。"
+                    ),
+                },
+            },
+            {
+                "name": "integrity",
+                "status": "skip",
+                "details": {"skip_reason": "non-stream-unsupported"},
+            },
+            {"name": "protocol", "status": "pass", "details": {}},
+        ],
+    }
+
+    notes = _report_notes(report)
+    assert [note["title"] for note in notes] == ["Token 统计自洽,但缺少交叉验证"]
+    assert "流式响应存在偏差" not in str(notes)
+    assert "统计自洽" in _openai_jpg_note(report)
+
+
+def test_openai_share_card_prioritizes_critical_backend_fingerprint():
+    from web.image_report import _openai_jpg_note
+
+    report = {
+        "protocol": "openai",
+        "results": [
+            {"name": "structured_output", "status": "pass"},
+            {
+                "name": "token_billing",
+                "status": "fail",
+                "details": {"non_stream_supported": False},
+            },
+            {
+                "name": "protocol",
+                "status": "fail",
+                "details": {
+                    "issues": [
+                        {"severity": "critical", "code": "usage_contains_claude_fields"}
+                    ]
+                },
+            },
+        ],
+    }
+
+    note = _openai_jpg_note(report)
+    assert note.startswith("协议高风险")
+    assert "非 OpenAI 后端指纹" in note

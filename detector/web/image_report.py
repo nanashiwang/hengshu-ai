@@ -255,14 +255,39 @@ def _openai_jpg_note(report: dict[str, Any]) -> str:
             )
         return "结构化输出未通过: 返回内容不能按 JSON schema 解析。"
 
+    # Put the strongest evidence on the compact share card instead of letting
+    # a lower-severity compatibility warning hide it.
+    protocol = results.get("protocol") or {}
+    details = protocol.get("details") or {}
+    if isinstance(details, dict):
+        critical_codes = {
+            "usage_contains_claude_fields",
+            "usage_contains_gemini_fields",
+            "usage_source_anthropic",
+            "usage_source_gemini",
+            "usage_source_non_openai",
+        }
+        issue_codes = {
+            issue.get("code")
+            for issue in details.get("issues") or []
+            if isinstance(issue, dict)
+        }
+        if issue_codes & critical_codes:
+            return "协议高风险: usage 字段出现非 OpenAI 后端指纹,疑似存在转换层。"
+        if "usage_mixed_token_fields" in issue_codes:
+            return "协议提示: usage 字段带有非 OpenAI 适配层痕迹。"
+
     token_billing = results.get("token_billing") or {}
+    billing_details = token_billing.get("details") or {}
     if token_billing.get("status") == "skip":
         return "Token 计费无法判断: 接口没有返回足够完整的 Token 用量信息。"
     if token_billing.get("status") == "fail":
+        if isinstance(billing_details, dict) and billing_details.get("non_stream_supported") is False:
+            return "Token 统计自洽,但接口仅支持流式请求,无法完成流/非流交叉验证。"
         return "Token 计费存在风险: 返回的 Token 统计有明显偏差。"
 
     integrity = results.get("integrity") or {}
-    if integrity.get("status") != "pass":
+    if integrity.get("status") == "fail":
         details = integrity.get("details") or {}
         if isinstance(details, dict) and (
             details.get("non_stream_target_match") is False
@@ -270,19 +295,6 @@ def _openai_jpg_note(report: dict[str, Any]) -> str:
         ):
             return "流式一致性未通过: stream 或 non-stream 没有正确返回指定标记。"
         return "流式一致性未通过: 结束原因或 usage 字段没有对齐。"
-
-    protocol = results.get("protocol") or {}
-    details = protocol.get("details") or {}
-    if isinstance(details, dict):
-        for issue in details.get("issues") or []:
-            if not isinstance(issue, dict):
-                continue
-            if issue.get("code") in {
-                "usage_contains_claude_fields",
-                "usage_source_anthropic",
-                "usage_mixed_token_fields",
-            }:
-                return "协议提示: usage 字段带有非 OpenAI 适配层痕迹。"
     return ""
 
 

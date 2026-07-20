@@ -183,7 +183,13 @@ class TokenBillingDetector(ActiveDetector):
             else "medium" if score >= 70
             else "high"
         )
-        evaluation_zh = _evaluation_text(score, stream_usage, reference_result)
+        core_usage_ok = usage_present and arithmetic_ok and delta_ok and completion_ok
+        evaluation_zh = (
+            "现有 Token 统计内部自洽,但接口仅支持流式请求,"
+            "无法完成独立的流式/非流式交叉验证。"
+            if stream_only and core_usage_ok
+            else _evaluation_text(score, stream_usage, reference_result)
+        )
         details = {
             "sub_checks": sub,
             "risk_level": risk_level,

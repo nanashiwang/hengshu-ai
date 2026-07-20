@@ -26,7 +26,6 @@ from relay_detector.models import (
     ExecutionConfig,
     Mode,
     Protocol,
-    mask_api_key,
 )
 from relay_detector.scorer import (
     compute_total,
@@ -34,7 +33,7 @@ from relay_detector.scorer import (
     fatal_run_error,
     summary_text,
 )
-from .security import redact_secret, redact_text
+from .security import REDACTED, redact_secret, redact_text
 
 
 JobStatus = Literal["queued", "running", "done", "error"]
@@ -310,7 +309,7 @@ async def _run(
                 tier_title=tier_title,
                 tier_message=tier_message,
                 base_url=base_url,
-                api_key_masked=mask_api_key(api_key),
+                api_key_masked=REDACTED,
                 target_model=model,
                 mode=Mode(mode),
                 timestamp=datetime.now(timezone.utc),
