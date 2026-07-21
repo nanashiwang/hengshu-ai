@@ -33,6 +33,7 @@ from .image_report import render_report_jpg
 from .probe import probe_model_alive, probe_relay
 from .public_rankings import (
     BLACK_RANKING,
+    EXCLUDED_RANKING_DOMAINS,
     RED_RANKING,
     UPDATED_AT,
     PublicRankingSite,
@@ -255,11 +256,15 @@ def _compute_public_ranking_snapshot() -> dict[str, object]:
     sites = {
         site.domain: site
         for site in (*RED_RANKING, *BLACK_RANKING)
+        if site.domain.lower() not in EXCLUDED_RANKING_DOMAINS
     }
     latest = UPDATED_AT
     relays, _summary = leaderboard.aggregate()
     for relay in relays:
-        if not relay.domain:
+        if (
+            not relay.domain
+            or relay.domain.lower() in EXCLUDED_RANKING_DOMAINS
+        ):
             continue
         current = sites.get(relay.domain)
         local_checked = (

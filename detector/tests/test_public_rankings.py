@@ -35,11 +35,13 @@ def test_leaderboard_discloses_external_snapshot_and_first_party_sources():
     assert "nan.meta-api.vip" in response.text
     assert "codexpp.com" in response.text
     assert "api.thinkai.tv" in response.text
+    assert "api.loomcode.cn" not in response.text
     assert "api.example.com" not in response.text
     assert 'href="/login"' in response.text
     assert 'href="/register"' in response.text
     assert 'href="https://nan.meta-api.vip"' in response.text
-    assert 'href="https://api.thinkai.tv"' in response.text
+    assert 'href="/leaderboard/api.thinkai.tv"' in response.text
+    assert 'href="https://api.thinkai.tv"' not in response.text
     assert 'target="_blank"' in response.text
     assert 'rel="noopener noreferrer nofollow external"' in response.text
     assert 'referrerpolicy="no-referrer"' in response.text
@@ -47,7 +49,7 @@ def test_leaderboard_discloses_external_snapshot_and_first_party_sources():
     assert 'data-compare-domain="nan.meta-api.vip"' in response.text
     assert "高可信" in response.text
     assert "我的关注" in response.text
-    assert "点击域名会在新窗口打开外部站点" in response.text
+    assert "点击域名只进入格物站内详情" in response.text
     assert "格物关联站点 · 推广位" in response.text
     assert "该位置不加分、不改变名次" in response.text
     assert 'href="/pricing"' in response.text
@@ -66,6 +68,7 @@ def test_ranking_detail_renders_decision_page_and_unknown_domain_is_404():
     assert "检测详情" in response.text
     assert "样本可信度" in response.text
     assert "检测此站" in response.text
+    assert "打开域名" not in response.text
     assert 'data-watch-domain="nan.meta-api.vip"' in response.text
     assert 'data-compare-domain="nan.meta-api.vip"' in response.text
     assert client.get("/leaderboard/not-listed.example").status_code == 404
@@ -120,6 +123,8 @@ def test_compare_page_limits_deduplicates_and_validates_domains():
     assert "nan.meta-api.vip" in response.text
     assert "codereel.pro" in response.text
     assert "evil.example" not in response.text
+    assert "打开域名" not in response.text
+    assert 'href="/leaderboard/codereel.pro"' in response.text
     assert 'name="robots" content="noindex,follow"' in response.text
 
 
@@ -154,17 +159,23 @@ def test_market_pricing_parser_preserves_billing_variants_and_bounds_values():
     payloads = {
         method: _market_payload(method, []) for method in range(1, 5)
     }
-    payloads[1] = _market_payload(1, [{
-        "sku_name": " gpt-test ", "company": "OpenAI", "pricing_method": 1,
-        "sku_tags": ["对话", "对话", "识图"],
-        "min_price_info": {
-            "min_price": 0.2, "input_price": 0.2, "output_price": 1.4,
-            "cache_read_price": 0,  # Oken uses zero for unavailable.
+    payloads[1] = _market_payload(1, [
+        {
+            "sku_name": " gpt-test ", "company": "OpenAI", "pricing_method": 1,
+            "sku_tags": ["对话", "对话", "识图"],
+            "min_price_info": {
+                "min_price": 0.2, "input_price": 0.2, "output_price": 1.4,
+                "cache_read_price": 0,  # Oken uses zero for unavailable.
+            },
+            "official_price_info": {"input_price": 3.4, "output_price": float("inf")},
+            "best_discount": 0.0591, "manufacturer_num": 63,
+            "publish_at": "2026-07-09", "is_new": 1,
         },
-        "official_price_info": {"input_price": 3.4, "output_price": float("inf")},
-        "best_discount": 0.0591, "manufacturer_num": 63,
-        "publish_at": "2026-07-09", "is_new": 1,
-    }])
+        {
+            "sku_name": "gpt-cheap", "company": "OpenAI", "pricing_method": 1,
+            "min_price_info": {"min_price": 0.01, "input_price": 0.01},
+        },
+    ])
     payloads[2] = _market_payload(2, [
         {
             "sku_name": "gpt-test", "company": "OpenAI", "pricing_method": 2,
@@ -175,10 +186,14 @@ def test_market_pricing_parser_preserves_billing_variants_and_bounds_values():
 
     parsed = parse_market_pricing(payloads, captured_at="2026-07-21T14:00:00+08:00")
 
-    assert parsed.model_count == 1
-    assert parsed.variant_count == 2
+    assert parsed.model_count == 2
+    assert parsed.variant_count == 3
+    assert [item.model for item in parsed.prices] == ["gpt-cheap", "gpt-test", "gpt-test"]
     assert {item.billing_key for item in parsed.prices} == {"usage", "count"}
-    usage = next(item for item in parsed.prices if item.billing_method == 1)
+    usage = next(
+        item for item in parsed.prices
+        if item.billing_method == 1 and item.model == "gpt-test"
+    )
     count = next(item for item in parsed.prices if item.billing_method == 2)
     assert usage.abilities == ("对话", "识图")
     assert usage.cache_read_price is None
@@ -255,7 +270,8 @@ def test_featured_placement_does_not_change_quality_order(monkeypatch):
         site.domain for site in server._compute_public_ranking_snapshot()["red_sites"]
     ]
 
-    assert quality_domains[0] == "api.loomcode.cn"
+    assert "api.loomcode.cn" not in quality_domains
+    assert quality_domains[0] == "codereel.pro"
     assert quality_domains.index("nan.meta-api.vip") > 0
 
 
