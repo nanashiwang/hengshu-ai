@@ -3,6 +3,7 @@
 {% block description %}聚合公开的 AI 模型价格，按厂商、计费方式和能力筛选输入、输出、缓存与按次价格。价格参考与格物质量检测相互独立。{% endblock %}
 {% block canonical %}{{ brand.site_url }}/pricing{% endblock %}
 {% block og_url %}{{ brand.site_url }}/pricing{% endblock %}
+{% block body_class %}page-pricing{% endblock %}
 
 {% macro yuan(value) %}{% if value == -1 %}免费{% elif value is not none %}¥{{ "%g"|format(value) }}{% else %}—{% endif %}{% endmacro %}
 {% macro discount(value) %}{% if value is not none %}{{ "%.2f"|format(value)|trim('0')|trim('.') }} 折{% else %}—{% endif %}{% endmacro %}
@@ -50,7 +51,7 @@
 {% if pricing %}
 <section class="pricing-models" id="model-pricing">
   <div class="pricing-section-head pricing-workbench-head">
-    <div><span class="public-ranking-kicker">PUBLIC MARKET REFERENCE</span><h2>模型价格工作台</h2><p>{{ pricing.model_count }} 个模型 · {{ pricing.variant_count }} 个计费版本 · 页面每 5 分钟重新读取</p></div>
+    <div><span class="public-ranking-kicker">LOWEST PRICE FIRST</span><h2>模型价格榜单</h2><p>同一计费方式内按最低价从低到高 · {{ pricing.model_count }} 个模型 · {{ pricing.variant_count }} 个计费版本</p></div>
     <strong id="pricing-visible-count">{{ pricing.variant_count }} 个计费版本</strong>
   </div>
 

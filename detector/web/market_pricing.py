@@ -163,6 +163,18 @@ def _date(value: Any) -> str | None:
     return text
 
 
+def _price_order(item: MarketModelPrice) -> tuple[int, float, str, str]:
+    """Compare prices only inside the same billing unit."""
+    value = item.display_price
+    comparable_price = 0.0 if value == -1 else value if value is not None else math.inf
+    return (
+        item.billing_method,
+        comparable_price,
+        item.company.casefold(),
+        item.model.casefold(),
+    )
+
+
 def parse_market_pricing(payloads: dict[int, Any], *, captured_at: str) -> MarketPricing:
     """Validate all four billing feeds and return bounded display records."""
     prices: list[MarketModelPrice] = []
@@ -226,10 +238,7 @@ def parse_market_pricing(payloads: dict[int, Any], *, captured_at: str) -> Marke
     if not captured:
         raise ValueError("captured_at is required")
     return MarketPricing(
-        prices=tuple(sorted(
-            prices,
-            key=lambda item: (item.company.casefold(), item.model.casefold(), item.billing_method),
-        )),
+        prices=tuple(sorted(prices, key=_price_order)),
         captured_at=captured,
     )
 

@@ -17,6 +17,10 @@ PROTOCOL_LABELS = {
     "gemini": "Gemini",
 }
 
+# Domains explicitly withdrawn from public presentation remain excluded even
+# if an older local report still exists in the detector history.
+EXCLUDED_RANKING_DOMAINS = frozenset({"api.loomcode.cn"})
+
 
 @dataclass(frozen=True)
 class PublicRankingSite:
@@ -151,7 +155,6 @@ RED_RANKING = (
     PublicRankingSite("ssnaiyun.com", 93, 30, "2026-07-13", ("anthropic", "openai")),
     PublicRankingSite("gwlink.cc", 93, 14, "2026-07-14", ("anthropic", "openai")),
     PublicRankingSite("xbhuiz.com", 93, 3, "2026-06-22", ("anthropic", "openai")),
-    PublicRankingSite("api.loomcode.cn", 92, 81, "2026-07-13", ("anthropic", "openai")),
     PublicRankingSite("9527code.com", 91, 21, "2026-07-14", ("anthropic", "openai")),
     PublicRankingSite("dasuapi.com", 91, 55, "2026-07-17", ("openai",)),
     PublicRankingSite("zivv.pro", 89, 11, "2026-07-10", ("anthropic", "gemini", "openai")),

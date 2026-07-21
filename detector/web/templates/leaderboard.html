@@ -10,7 +10,7 @@
 <article class="public-rank-row public-rank-row-{{ tone }}" data-rank-row data-tone="{{ tone }}" data-domain="{{ site.domain|lower }}" data-protocols="{{ site.protocols|join(' ') }}">
   <div class="public-rank-position"><span>{{ rank }}</span></div>
   <div class="public-rank-main">
-    <div class="public-rank-title-line"><h3><a class="rank-domain-link" href="{{ site.external_url }}" target="_blank" rel="noopener noreferrer nofollow external" referrerpolicy="no-referrer" aria-label="打开 {{ site.domain }} 外部站点（新窗口）">{{ site.domain }}<span aria-hidden="true">↗</span></a></h3><span class="rank-freshness">{{ site.last_checked }}</span></div>
+    <div class="public-rank-title-line"><h3><a class="rank-domain-link" href="/leaderboard/{{ site.domain }}" aria-label="查看 {{ site.domain }} 站内详情">{{ site.domain }}</a></h3><span class="rank-freshness">{{ site.last_checked }}</span></div>
     <div class="rank-protocols"><span class="source-badge source-{{ site.source_class }}">{{ site.source_label }}</span>{% for p in site.protocols %}{{ badge(p) }}{% endfor %}<span class="rank-check-count">{{ site.report_count }} 次记录</span><span class="confidence-badge confidence-{{ site.confidence_class }}">{{ site.confidence_label }}</span><span class="freshness-badge freshness-{{ site.freshness_class }}">{{ site.freshness_label }}</span></div>
     <div class="rank-row-actions"><a href="/leaderboard/{{ site.domain }}">详情</a><a href="{{ site.detect_url }}">复测</a><button type="button" data-watch-domain="{{ site.domain }}" aria-pressed="false">关注</button><button type="button" data-compare-domain="{{ site.domain }}" aria-pressed="false">对比</button></div>
   </div>
@@ -46,6 +46,6 @@
 <p class="ranking-empty" id="ranking-empty" hidden>没有匹配的中转站,请换个域名或筛选条件。</p>
 <details class="ranking-methodology"><summary>排名、分数和来源怎么看?</summary><div><p>“Veridrop 快照”转录第三方公开分数与记录数；“格物实测”来自格物检测器生成的报告。综合分原样展示，排序时会按样本数向中性值收缩；跨来源分数只能作为筛选线索，购买前仍应使用自己的 key 复测。</p></div></details>
 <section class="leaderboard-cta"><div><span>没找到你的中转站?</span><h2>用真实 API 请求生成一份可复核报告</h2></div><a class="btn btn-primary" href="/#quick-check">开始检测</a></section>
-<section class="hub-note public-ranking-note"><h2>使用边界</h2><p>点击域名会在新窗口打开外部站点;“关注”只保存在当前浏览器。榜单用于快速筛查,不构成商业信用、价格或永久质量结论;风险观察中的站点请谨慎访问,并以最新实测报告为准。</p></section>
+<section class="hub-note public-ranking-note"><h2>使用边界</h2><p>点击域名只进入格物站内详情，不会直接跳转外部站点；“关注”只保存在当前浏览器。榜单用于快速筛查,不构成商业信用、价格或永久质量结论,并以最新实测报告为准。</p></section>
 <div class="compare-selection-bar" id="compare-selection-bar" hidden><span><strong id="compare-selection-count">0</strong>/3 已选</span><div><button type="button" class="btn btn-ghost" id="compare-selection-clear">清空</button><a class="btn btn-primary" id="compare-selection-open" href="/leaderboard/compare" aria-disabled="true">开始对比</a></div></div>
 {% endblock %}
