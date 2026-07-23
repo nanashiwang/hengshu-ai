@@ -342,7 +342,7 @@
       if (data && data.base_url) {
         baseUrlInput.value = data.base_url;
         const fromLabel = {anthropic: 'Claude', openai: 'OpenAI', gemini: 'Gemini'}[data.from] || data.from;
-        setPill('neutral', '🔐 已从 ' + fromLabel + ' 页面带入中转站地址。为保护密钥,请重新粘贴 API 密钥。');
+        setPill('neutral', '已从 ' + fromLabel + ' 页面带入中转站地址。为保护密钥，请重新粘贴 API 密钥。');
         apiKeyInput.focus();
       }
     }
@@ -553,6 +553,75 @@
   });
 })();
 
+// Homepage history lookup. The first action is read-only: exact known domains
+// open their internal evidence page; partial queries continue in the full list.
+(() => {
+  const form = document.getElementById('history-search-form');
+  const input = document.getElementById('home-domain-search');
+  if (!form || !input) return;
+
+  const rows = Array.from(document.querySelectorAll('[data-home-rank-row]'));
+  const empty = document.getElementById('home-ranking-empty');
+  const status = document.getElementById('history-search-status');
+  const knownDomains = new Set(
+    Array.from(document.querySelectorAll('#home-domain-options option'))
+      .map((option) => String(option.value || '').trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const DOMAIN_RE = /^[a-z0-9](?:[a-z0-9.-]{1,251}[a-z0-9])$/;
+
+  function normalizeLookup(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return '';
+    try {
+      const candidate = raw.includes('://') ? new URL(raw) : new URL(`https://${raw}`);
+      return candidate.hostname.replace(/\.$/, '');
+    } catch {
+      return raw.replace(/\.$/, '');
+    }
+  }
+
+  function filterPreview() {
+    const query = normalizeLookup(input.value);
+    let visible = 0;
+    rows.forEach((row) => {
+      const show = !query || String(row.dataset.domain || '').includes(query);
+      row.hidden = !show;
+      if (show) visible += 1;
+    });
+    const exactMatch = knownDomains.has(query);
+    if (empty) {
+      empty.hidden = visible !== 0 || !query;
+      if (!empty.hidden) {
+        empty.textContent = exactMatch
+          ? '该域名不在首页前列，但完整榜单中有记录；按回车查看站内报告。'
+          : '首页前列暂无匹配；按回车搜索完整榜单。';
+      }
+    }
+    if (!status) return;
+    if (!query) status.textContent = '';
+    else if (exactMatch) status.textContent = `已找到 ${query}，按回车查看站内报告。`;
+    else if (visible) status.textContent = `首页前列有 ${visible} 个匹配项；按回车搜索完整榜单。`;
+    else status.textContent = '首页前列暂无匹配；按回车搜索完整榜单。';
+  }
+
+  input.addEventListener('input', filterPreview);
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const query = normalizeLookup(input.value);
+    if (!query) {
+      input.focus();
+      if (status) status.textContent = '请输入中转站域名或 URL。';
+      return;
+    }
+    if (knownDomains.has(query) && DOMAIN_RE.test(query)) {
+      location.href = `/leaderboard/${encodeURIComponent(query)}`;
+      return;
+    }
+    location.href = `/leaderboard?query=${encodeURIComponent(query)}#ranking-browser`;
+  });
+})();
+
 // Homepage quick launcher and safe Base URL handoff. API keys never enter URLs.
 (() => {
   function parseSafeBaseUrl(value) {
@@ -572,6 +641,7 @@
   const launcher = document.getElementById('quick-check');
   if (launcher) {
     const input = document.getElementById('quick-base-url');
+    const modelInput = document.getElementById('quick-model');
     const error = document.getElementById('quick-check-error');
     launcher.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -587,17 +657,37 @@
       }
       const selected = launcher.querySelector('input[name="protocol"]:checked');
       const protocol = selected?.value || 'claude';
-      location.href = `/${protocol}?base_url=${encodeURIComponent(value)}#detect-form`;
+      const target = new URL(`/${protocol}`, location.origin);
+      target.searchParams.set('base_url', value);
+      const model = String(modelInput?.value || '').trim();
+      if (model && model.length <= 120 && !/[\u0000-\u001f\u007f]/.test(model)) {
+        target.searchParams.set('model', model);
+      }
+      location.href = `${target.pathname}${target.search}#detect-form`;
     });
   }
 
   const detectorForm = document.getElementById('detect-form');
   const baseUrlInput = document.getElementById('base_url');
-  if (detectorForm && baseUrlInput && !baseUrlInput.value) {
-    const candidate = new URLSearchParams(location.search).get('base_url');
-    if (candidate) {
-      const parsed = parseSafeBaseUrl(candidate);
-      if (parsed) baseUrlInput.value = candidate;
+  const detectorModelInput = document.getElementById('model');
+  if (detectorForm) {
+    const params = new URLSearchParams(location.search);
+    if (baseUrlInput && !baseUrlInput.value) {
+      const candidate = params.get('base_url');
+      if (candidate) {
+        const parsed = parseSafeBaseUrl(candidate);
+        if (parsed) baseUrlInput.value = candidate;
+      }
+    }
+    if (detectorModelInput) {
+      const candidateModel = String(params.get('model') || '').trim();
+      if (
+        candidateModel
+        && candidateModel.length <= 120
+        && !/[\u0000-\u001f\u007f]/.test(candidateModel)
+      ) {
+        detectorModelInput.value = candidateModel;
+      }
     }
   }
 })();
@@ -613,6 +703,9 @@
   let tone = 'all';
   let protocol = 'all';
   let watchedOnly = false;
+
+  const initialQuery = new URLSearchParams(location.search).get('query');
+  if (search && initialQuery) search.value = initialQuery.slice(0, 253);
 
   function watchedDomains() {
     try {
@@ -768,83 +861,105 @@
 // Price workbench filters and explicit presentation sorting. The server keeps
 // the market directory order; the browser never recalculates or mixes units.
 (() => {
-  const rows = Array.from(document.querySelectorAll('[data-pricing-row]'));
-  if (!rows.length) return;
-  const search = document.getElementById('pricing-search');
-  const billing = document.getElementById('pricing-billing');
-  const ability = document.getElementById('pricing-ability');
-  const sort = document.getElementById('pricing-sort');
-  const visibleCount = document.getElementById('pricing-visible-count');
-  const empty = document.getElementById('pricing-empty');
-  const tableBody = rows[0].parentElement;
-  let vendor = 'all';
+  document.querySelectorAll('[data-pricing-workbench]').forEach((workbench) => {
+    const rows = Array.from(workbench.querySelectorAll('[data-pricing-row]'));
+    if (!rows.length) return;
+    const search = workbench.querySelector('[data-pricing-search]');
+    const billing = workbench.querySelector('[data-pricing-billing]');
+    const ability = workbench.querySelector('[data-pricing-ability]');
+    const sort = workbench.querySelector('[data-pricing-sort]');
+    const visibleCount = workbench.closest('.pricing-models')?.querySelector('#pricing-visible-count');
+    const empty = workbench.querySelector('[data-pricing-empty]');
+    const feedback = workbench.querySelector('[data-pricing-feedback]');
+    const tableBody = rows[0].parentElement;
+    let vendor = 'all';
 
-  function sourceOrder(row) {
-    return Number.parseInt(row.dataset.sourceOrder || '', 10) || 0;
-  }
+    function sourceOrder(row) {
+      return Number.parseInt(row.dataset.sourceOrder || '', 10) || 0;
+    }
 
-  function priceValue(row, key) {
-    const raw = String(row.dataset[key] || '');
-    if (!raw) return Number.POSITIVE_INFINITY;
-    const value = Number(raw);
-    if (!Number.isFinite(value)) return Number.POSITIVE_INFINITY;
-    return value === -1 ? Number.NEGATIVE_INFINITY : value;
-  }
+    function priceValue(row, key) {
+      const raw = String(row.dataset[key] || '');
+      if (!raw) return Number.POSITIVE_INFINITY;
+      const value = Number(raw);
+      if (!Number.isFinite(value)) return Number.POSITIVE_INFINITY;
+      return value === -1 ? Number.NEGATIVE_INFINITY : value;
+    }
 
-  function applyPricingSort() {
-    if (!tableBody) return;
-    const mode = String(sort?.value || 'source');
-    const billingOrder = ['usage', 'count', 'video_size', 'av_duration'];
-    const ordered = [...rows].sort((left, right) => {
-      let result = 0;
-      if (mode === 'price-asc') {
-        // Keep unlike units in separate groups when "all billing" is shown.
-        result = billingOrder.indexOf(left.dataset.billing) - billingOrder.indexOf(right.dataset.billing);
-        if (result) return result;
-        result = priceValue(left, 'price') - priceValue(right, 'price');
-      } else if (mode === 'output-asc') {
-        result = billingOrder.indexOf(left.dataset.billing) - billingOrder.indexOf(right.dataset.billing);
-        if (result) return result;
-        result = priceValue(left, 'outputPrice') - priceValue(right, 'outputPrice');
-      } else if (mode === 'published-desc') {
-        result = String(right.dataset.published || '').localeCompare(String(left.dataset.published || ''));
-      }
-      return result || sourceOrder(left) - sourceOrder(right);
-    });
-    ordered.forEach((row) => tableBody.appendChild(row));
-  }
-
-  function applyPricingFilters() {
-    const query = String(search?.value || '').trim().toLowerCase();
-    const billingValue = String(billing?.value || 'all');
-    const abilityValue = String(ability?.value || 'all').toLowerCase();
-    let visible = 0;
-    rows.forEach((row) => {
-      const abilities = String(row.dataset.abilities || '').split('|');
-      const show = (!query || String(row.dataset.model || '').includes(query))
-        && (vendor === 'all' || row.dataset.vendor === vendor)
-        && (billingValue === 'all' || row.dataset.billing === billingValue)
-        && (abilityValue === 'all' || abilities.includes(abilityValue));
-      row.hidden = !show;
-      if (show) visible += 1;
-    });
-    if (visibleCount) visibleCount.textContent = `${visible} 个计费版本`;
-    if (empty) empty.hidden = visible !== 0;
-  }
-
-  search?.addEventListener('input', applyPricingFilters);
-  billing?.addEventListener('change', applyPricingFilters);
-  ability?.addEventListener('change', applyPricingFilters);
-  sort?.addEventListener('change', applyPricingSort);
-  document.querySelectorAll('[data-pricing-vendor]').forEach((button) => {
-    button.addEventListener('click', () => {
-      vendor = button.dataset.pricingVendor || 'all';
-      document.querySelectorAll('[data-pricing-vendor]').forEach((item) => {
-        item.classList.toggle('is-active', item === button);
+    function applyPricingSort() {
+      if (!tableBody) return;
+      const mode = String(sort?.value || 'source');
+      const billingOrder = ['usage', 'count', 'video_size', 'av_duration'];
+      const ordered = [...rows].sort((left, right) => {
+        let result = 0;
+        if (mode === 'price-asc') {
+          // Keep unlike units in separate groups when "all billing" is shown.
+          result = billingOrder.indexOf(left.dataset.billing) - billingOrder.indexOf(right.dataset.billing);
+          if (result) return result;
+          result = priceValue(left, 'price') - priceValue(right, 'price');
+        } else if (mode === 'output-asc') {
+          result = billingOrder.indexOf(left.dataset.billing) - billingOrder.indexOf(right.dataset.billing);
+          if (result) return result;
+          result = priceValue(left, 'outputPrice') - priceValue(right, 'outputPrice');
+        } else if (mode === 'published-desc') {
+          result = String(right.dataset.published || '').localeCompare(String(left.dataset.published || ''));
+        }
+        return result || sourceOrder(left) - sourceOrder(right);
       });
-      applyPricingFilters();
+      ordered.forEach((row) => tableBody.appendChild(row));
+    }
+
+    function applyPricingFilters() {
+      const query = String(search?.value || '').trim().toLowerCase();
+      const billingValue = String(billing?.value || 'all');
+      const abilityValue = String(ability?.value || 'all').toLowerCase();
+      let visible = 0;
+      rows.forEach((row) => {
+        const abilities = String(row.dataset.abilities || '').split('|');
+        const show = (!query || String(row.dataset.model || '').includes(query))
+          && (vendor === 'all' || row.dataset.vendor === vendor)
+          && (billingValue === 'all' || row.dataset.billing === billingValue)
+          && (abilityValue === 'all' || abilities.includes(abilityValue));
+        row.hidden = !show;
+        if (show) visible += 1;
+      });
+      if (visibleCount) visibleCount.textContent = `${visible} 个计费版本`;
+      if (empty) empty.hidden = visible !== 0;
+    }
+
+    search?.addEventListener('input', applyPricingFilters);
+    billing?.addEventListener('change', applyPricingFilters);
+    ability?.addEventListener('change', applyPricingFilters);
+    sort?.addEventListener('change', applyPricingSort);
+    workbench.querySelectorAll('[data-pricing-vendor]').forEach((button) => {
+      button.addEventListener('click', () => {
+        vendor = button.dataset.pricingVendor || 'all';
+        workbench.querySelectorAll('[data-pricing-vendor]').forEach((item) => {
+          item.classList.toggle('is-active', item === button);
+        });
+        applyPricingFilters();
+      });
     });
+    workbench.querySelectorAll('[data-pricing-test-model]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const quickCheck = document.getElementById('quick-check');
+        const modelInput = document.getElementById('quick-model');
+        const baseUrlInput = document.getElementById('quick-base-url');
+        if (!quickCheck || !modelInput) return;
+        const model = String(button.dataset.pricingTestModel || '').slice(0, 120);
+        const protocol = String(button.dataset.pricingTestProtocol || 'openai');
+        modelInput.value = model;
+        const radio = quickCheck.querySelector(`input[name="protocol"][value="${protocol}"]`);
+        if (radio) radio.checked = true;
+        quickCheck.classList.remove('is-prefilled');
+        void quickCheck.offsetWidth;
+        quickCheck.classList.add('is-prefilled');
+        if (feedback) feedback.textContent = `已把 ${model} 带入检测面板；补充中转站 URL 后即可继续。`;
+        quickCheck.scrollIntoView({behavior: 'smooth', block: 'center'});
+        window.setTimeout(() => baseUrlInput?.focus({preventScroll: true}), 350);
+      });
+    });
+    applyPricingSort();
+    applyPricingFilters();
   });
-  applyPricingSort();
-  applyPricingFilters();
 })();

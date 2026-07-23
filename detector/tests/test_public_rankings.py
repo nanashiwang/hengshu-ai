@@ -50,6 +50,7 @@ def test_leaderboard_discloses_external_snapshot_and_first_party_sources():
     assert "高可信" in response.text
     assert "我的关注" in response.text
     assert "点击域名只进入格物站内详情" in response.text
+    assert "质量榜按综合分从高到低排列" in response.text
     assert "格物关联站点 · 推广位" in response.text
     assert "该位置不加分、不改变名次" in response.text
     assert 'href="/pricing"' in response.text
@@ -155,6 +156,38 @@ def _market_payload(method, rows):
     return {"code": 0, "data": {"list": rows, "total": len(rows)}}
 
 
+def _sample_market_pricing(count: int = 12) -> MarketPricing:
+    names = (
+        ("gpt-5.6-sol", "OpenAI"),
+        ("gpt-5.6-luna", "OpenAI"),
+        ("kimi-k3", "Moonshot"),
+        ("gpt-5.5", "OpenAI"),
+        ("gpt-5.6-terra", "OpenAI"),
+        ("gemini-3.6-flash", "Google"),
+        ("claude-sonnet-5", "Anthropic"),
+        ("claude-fable-5", "Anthropic"),
+        ("claude-opus-4.8", "Anthropic"),
+        ("gpt-image-2", "OpenAI"),
+        ("grok-4.5", "xAI"),
+        ("deepseek-v4-pro", "DeepSeek"),
+    )
+    return MarketPricing(
+        prices=tuple(
+            MarketModelPrice(
+                model=model, company=company, billing_method=1,
+                abilities=("对话",), minimum_price=0.2 + index,
+                input_price=0.2 + index, output_price=1.4 + index,
+                cache_read_price=0.02, best_discount=0.06,
+                official_input_price=3.4, official_output_price=20,
+                provider_count=63 - index, published_at="2026-07-09",
+                is_new=index < 3, is_hot=index in (3, 6, 7),
+            )
+            for index, (model, company) in enumerate(names[:count])
+        ),
+        captured_at="2026-07-23T16:00:00+08:00",
+    )
+
+
 def test_market_pricing_parser_preserves_billing_variants_and_bounds_values():
     payloads = {
         method: _market_payload(method, []) for method in range(1, 5)
@@ -203,6 +236,20 @@ def test_market_pricing_parser_preserves_billing_variants_and_bounds_values():
     assert usage.provider_count == 63
     assert count.minimum_price == -1
     assert count.provider_count == 0
+
+
+def test_homepage_pricing_selects_only_ten_usage_models_and_maps_protocols():
+    pricing = _sample_market_pricing()
+
+    assert len(pricing.homepage_prices) == 10
+    assert pricing.homepage_prices[0].model == "gpt-5.6-sol"
+    assert pricing.homepage_prices[7].model == "claude-fable-5"
+    assert pricing.homepage_prices[0].detection_protocol == "openai"
+    assert pricing.homepage_prices[5].detection_protocol == "gemini"
+    assert pricing.homepage_prices[7].detection_protocol == "claude"
+    assert pricing.homepage_companies == (
+        "OpenAI", "Moonshot", "Google", "Anthropic"
+    )
 
 
 def test_market_pricing_parser_requires_every_billing_feed():
@@ -274,16 +321,22 @@ def test_featured_placement_does_not_change_quality_order(monkeypatch):
     from web import server
 
     monkeypatch.setattr(server.leaderboard, "aggregate", lambda: ([], {}))
-    quality_domains = [
-        site.domain for site in server._compute_public_ranking_snapshot()["red_sites"]
-    ]
+    quality_sites = server._compute_public_ranking_snapshot()["red_sites"]
+    quality_domains = [site.domain for site in quality_sites]
 
     assert "api.loomcode.cn" not in quality_domains
-    assert quality_domains[0] == "codereel.pro"
-    assert quality_domains.index("nan.meta-api.vip") > 0
+    assert [site.score for site in quality_sites] == sorted(
+        (site.score for site in quality_sites), reverse=True
+    )
 
 
-def test_homepage_exposes_optional_account_and_relay_management_entry():
+def test_homepage_exposes_optional_account_and_relay_management_entry(monkeypatch):
+    from web import server
+
+    async def fake_pricing():
+        return _sample_market_pricing()
+
+    monkeypatch.setattr(server, "get_market_pricing", fake_pricing)
     response = TestClient(app).get("/")
 
     assert response.status_code == 200
@@ -293,7 +346,63 @@ def test_homepage_exposes_optional_account_and_relay_management_entry():
     assert "账户与站点管理" in response.text
 
 
-def test_public_pages_do_not_expose_repository_entry_points():
+def test_homepage_visual_and_interaction_contract(monkeypatch):
+    from web import server
+
+    async def fake_pricing():
+        return _sample_market_pricing()
+
+    monkeypatch.setattr(server, "get_market_pricing", fake_pricing)
+    client = TestClient(app)
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "全网比价 +" in response.text
+    assert 'id="history-search-form"' in response.text
+    assert 'id="home-domain-search"' in response.text
+    assert 'id="quick-model"' in response.text
+    assert response.text.count("data-pricing-test-model") == 10
+    assert response.text.count("data-pricing-row") == 10
+    assert "gpt-5.6-sol" in response.text
+    assert "claude-fable-5" in response.text
+    assert "查看全部 12 个模型" in response.text
+    assert response.text.count("data-home-rank-row") == 12
+    assert response.text.index('id="home-pricing"') < response.text.index(
+        'id="home-ranking"'
+    )
+    assert response.text.index('id="home-ranking"') < response.text.index(
+        'id="security-and-trust"'
+    )
+    assert response.text.index("怎么用？三步，约 30–75 秒") < response.text.index(
+        'class="account-entry"'
+    )
+    assert "查看完整榜单" in response.text
+    assert "Veridrop 快照" in response.text
+    assert "格物实测" in response.text
+    assert all(icon not in response.text for icon in ("🔒", "📋", "🔐", "🛡️"))
+
+    css = client.get("/static/style.css").text
+    assert "--accent: #5b5bd6" in css
+    assert "--green:" not in css
+    assert ".quick-protocols input:focus-visible + span" in css
+    assert "@media (prefers-color-scheme: dark)" in css
+    assert ".btn-block { width: 100%; }" in css
+
+    javascript = client.get("/static/app.js").text
+    assert "history-search-form" in javascript
+    assert "knownDomains.has(query)" in javascript
+    assert "new URLSearchParams(location.search).get('query')" in javascript
+    assert "data-pricing-test-model" in javascript
+    assert "target.searchParams.set('model', model)" in javascript
+
+
+def test_public_pages_do_not_expose_repository_entry_points(monkeypatch):
+    from web import server
+
+    async def fake_pricing():
+        return _sample_market_pricing()
+
+    monkeypatch.setattr(server, "get_market_pricing", fake_pricing)
     client = TestClient(app)
     for path in (
         "/", "/faq", "/leaderboard", "/leaderboard/nan.meta-api.vip",
@@ -339,6 +448,9 @@ def test_public_ranking_snapshot_merges_newer_live_reports_without_double_counti
     red = {site.domain: site for site in snapshot["red_sites"]}
     black = {site.domain: site for site in snapshot["black_sites"]}
 
+    assert [site.score for site in snapshot["red_sites"]] == sorted(
+        (site.score for site in snapshot["red_sites"]), reverse=True
+    )
     assert metrics["site_count"] == 3
     assert metrics["report_count"] == 19
     assert metrics["updated_at"] == "2026-07-20"
@@ -346,6 +458,9 @@ def test_public_ranking_snapshot_merges_newer_live_reports_without_double_counti
     assert metrics["first_party_report_count"] == 14
     assert metrics["external_site_count"] == 1
     assert metrics["external_report_count"] == 5
+    assert metrics["anthropic_site_count"] == 2
+    assert metrics["openai_site_count"] == 1
+    assert metrics["gemini_site_count"] == 1
     assert red["a.example"].score == 91
     assert red["a.example"].source_label == "格物实测"
     assert red["a.example"].report_count == 12
@@ -372,13 +487,13 @@ def test_homepage_renders_coverage_counts_and_truthful_key_policy(monkeypatch):
     assert response.status_code == 200
     assert "73" in response.text
     assert "1,927" in response.text
-    assert "家中转站已覆盖" in response.text
-    assert "次检测记录" in response.text
+    assert "73 个域名" in response.text
+    assert "1,927 次记录" in response.text
     assert "sk-y7xU" not in response.text
     assert "不会保留密钥前缀" in response.text
     assert 'id="quick-check"' in response.text
     assert 'name="protocol"' in response.text
-    assert "\u5bc6\u94a5\u4e0d\u4f1a\u5199\u5165 URL" in response.text
+    assert "首页不收集密钥" in response.text
 
 
 def test_leaderboard_has_search_protocol_filters_and_methodology(monkeypatch):
@@ -407,4 +522,5 @@ def test_leaderboard_has_search_protocol_filters_and_methodology(monkeypatch):
     assert "\u6392\u540d\u3001\u5206\u6570\u548c\u6765\u6e90\u600e\u4e48\u770b" in response.text
     assert "\u4e2d\u8f6c\u7ad9\u600e\u4e48\u9009" in response.text
     assert 'id="compare-selection-bar"' in response.text
-    assert "排序时会按样本数向中性值收缩" in response.text
+    assert "质量榜按综合分从高到低排列" in response.text
+    assert "只有同分时才参考样本可信度与记录数" in response.text
