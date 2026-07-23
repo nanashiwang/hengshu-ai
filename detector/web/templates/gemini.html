@@ -51,14 +51,14 @@
   "@context": "https://schema.org",
   "@type": "HowTo",
   "name": "如何检测 Gemini API 中转站",
-  "totalTime": "PT1M",
+  "totalTime": "PT75S",
   "estimatedCost": {"@type": "MonetaryAmount", "currency": "USD", "value": "0.005"},
   "step": [
     {"@type": "HowToStep", "name": "打开检测页", "text": "访问 {{ brand.site_url }}/gemini"},
     {"@type": "HowToStep", "name": "填中转站地址", "text": "Google 官方填 https://generativelanguage.googleapis.com/v1beta/openai;第三方中转站通常填 https://api.example.com/v1"},
     {"@type": "HowToStep", "name": "粘贴 API key", "text": "Google 官方用 AIza... key,第三方中转站用 sk-... key"},
     {"@type": "HowToStep", "name": "选模型 + 模式", "text": "推荐稳定版 gemini-3.5-flash;成本优先可选 gemini-3.1-flash-lite,standard 模式约 40 秒"},
-    {"@type": "HowToStep", "name": "开始检测", "text": "点开始检测,等 30-70 秒拿到报告"},
+    {"@type": "HowToStep", "name": "开始检测", "text": "点开始检测，等待 30–75 秒拿到报告"},
     {"@type": "HowToStep", "name": "对比 Google 官方基线", "text": "建议先检测一次 Google 官方端点作为 100 分基线,再去对比第三方中转站的差距"}
   ]
 }
@@ -70,17 +70,17 @@
 <section class="hero">
   <h1>Gemini API 中转站检测</h1>
   <p class="hero-sub answer-capsule" style="text-align:center;max-width:760px;margin:0 auto 14px;">
-    <strong>格物</strong> 通过 OpenAI 兼容协议(<code>POST /chat/completions</code>)探测 Gemini 中转站,
+    <strong>格物</strong>通过 OpenAI 兼容协议（<code>POST /chat/completions</code>）探测 Gemini 中转站，
     <strong>7 项检测</strong>覆盖协议规范、function calling、structured output、流式一致性和 usage 字段。
     适配 Gemini 3 <strong>thinking-by-default</strong> 模型的特殊处理。免费、API key 不持久化、结果可复核。
   </p>
 </section>
 
 <section class="card alert-card">
-  <strong>协议级验证:</strong>
-  本检测验证 Gemini 中转站的 OpenAI 兼容协议实现是否完整,不提供签名回放或绝对模型真伪证明。
+  <strong>协议级验证：</strong>
+  本检测验证 Gemini 中转站的 OpenAI 兼容协议实现是否完整，不提供签名回放或绝对模型真伪证明。
   Google 官方 OpenAI 兼容端点是
-  <code>https://generativelanguage.googleapis.com/v1beta/openai</code>;
+  <code>https://generativelanguage.googleapis.com/v1beta/openai</code>；
   第三方中转站通常在 <code>/v1</code> 暴露同样的协议。
 </section>
 
@@ -91,7 +91,7 @@
       <input type="url" id="base_url" name="base_url" required
              placeholder="https://generativelanguage.googleapis.com/v1beta/openai"
              maxlength="2048" autocomplete="url" autocapitalize="none" spellcheck="false" />
-      <p class="hint">填到 <code>/chat/completions</code> 的上一级。Google 官方填 <code>/v1beta/openai</code>;第三方中转站通常填 <code>/v1</code>。</p>
+      <p class="hint">填到 <code>/chat/completions</code> 的上一级。Google 官方填 <code>/v1beta/openai</code>；第三方中转站通常填 <code>/v1</code>。</p>
     </div>
 
     <div class="field">
@@ -99,7 +99,7 @@
       <input type="password" id="api_key" name="api_key" required
              placeholder="AIza... 或 sk-..." minlength="8" maxlength="4096"
              autocomplete="new-password" autocapitalize="none" spellcheck="false" />
-      <p class="hint">仅用于本次检测,不写入报告、不持久化。会以 <code>Authorization: Bearer</code> 头发送。</p>
+      <p class="hint">仅用于本次检测，不写入报告、不持久化。会以 <code>Authorization: Bearer</code> 头发送。</p>
     </div>
 
     <div class="field-row">
@@ -127,7 +127,7 @@
       </div>
     </div>
 
-    <button type="submit" id="submit-btn" class="btn btn-primary">
+    <button type="submit" id="submit-btn" class="btn btn-primary btn-block">
       开始检测
     </button>
     <p class="hint">检测报告是公开链接并包含完整 base_url;持有链接的人都能查看,请勿分享私有中转地址的报告。</p>

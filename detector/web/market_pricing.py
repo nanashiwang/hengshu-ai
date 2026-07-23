@@ -75,6 +75,17 @@ class MarketModelPrice:
     def display_price(self) -> float | None:
         return self.input_price if self.billing_method == 1 else self.minimum_price
 
+    @property
+    def detection_protocol(self) -> str:
+        """Map a market model to the closest Gewu verification protocol."""
+        model = self.model.casefold()
+        company = self.company.casefold()
+        if model.startswith(("gemini-", "models/gemini-")) or company == "google":
+            return "gemini"
+        if model.startswith("claude-") or company == "anthropic":
+            return "claude"
+        return "openai"
+
 
 @dataclass(frozen=True)
 class MarketPricing:
@@ -104,6 +115,22 @@ class MarketPricing:
             (key, label, sum(item.billing_method == number for item in self.prices))
             for number, key, label in _BILLING_METHODS
         )
+
+    @property
+    def homepage_prices(self) -> tuple[MarketModelPrice, ...]:
+        """Return ten curated usage-priced models without embedding the full feed.
+
+        The upstream directory already prioritizes new and popular models.  We
+        keep that order and select only usage-priced rows so unlike billing
+        units are never compared in the compact homepage table.
+        """
+        return tuple(
+            item for item in self.prices if item.billing_method == 1
+        )[:10]
+
+    @property
+    def homepage_companies(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(item.company for item in self.homepage_prices))
 
 
 def _clean_text(value: Any, *, maximum: int = 120) -> str:

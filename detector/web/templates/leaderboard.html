@@ -22,7 +22,7 @@
 <section class="leaderboard-hero">
   <div class="leaderboard-eyebrow"><i></i> 第三方榜单快照与格物实测分开标注</div>
   <div class="leaderboard-hero-grid">
-    <div><h1>AI API 中转站<br><span>质量与风险</span></h1><p>大部分条目来自 Veridrop 公开榜单快照；只有带“格物实测”标记的记录来自格物检测器。两类来源不会冒充彼此。</p><div class="leaderboard-hero-actions"><a class="btn btn-primary" href="/#quick-check">立即检测</a><a class="btn btn-ghost" href="#ranking-browser">浏览榜单</a><a class="btn btn-ghost" href="/pricing">价格透明</a></div></div>
+    <div><h1>AI API 中转站<br><span>质量与风险</span></h1><p>大部分条目来自 Veridrop 公开榜单快照；只有带“格物实测”标记的记录来自格物检测器。两类来源不会冒充彼此。</p><div class="leaderboard-hero-actions"><a class="btn btn-primary" href="/#quick-check">立即检测</a><a class="btn btn-ghost" href="#ranking-browser">浏览榜单</a><a class="btn btn-ghost" href="/pricing">模型价格</a></div></div>
     <div class="leaderboard-overview source-overview"><div><strong>{{ coverage.external_site_count }}</strong><span>第三方快照站点</span><small>Veridrop · {{ coverage.external_updated_at }}</small></div><div><strong>{{ coverage.first_party_site_count }}</strong><span>格物实测站点</span><small>{{ coverage.first_party_report_count }} 次记录 · {{ coverage.first_party_updated_at }}</small></div><div class="overview-red"><strong>{{ coverage.red_count }}</strong><span>质量榜</span></div><div class="overview-black"><strong>{{ coverage.black_count }}</strong><span>风险观察</span></div><p>总计 {{ coverage.site_count_label }} 个域名 · 来源以每行标记为准</p></div>
   </div>
 </section>
@@ -44,7 +44,7 @@
 <section class="public-ranking-section" data-ranking-section="red"><div class="public-ranking-heading public-ranking-heading-red"><div><span class="public-ranking-kicker">QUALITY LIST</span><h2>质量榜</h2></div><strong><span data-section-count="red">{{ red_sites|length }}</span> 家</strong></div><div class="public-ranking-list">{% for site in red_sites %}{{ row(site, loop.index, "red") }}{% endfor %}</div></section>
 <section class="public-ranking-section" data-ranking-section="black"><div class="public-ranking-heading public-ranking-heading-black"><div><span class="public-ranking-kicker">RISK WATCH</span><h2>风险观察</h2></div><strong><span data-section-count="black">{{ black_sites|length }}</span> 家</strong></div><div class="public-ranking-list">{% for site in black_sites %}{{ row(site, loop.index, "black") }}{% endfor %}</div></section>
 <p class="ranking-empty" id="ranking-empty" hidden>没有匹配的中转站,请换个域名或筛选条件。</p>
-<details class="ranking-methodology"><summary>排名、分数和来源怎么看?</summary><div><p>“Veridrop 快照”转录第三方公开分数与记录数；“格物实测”来自格物检测器生成的报告。综合分原样展示，排序时会按样本数向中性值收缩；跨来源分数只能作为筛选线索，购买前仍应使用自己的 key 复测。</p></div></details>
+<details class="ranking-methodology"><summary>排名、分数和来源怎么看?</summary><div><p>“Veridrop 快照”转录第三方公开分数与记录数；“格物实测”来自格物检测器生成的报告。质量榜按综合分从高到低排列，只有同分时才参考样本可信度与记录数；跨来源分数只能作为筛选线索，购买前仍应使用自己的 key 复测。</p></div></details>
 <section class="leaderboard-cta"><div><span>没找到你的中转站?</span><h2>用真实 API 请求生成一份可复核报告</h2></div><a class="btn btn-primary" href="/#quick-check">开始检测</a></section>
 <section class="hub-note public-ranking-note"><h2>使用边界</h2><p>点击域名只进入格物站内详情，不会直接跳转外部站点；“关注”只保存在当前浏览器。榜单用于快速筛查,不构成商业信用、价格或永久质量结论,并以最新实测报告为准。</p></section>
 <div class="compare-selection-bar" id="compare-selection-bar" hidden><span><strong id="compare-selection-count">0</strong>/3 已选</span><div><button type="button" class="btn btn-ghost" id="compare-selection-clear">清空</button><a class="btn btn-primary" id="compare-selection-open" href="/leaderboard/compare" aria-disabled="true">开始对比</a></div></div>

@@ -49,14 +49,14 @@
   "@context": "https://schema.org",
   "@type": "HowTo",
   "name": "如何检测 OpenAI / GPT 中转站协议合规",
-  "totalTime": "PT1M",
+  "totalTime": "PT75S",
   "estimatedCost": {"@type": "MonetaryAmount", "currency": "USD", "value": "0.005"},
   "step": [
     {"@type": "HowToStep", "name": "打开检测页", "text": "访问 {{ brand.site_url }}/openai"},
     {"@type": "HowToStep", "name": "填中转站地址", "text": "填 OpenAI-compatible base_url,例如 https://api.example.com 或 https://api.example.com/v1"},
     {"@type": "HowToStep", "name": "粘贴 API key", "text": "粘贴你的 sk-... key,只用于本次检测"},
     {"@type": "HowToStep", "name": "选模型 + 模式", "text": "推荐 gpt-5.6-sol;也可按成本选择 gpt-5.6-terra 或 gpt-5.6-luna,standard 模式约 40 秒"},
-    {"@type": "HowToStep", "name": "开始检测", "text": "点开始检测,等 30-70 秒拿到报告"},
+    {"@type": "HowToStep", "name": "开始检测", "text": "点开始检测，等待 30–75 秒拿到报告"},
     {"@type": "HowToStep", "name": "看 usage 字段指纹", "text": "重点看 protocol detector 是否报 usage_contains_claude_fields / usage_source_non_openai 等 critical issue — 它强烈提示异源适配或非标准扩展,但不单独证明实际后端模型"}
   ]
 }
@@ -68,13 +68,13 @@
 <section class="hero">
   <h1>OpenAI / GPT 中转站检测</h1>
   <p class="hero-sub answer-capsule" style="text-align:center;max-width:760px;margin:0 auto 14px;">
-    <strong>格物</strong> 通过 8 项 Chat Completions 协议检测 + <strong>usage 字段后端指纹识别</strong>,
-    <strong>1 分钟</strong>评估中转站的 OpenAI 协议透传质量和后端适配层风险。免费、API key 不持久化、结果可复核。
+    <strong>格物</strong>通过 8 项 Chat Completions 协议检测 + <strong>usage 字段后端指纹识别</strong>，
+    约 <strong>30–75 秒</strong>评估中转站的 OpenAI 协议透传质量和后端适配层风险。免费、API key 不持久化、结果可复核。
   </p>
 </section>
 
 <section class="card alert-card">
-  <strong>行为/协议级验证:</strong>
+  <strong>行为/协议级验证：</strong>
   本检测无法可靠区分高配模型真品与低配模型伪装。我们检测的是中转站接口是否符合 OpenAI
   Chat Completions 协议规范、能力是否完整、usage 字段是否符合官方响应形状。
 </section>
@@ -86,7 +86,7 @@
       <input type="url" id="base_url" name="base_url" required
              placeholder="https://api.example.com/v1" maxlength="2048"
              autocomplete="url" autocapitalize="none" spellcheck="false" />
-      <p class="hint">OpenAI-compatible 根 URL,可填 <code>https://api.example.com</code> 或 <code>https://api.example.com/v1</code>。</p>
+      <p class="hint">OpenAI-compatible 根 URL，可填 <code>https://api.example.com</code> 或 <code>https://api.example.com/v1</code>。</p>
     </div>
 
     <div class="field">
@@ -94,7 +94,7 @@
       <input type="password" id="api_key" name="api_key" required
              placeholder="sk-..." minlength="8" maxlength="4096"
              autocomplete="new-password" autocapitalize="none" spellcheck="false" />
-      <p class="hint">仅用于本次检测,不写入报告、不持久化。</p>
+      <p class="hint">仅用于本次检测，不写入报告、不持久化。</p>
     </div>
 
     <div class="field-row">
@@ -147,7 +147,7 @@
       </label>
     </div>
 
-    <button type="submit" id="submit-btn" class="btn btn-primary">
+    <button type="submit" id="submit-btn" class="btn btn-primary btn-block">
       开始检测
     </button>
     <p class="hint">检测报告是公开链接并包含完整 base_url;持有链接的人都能查看,请勿分享私有中转地址的报告。</p>

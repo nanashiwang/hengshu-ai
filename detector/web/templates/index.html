@@ -29,7 +29,7 @@
     "Kiro / Amazon Q / Bedrock 替身识别",
     "可分享 JPG / HTML 报告"
   ],
-  "description": "格物 通过 Claude thinking signature 等 12 项检测维度,1 分钟内验证 AI API 中转站是否真实透传 Claude 模型,识别用 Kiro / Amazon Q / Bedrock 等后端伪装的中转站,并检查 Token 用量是否虚报、长上下文窗口是否真实兑现。"
+  "description": "格物通过 Claude thinking signature 等 12 项检测维度，在约 30–75 秒内验证 AI API 中转站是否真实透传 Claude 模型，识别用 Kiro / Amazon Q / Bedrock 等后端伪装的中转站，并检查 Token 用量是否虚报、长上下文窗口是否真实兑现。"
 }
 </script>
 <script type="application/ld+json">
@@ -51,14 +51,14 @@
   "@context": "https://schema.org",
   "@type": "HowTo",
   "name": "如何检测 Claude API 中转站是不是真原生",
-  "totalTime": "PT1M",
+  "totalTime": "PT75S",
   "estimatedCost": {"@type": "MonetaryAmount", "currency": "USD", "value": "0.02"},
   "step": [
     {"@type": "HowToStep", "name": "打开检测页", "text": "访问 {{ brand.site_url }}/claude"},
     {"@type": "HowToStep", "name": "填中转站地址", "text": "在 base_url 输入框填中转站根 URL,例如 https://api.example.com"},
     {"@type": "HowToStep", "name": "粘贴 API key", "text": "在 API 密钥框粘贴你的 sk-... key,只用于本次检测,不会持久化"},
     {"@type": "HowToStep", "name": "选模型 + 模式", "text": "下拉自动列出该 key 在该中转站可用的模型,选 standard 模式覆盖 9 项检测约 45 秒"},
-    {"@type": "HowToStep", "name": "开始检测", "text": "点开始检测,等 30-75 秒拿到报告"},
+    {"@type": "HowToStep", "name": "开始检测", "text": "点开始检测，等待 30–75 秒拿到报告"},
     {"@type": "HowToStep", "name": "看 thinking signature", "text": "重点看 thinking_signature 的原始回放和篡改对照是否同时验证。0 分表示该强证据缺失,应结合其他检测项判断"}
   ]
 }
@@ -68,10 +68,10 @@
 {% block content %}
 
 <section class="hero">
-  <h1>这家 Claude API 中转站,是真原生吗?</h1>
+  <h1>这家 Claude API 中转站，是真原生吗？</h1>
   <p class="hero-sub answer-capsule" style="text-align:center;max-width:760px;margin:0 auto 14px;">
-    <strong>格物</strong> 对 Claude <strong>thinking block 做原始/篡改回放验证</strong>,再结合 10 项辅助检测,
-    <strong>1 分钟</strong>评估中转站的协议透传质量与后端替换风险。免费、API key 不持久化、结果可复核。
+    <strong>格物</strong>对 Claude <strong>thinking block 做原始/篡改回放验证</strong>，再结合 10 项辅助检测，
+    约 <strong>30–75 秒</strong>评估中转站的协议透传质量与后端替换风险。免费、API key 不持久化、结果可复核。
   </p>
 </section>
 
@@ -82,7 +82,7 @@
       <input type="url" id="base_url" name="base_url" required
              placeholder="https://api.example.com" maxlength="2048"
              autocomplete="url" autocapitalize="none" spellcheck="false" />
-      <p class="hint">中转站根 URL,格物 将向其 <code>/v1/messages</code> 发送测试请求。</p>
+      <p class="hint">中转站根 URL，格物将向其 <code>/v1/messages</code> 发送测试请求。</p>
     </div>
 
     <div class="field">
@@ -90,7 +90,7 @@
       <input type="password" id="api_key" name="api_key" required
              placeholder="sk-..." minlength="8" maxlength="4096"
              autocomplete="new-password" autocapitalize="none" spellcheck="false" />
-      <p class="hint">全程 HTTPS 传输,仅用于本次检测,不写日志、不持久化、检测完即丢弃。</p>
+      <p class="hint">全程 HTTPS 传输，仅用于本次检测，不写日志、不持久化，检测完成后即丢弃。</p>
     </div>
 
     <div class="field-row">
@@ -144,7 +144,7 @@
       </label>
     </div>
 
-    <button type="submit" id="submit-btn" class="btn btn-primary">
+    <button type="submit" id="submit-btn" class="btn btn-primary btn-block">
       开始检测
     </button>
     <p class="hint">检测报告是公开链接并包含完整 base_url;持有链接的人都能查看,请勿分享私有中转地址的报告。</p>

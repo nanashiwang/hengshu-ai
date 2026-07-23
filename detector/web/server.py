@@ -303,8 +303,8 @@ def _compute_public_ranking_snapshot() -> dict[str, object]:
     red_sites = tuple(sorted(
         (site for site in sites.values() if site.score >= _RED_SCORE_THRESHOLD),
         key=lambda site: (
-            -site.confidence_score,
             -site.score,
+            -site.confidence_score,
             -site.report_count,
             site.domain,
         ),
@@ -333,6 +333,15 @@ def _compute_public_ranking_snapshot() -> dict[str, object]:
         "external_site_count": len(external_sites),
         "external_report_count": sum(site.report_count for site in external_sites),
         "external_updated_at": UPDATED_AT,
+        "anthropic_site_count": sum(
+            "anthropic" in site.protocols for site in sites.values()
+        ),
+        "openai_site_count": sum(
+            "openai" in site.protocols for site in sites.values()
+        ),
+        "gemini_site_count": sum(
+            "gemini" in site.protocols for site in sites.values()
+        ),
     }
     return {
         "red_sites": red_sites,
@@ -374,10 +383,17 @@ def _public_ranking_detail(
 
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request) -> HTMLResponse:
+    snapshot = _public_ranking_snapshot()
+    all_sites = (*snapshot["red_sites"], *snapshot["black_sites"])
     return templates.TemplateResponse(
         request,
         "hub.html",
-        {"coverage": _homepage_metrics()},
+        {
+            "coverage": _homepage_metrics(),
+            "ranking_sites": snapshot["red_sites"][:12],
+            "all_ranking_sites": all_sites,
+            "pricing": await get_market_pricing(),
+        },
     )
 
 
