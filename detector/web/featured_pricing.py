@@ -16,9 +16,10 @@ from typing import Any
 import httpx
 
 
-FEATURED_DOMAIN = "nan.meta-api.vip"
-FEATURED_WEBSITE_URL = f"https://{FEATURED_DOMAIN}"
-FEATURED_PRICING_URL = f"{FEATURED_WEBSITE_URL}/api/pricing"
+FEATURED_PRICING_DOMAIN = "nan.meta-api.vip"
+FEATURED_DOMAIN = "cn.meta-api.vip"
+FEATURED_WEBSITE_URL = "https://cn.meta-api.vip/i/Eu48"
+FEATURED_PRICING_URL = f"https://{FEATURED_PRICING_DOMAIN}/api/pricing"
 
 _MAX_RESPONSE_BYTES = 512 * 1024
 _MAX_MODELS = 250
