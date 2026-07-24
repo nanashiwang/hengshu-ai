@@ -2742,6 +2742,7 @@ a.coverage-metric:hover strong { color: var(--accent); }
 .relay-detail-copy > p { max-width: 570px; color: var(--muted); line-height: 1.8; }
 .relay-detail-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 20px; }
 .relay-detail-actions button.is-active { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
+.relay-detail-copy > p.referral-disclosure { margin: 12px 0 0; font-size: 12px; line-height: 1.65; }
 .relay-decision-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 1px; overflow: hidden; border: 1px solid var(--line); border-radius: 13px; background: var(--line); box-shadow: var(--shadow); }
 .relay-decision-grid > div { min-height: 104px; padding: 18px; background: rgba(255,255,255,.96); }
 .relay-decision-grid strong { display: block; font-size: 22px; line-height: 1.1; word-break: break-word; }

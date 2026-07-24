@@ -16,9 +16,11 @@
     <p>{{ site.report_count }} 次检测形成当前综合分。先看样本可信度和更新时间,再结合协议与历史报告判断;分数不是永久保证。</p>
     <div class="relay-detail-actions">
       <a class="btn btn-primary" href="{{ site.detect_url }}">检测此站</a>
+      {% if site.registration_url %}<a class="btn btn-ghost" href="{{ site.registration_url }}" target="_blank" rel="noopener noreferrer nofollow sponsored external" referrerpolicy="no-referrer">通过邀请链接注册 ↗</a>{% endif %}
       <button class="btn btn-ghost" type="button" data-watch-domain="{{ domain }}" aria-pressed="false">关注</button>
       <button class="btn btn-ghost" type="button" data-compare-domain="{{ domain }}" aria-pressed="false">加入对比</button>
     </div>
+    {% if site.registration_url %}<p class="referral-disclosure">邀请链接说明：通过此链接注册，格物运营方可能获得返利；该链接不影响检测分数、排名或风险结论。</p>{% endif %}
   </div>
   <div class="relay-decision-grid">
     <div class="relay-decision-score"><strong>{{ site.score }}</strong><span>综合分</span></div>

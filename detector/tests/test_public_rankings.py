@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from web.market_pricing import MarketModelPrice, MarketPricing, parse_market_pricing
-from web.public_rankings import BLACK_RANKING, RED_RANKING, PublicRankingSite
+from web.public_rankings import (
+    AFFILIATE_REGISTRATION_URLS,
+    BLACK_RANKING,
+    RED_RANKING,
+    PublicRankingSite,
+    _safe_registration_url,
+)
 from web.server import app
 
 
@@ -39,11 +46,11 @@ def test_leaderboard_discloses_external_snapshot_and_first_party_sources():
     assert "api.example.com" not in response.text
     assert 'href="/login"' in response.text
     assert 'href="/register"' in response.text
-    assert 'href="https://nan.meta-api.vip"' in response.text
+    assert 'href="https://cn.meta-api.vip/i/Eu48"' in response.text
     assert 'href="/leaderboard/api.thinkai.tv"' in response.text
     assert 'href="https://api.thinkai.tv"' not in response.text
     assert 'target="_blank"' in response.text
-    assert 'rel="noopener noreferrer nofollow external"' in response.text
+    assert 'rel="noopener noreferrer nofollow sponsored external"' in response.text
     assert 'referrerpolicy="no-referrer"' in response.text
     assert 'data-watch-domain="nan.meta-api.vip"' in response.text
     assert 'data-compare-domain="nan.meta-api.vip"' in response.text
@@ -53,6 +60,8 @@ def test_leaderboard_discloses_external_snapshot_and_first_party_sources():
     assert "质量榜按综合分从高到低排列" in response.text
     assert "格物关联站点 · 推广位" in response.text
     assert "该位置不加分、不改变名次" in response.text
+    assert "格物运营方可能获得返利" in response.text
+    assert "通过邀请链接注册" in response.text
     assert 'href="/pricing"' in response.text
     assert "Veridrop 快照" in response.text
     assert "格物实测" in response.text
@@ -150,6 +159,55 @@ def test_public_ranking_site_constrains_links_and_exposes_confidence():
     assert hostile.confidence_label == "高可信"
     assert safe.confidence_score < safe.score
     assert safe.detect_url.startswith("/openai?base_url=")
+
+
+def test_affiliate_registration_link_is_allowlisted_and_separate_from_score():
+    affiliate = PublicRankingSite(
+        "cn.meta-api.vip", 88, 4, "2026-07-24", ("openai",)
+    )
+    unrelated = PublicRankingSite(
+        "relay.example.com", 88, 4, "2026-07-24", ("openai",)
+    )
+
+    assert affiliate.registration_url == "https://cn.meta-api.vip/i/Eu48"
+    assert affiliate.score == 88
+    assert unrelated.registration_url is None
+
+
+def test_affiliate_registration_link_rejects_unsafe_or_cross_domain_values():
+    domain = "cn.meta-api.vip"
+
+    assert _safe_registration_url(domain, "http://cn.meta-api.vip/i/code") is None
+    assert _safe_registration_url(domain, "javascript:alert(1)") is None
+    assert _safe_registration_url(domain, "https://user:pass@cn.meta-api.vip/i/code") is None
+    assert _safe_registration_url(domain, "https://evil.example/i/code") is None
+    assert _safe_registration_url(domain, "https://cn.meta-api.vip/i/code") == "https://cn.meta-api.vip/i/code"
+
+
+def test_affiliate_registration_mapping_is_immutable():
+    with pytest.raises(TypeError):
+        AFFILIATE_REGISTRATION_URLS["evil.example"] = "https://evil.example/i/code"
+
+
+def test_affiliate_registration_link_is_disclosed_on_detail_page(monkeypatch):
+    from web import server
+
+    site = PublicRankingSite(
+        "cn.meta-api.vip", 88, 4, "2026-07-24", ("openai",)
+    )
+    monkeypatch.setattr(server, "_public_ranking_snapshot", lambda: {
+        "red_sites": (site,), "black_sites": (),
+        "metrics": {"updated_at": "2026-07-24"},
+    })
+    monkeypatch.setattr(server, "_public_ranking_detail", lambda _domain: None)
+
+    response = TestClient(server.app).get("/leaderboard/cn.meta-api.vip")
+
+    assert response.status_code == 200
+    assert 'href="https://cn.meta-api.vip/i/Eu48"' in response.text
+    assert 'rel="noopener noreferrer nofollow sponsored external"' in response.text
+    assert "格物运营方可能获得返利" in response.text
+    assert "不影响检测分数、排名或风险结论" in response.text
 
 
 def _market_payload(method, rows):

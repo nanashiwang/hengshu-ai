@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from types import MappingProxyType
 from urllib.parse import urlencode, urlsplit
 
 
@@ -20,6 +21,37 @@ PROTOCOL_LABELS = {
 # Domains explicitly withdrawn from public presentation remain excluded even
 # if an older local report still exists in the detector history.
 EXCLUDED_RANKING_DOMAINS = frozenset({"api.loomcode.cn"})
+
+# Commercial links are explicitly curated and remain separate from ranking
+# evidence, scores, and source labels.
+AFFILIATE_REGISTRATION_URLS = MappingProxyType({
+    "cn.meta-api.vip": "https://cn.meta-api.vip/i/Eu48",
+})
+
+
+def _safe_registration_url(domain: str, value: str | None) -> str | None:
+    if not value or len(value) > 2048:
+        return None
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return None
+    if (
+        parts.scheme != "https"
+        or not parts.hostname
+        or parts.username is not None
+        or parts.password is not None
+    ):
+        return None
+    link_host = parts.hostname.rstrip(".").lower()
+    normalized_domain = domain.rstrip(".").lower()
+    if not (
+        link_host == normalized_domain
+        or link_host.endswith(f".{normalized_domain}")
+        or normalized_domain.endswith(f".{link_host}")
+    ):
+        return None
+    return value
 
 
 @dataclass(frozen=True)
@@ -128,6 +160,12 @@ class PublicRankingSite:
             )
         )
         return self.website_url.rstrip("/") if related else fallback
+
+    @property
+    def registration_url(self) -> str | None:
+        """Return an allowlisted same-site registration link, if configured."""
+        value = AFFILIATE_REGISTRATION_URLS.get(self.domain.rstrip(".").lower())
+        return _safe_registration_url(self.domain, value)
 
     @property
     def primary_protocol(self) -> str:
